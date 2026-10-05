@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"database/sql"
 	"github.com/atotmakov/home_net_explorer/internal/inventory"
 	"github.com/atotmakov/home_net_explorer/internal/store"
-	"database/sql"
 )
 
 // ---------------------------------------------------------------- home
@@ -250,10 +250,10 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 
 func (s *Server) handleSettingsSave(w http.ResponseWriter, r *http.Request) {
 	type field struct {
-		form, key  string
-		min, max   int
-		scale      int
-		label      string
+		form, key string
+		min, max  int
+		scale     int
+		label     string
 	}
 	fields := []field{
 		{"interval_minutes", "builtin_interval_seconds", 1, 1440, 60, "Scan interval must be 1–1440 minutes."},

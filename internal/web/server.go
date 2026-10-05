@@ -33,8 +33,8 @@ type Options struct {
 	Clock   clock.Clock
 	Log     *slog.Logger
 	Store   *store.Store
-	Scanner Scanner     // nil when the built-in collector is disabled
-	Facts   FactWriter  // serializes user edits with ingest
+	Scanner Scanner    // nil when the built-in collector is disabled
+	Facts   FactWriter // serializes user edits with ingest
 	Version string
 }
 
@@ -159,7 +159,6 @@ func (s *Server) Handler() http.Handler {
 	h = s.recoverPanics(h)
 	return s.logRequests(h)
 }
-
 
 // authGate: first run → /setup; afterwards every page needs an owner session (FR-030).
 func (s *Server) authGate(next http.Handler) http.Handler {
