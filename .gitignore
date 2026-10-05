@@ -1,0 +1,19 @@
+# Build output
+dist/
+*.exe
+
+# Runtime data (server DB, collector spool/config/logs)
+data/
+tmp-data/
+spool/
+*.db
+*.db-*
+hne-collector.json
+hne-collector.log*
+
+# CI caches
+.go/
+.cache/
+
+# Local agent settings (may contain machine-specific or private values)
+.claude/settings.local.json

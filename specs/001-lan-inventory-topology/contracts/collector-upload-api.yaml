@@ -1,0 +1,189 @@
+openapi: 3.1.0
+info:
+  title: Home Net Explorer — Collector Upload API
+  version: "1.0.0"
+  description: |
+    The interface between remote collectors and the server. It is versioned (Constitution IV):
+    the major version appears in both the path and `schema_version`. A breaking change means
+    adding /api/v2 while /api/v1 stays supported during the transition.
+    Uploads are idempotent on `collection_id` (FR-011).
+servers:
+  - url: http://{nas}:8080
+    variables:
+      nas:
+        default: nas.local
+security:
+  - collectorToken: []
+paths:
+  /api/v1/collections:
+    post:
+      summary: Upload one completed collection run
+      operationId: uploadCollection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionRun" }
+      responses:
+        "201":
+          description: Stored and ingested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadResult" }
+        "200":
+          description: Duplicate `collection_id`, so nothing was changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadResult" }
+        "400":
+          description: Malformed JSON or failed validation (see data-model.md)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Missing, unknown, or revoked token. The collector MUST stop retrying and report an error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: Payload too large (> 4096 observations or > 2 MiB)
+        "422":
+          description: Unsupported schema_version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/ping:
+    get:
+      summary: Check connectivity and the token, without uploading
+      operationId: ping
+      responses:
+        "200":
+          description: Token valid
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [collector, server_time, supported_schema_versions, ignored_subnets]
+                properties:
+                  collector: { type: string }
+                  server_time: { type: string, format: date-time }
+                  supported_schema_versions:
+                    type: array
+                    items: { type: integer }
+                  ignored_subnets:
+                    type: array
+                    items: { type: string }
+                    description: Subnets the owner has ignored. Collectors report them as method=skipped, skip_reason=ignored and do not probe them.
+        "401":
+          description: Invalid token
+components:
+  securitySchemes:
+    collectorToken:
+      type: http
+      scheme: bearer
+      description: Per-collector token issued in the web UI (shown once, stored hashed).
+  schemas:
+    CollectionRun:
+      type: object
+      additionalProperties: false
+      required: [schema_version, collection_id, collector, started_at, finished_at, sent_at, interval_seconds, vantage, subnets, observations]
+      properties:
+        schema_version: { type: integer, const: 1 }
+        collection_id: { type: string, format: uuid }
+        collector:
+          type: object
+          required: [name, version, os]
+          properties:
+            name: { type: string, pattern: "^[a-z0-9-]{1,64}$" }
+            version: { type: string, description: "Collector build version" }
+            os: { type: string, enum: [windows, linux, darwin] }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time }
+        interval_seconds:
+          type: integer
+          minimum: 0
+          description: Configured scan interval. 0 = run once / manual.
+        vantage: { $ref: "#/components/schemas/Vantage" }
+        subnets:
+          type: array
+          maxItems: 16
+          items: { $ref: "#/components/schemas/SubnetScan" }
+        observations:
+          type: array
+          maxItems: 4096
+          items: { $ref: "#/components/schemas/Observation" }
+    Vantage:
+      type: object
+      description: The collector's own network position. Used for topology inference (research R4).
+      required: [interfaces, routes]
+      properties:
+        hostname: { type: string }
+        interfaces:
+          type: array
+          items:
+            type: object
+            required: [name, ip, prefix_len]
+            properties:
+              name: { type: string }
+              ip: { type: string, format: ipv4 }
+              prefix_len: { type: integer, minimum: 0, maximum: 32 }
+              mac: { $ref: "#/components/schemas/Mac" }
+        routes:
+          type: array
+          items:
+            type: object
+            required: [destination]
+            properties:
+              destination: { type: string, description: "IPv4 CIDR, e.g. 0.0.0.0/0" }
+              next_hop: { type: string, format: ipv4, description: "Omitted when on-link" }
+              interface: { type: string }
+    SubnetScan:
+      type: object
+      required: [cidr, method, complete, hosts_probed]
+      properties:
+        cidr:
+          type: string
+          description: "Private (RFC 1918) IPv4 CIDR with a prefix from /16 to /30. The collector discovers it at runtime; no subnet is predefined."
+        method: { type: string, enum: [arp, icmp_tcp, skipped] }
+        skip_reason:
+          type: string
+          enum: [too_large, ignored]
+          description: Required when method = skipped (prefix wider than /22, or ignored by the owner). Skipped entries have complete=false and hosts_probed=0.
+        complete:
+          type: boolean
+          description: false if the scan was interrupted. Incomplete scans do not count toward offline detection.
+        hosts_probed: { type: integer, minimum: 0 }
+    Observation:
+      type: object
+      additionalProperties: false
+      required: [observed_at, ip, method]
+      properties:
+        observed_at: { type: string, format: date-time }
+        ip: { type: string, format: ipv4 }
+        mac: { $ref: "#/components/schemas/Mac" }
+        hostname: { type: string, maxLength: 253 }
+        hostname_source: { type: string, enum: [dns, mdns] }
+        method: { type: string, enum: [arp, neighbor_cache, icmp, tcp] }
+    Mac:
+      type: string
+      pattern: "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
+    UploadResult:
+      type: object
+      required: [collection_id, status]
+      properties:
+        collection_id: { type: string, format: uuid }
+        status: { type: string, enum: [stored, duplicate] }
+        clock_skew_ms:
+          type: integer
+          description: Server-measured skew. Above 300000 (5 min), the collector is flagged in the UI.
+        new_subnets:
+          type: array
+          items: { type: string }
+          description: Subnets first seen in this run. They are now tracked automatically, and the owner is notified.
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: "Machine-readable code, e.g. invalid_token, validation_failed, unsupported_schema" }
+        detail: { type: string }

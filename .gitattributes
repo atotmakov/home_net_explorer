@@ -1,0 +1,5 @@
+# LF everywhere: CI runs on Linux, and shell scripts break with CRLF.
+* text=auto eol=lf
+*.exe binary
+*.png binary
+*.gz binary

@@ -1,0 +1,158 @@
+# GitLab CI for Home Net Explorer: validate → test → build → package.
+#
+# Constitution II: a change is done only when this pipeline is green.
+# Each job is gated with `rules: exists`, so jobs switch on as the matching tasks land:
+#   contract lint    → always (specs/*/contracts/*.yaml)
+#   go lint / tests  → go.mod + Makefile (T001, T002), tests/contract & tests/integration
+#   binaries         → cmd/hne-server, cmd/hne-collector (T001)
+#   container image  → deploy/Dockerfile + deploy/smoke.sh (T047)
+# Hardware tests (-tags hwtest) need real NICs and run only on the NAS/desktop (T096).
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+stages: [validate, test, build, package]
+
+variables:
+  GO_IMAGE: golang:1.26
+  GOPATH: $CI_PROJECT_DIR/.go
+  GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+  GOFLAGS: -mod=readonly
+  CGO_ENABLED: "0"
+  GOTESTSUM: gotest.tools/gotestsum@v1.12.0
+
+.go:
+  image: $GO_IMAGE
+  cache:
+    key:
+      prefix: go
+      files: [go.sum]
+    paths: [.go/pkg/mod/, .cache/go-build/]
+
+# ---------------------------------------------------------------- validate
+
+contract:lint:
+  stage: validate
+  image: node:22-alpine
+  needs: []
+  script:
+    - npx --yes @redocly/cli@2 lint --extends=minimal specs/*/contracts/*.yaml
+  rules:
+    - exists: ["specs/*/contracts/*.yaml"]
+
+go:lint:
+  extends: .go
+  stage: validate
+  needs: []
+  script:
+    - make lint   # gofmt, go vet, no subnet literals outside internal/contract/private.go (T002)
+  rules:
+    - exists: [Makefile]
+
+# ---------------------------------------------------------------- test
+
+.go-test:
+  extends: .go
+  stage: test
+  needs: []
+  script:
+    - go run $GOTESTSUM --junitfile report.xml --format testname -- -short -coverprofile=coverage.out $TEST_PKGS
+    - go tool cover -func=coverage.out | tail -n 1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    expire_in: 1 week
+
+go:test:unit:
+  extends: .go-test
+  variables:
+    TEST_PKGS: ./internal/... ./cmd/...
+  rules:
+    - exists: [go.mod]
+
+go:test:contract:
+  extends: .go-test
+  variables:
+    TEST_PKGS: ./tests/contract/...
+  rules:
+    - exists: ["tests/contract/**/*_test.go"]
+
+go:test:integration:
+  extends: .go-test
+  variables:
+    TEST_PKGS: ./tests/integration/...   # -short skips the SC-007 perf test on shared runners
+  rules:
+    - exists: ["tests/integration/**/*_test.go"]
+
+# ---------------------------------------------------------------- build
+
+go:build:
+  extends: .go
+  stage: build
+  needs:
+    - job: go:lint
+      optional: true
+    - job: go:test:unit
+      optional: true
+  parallel:
+    matrix:
+      - BIN: hne-server
+        GOOS: linux
+        GOARCH: [amd64, arm64]
+      - BIN: hne-collector
+        GOOS: [windows, linux]
+        GOARCH: amd64
+      - BIN: hne-collector
+        GOOS: linux
+        GOARCH: arm64
+  script:
+    - if [ "$GOOS" = windows ]; then EXT=.exe; else EXT=; fi
+    - go build -trimpath -ldflags "-s -w -X main.version=${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}" -o "dist/${BIN}-${GOOS}-${GOARCH}${EXT}" "./cmd/${BIN}"
+  artifacts:
+    paths: [dist/]
+    expire_in: 1 month
+  rules:
+    - exists: [cmd/hne-server/main.go, cmd/hne-collector/main.go]
+
+# ---------------------------------------------------------------- package
+
+# Multi-arch server image → GitLab Container Registry, then a smoke test on a fresh volume.
+# MR pipelines build without pushing. The Dockerfile must cross-compile with
+# --platform=$BUILDPLATFORM in the build stage (no QEMU on shared runners), and
+# deploy/smoke.sh must be POSIX sh and honour HNE_IMAGE / HNE_SMOKE_HOST (T047).
+image:build:
+  stage: package
+  image: docker:27
+  services: [docker:27-dind]
+  variables:
+    DOCKER_TLS_CERTDIR: /certs
+  needs:
+    - job: go:test:unit
+      optional: true
+    - job: go:test:contract
+      optional: true
+    - job: go:test:integration
+      optional: true
+  before_script:
+    - apk add --no-cache curl
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker buildx create --use --name hne
+  script:
+    - |
+      TAGS="-t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      OUTPUT=--push
+      if [ -n "$CI_COMMIT_TAG" ]; then TAGS="$TAGS -t $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG"; fi
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then TAGS="$TAGS -t $CI_REGISTRY_IMAGE:latest"; fi
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then TAGS=""; OUTPUT="--output=type=cacheonly"; fi
+      docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile $TAGS $OUTPUT .
+    - docker buildx build --platform linux/amd64 -f deploy/Dockerfile -t hne-server:smoke --load .
+    - HNE_IMAGE=hne-server:smoke HNE_SMOKE_HOST=docker sh deploy/smoke.sh
+  rules:
+    - exists: [deploy/Dockerfile]
