@@ -1,0 +1,3 @@
+# Vendored front-end libraries (served locally; never from a CDN — FR-031, research R9)
+htmx.org 2.0.11  https://unpkg.com/htmx.org@2.0.11/dist/htmx.min.js  sha256=d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717
+cytoscape 3.34.3 https://unpkg.com/cytoscape@3.34.3/dist/cytoscape.min.js  sha256=5f3b5b529546d5af1fc5628590af033b74511a5b6f789f5f4682845863228b91

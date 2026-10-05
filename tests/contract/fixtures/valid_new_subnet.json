@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "collection_id": "9b2d3c4e-1f20-4a5b-8c6d-7e8f90a1b2c3",
+  "collector": {
+    "name": "desktop",
+    "version": "dev",
+    "os": "windows"
+  },
+  "started_at": "2026-10-05T12:00:00.000Z",
+  "finished_at": "2026-10-05T12:01:00.000Z",
+  "sent_at": "2026-10-05T12:01:01.000Z",
+  "interval_seconds": 900,
+  "vantage": {
+    "interfaces": [
+      {
+        "name": "usb-eth",
+        "ip": "10.20.30.15",
+        "prefix_len": 24,
+        "mac": "00:e0:4c:68:01:02"
+      },
+      {
+        "name": "lab",
+        "ip": "10.0.0.5",
+        "prefix_len": 16,
+        "mac": "00:e0:4c:68:01:03"
+      }
+    ],
+    "routes": [
+      {
+        "destination": "0.0.0.0/0",
+        "next_hop": "10.20.30.1",
+        "interface": "usb-eth"
+      },
+      {
+        "destination": "10.20.30.0/24",
+        "interface": "usb-eth"
+      },
+      {
+        "destination": "10.0.0.0/16",
+        "interface": "lab"
+      }
+    ]
+  },
+  "subnets": [
+    {
+      "cidr": "10.20.30.0/24",
+      "method": "arp",
+      "complete": true,
+      "hosts_probed": 254
+    },
+    {
+      "cidr": "10.0.0.0/16",
+      "method": "skipped",
+      "skip_reason": "too_large",
+      "complete": false,
+      "hosts_probed": 0
+    }
+  ],
+  "observations": [
+    {
+      "observed_at": "2026-10-05T12:00:05.000Z",
+      "ip": "10.20.30.1",
+      "mac": "e4:8d:8c:01:02:03",
+      "hostname": "gw.lab",
+      "hostname_source": "dns",
+      "method": "arp"
+    },
+    {
+      "observed_at": "2026-10-05T12:00:06.000Z",
+      "ip": "10.20.30.44",
+      "mac": "52:54:00:12:34:56",
+      "method": "arp"
+    }
+  ]
+}

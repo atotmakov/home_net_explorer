@@ -1,6 +1,13 @@
 # CI for Home Net Explorer: validate → test → build → package.
 #
 # Constitution II: a change is done only when this workflow is green.
+# Nothing is built locally; this workflow is the only toolchain (no local Go/Docker).
+#
+# On pull requests, `autofix` runs `go mod tidy`, `gofmt -w` and (when the OUI table is
+# missing) `go generate ./internal/oui`, commits the result to the PR branch, and every later
+# job checks out that commit, so one run validates the fixed tree. On `main`, nothing is
+# rewritten and `make lint` enforces formatting strictly.
+#
 # The `detect` job turns jobs on as the matching tasks land:
 #   contract lint    → always (specs/*/contracts/*.yaml)
 #   go lint          → Makefile (T002)
@@ -48,11 +55,54 @@ jobs:
           echo "image=$(flag has deploy/Dockerfile)" >> "$GITHUB_OUTPUT"
           s='[]'
           add() { s=$(echo "$s" | jq -c --arg n "$1" --arg p "$2" '. + [{name: $n, pkgs: $p}]'); }
-          has go.mod && add unit './internal/... ./cmd/...'
+          has go.mod && add unit './internal/... ./cmd/... ./tools/...'
           has 'tests/contract/*_test.go' && add contract './tests/contract/...'
           has 'tests/integration/*_test.go' && add integration './tests/integration/...'
           echo "suites=$s" >> "$GITHUB_OUTPUT"
           echo "suites: $s"
+
+  autofix:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+    env:
+      GOFLAGS: -mod=mod
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+      - id: go
+        run: echo "present=$([ -f go.mod ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: steps.go.outputs.present == 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - if: steps.go.outputs.present == 'true'
+        run: go mod tidy
+      - if: steps.go.outputs.present == 'true'
+        run: |
+          files=$(git ls-files '*.go')
+          if [ -n "$files" ]; then gofmt -w $files; fi
+      - if: steps.go.outputs.present == 'true' && hashFiles('internal/oui/doc.go') != '' && hashFiles('internal/oui/oui.tsv.gz') == ''
+        run: go generate ./internal/oui
+      - id: push
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to fix"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --cached --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: autofix (go mod tidy, gofmt, go generate)"
+          git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   contract-lint:
     runs-on: ubuntu-latest
@@ -61,19 +111,21 @@ jobs:
       - run: npx --yes @redocly/cli@2 lint --extends=minimal specs/*/contracts/*.yaml
 
   lint:
-    needs: detect
-    if: needs.detect.outputs.make == 'true'
+    needs: [detect, autofix]
+    if: ${{ !cancelled() && needs.detect.outputs.make == 'true' && needs.autofix.result != 'failure' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: make lint   # gofmt, go vet, no subnet literals outside internal/contract/private.go (T002)
 
   test:
-    needs: detect
-    if: needs.detect.outputs.suites != '[]'
+    needs: [detect, autofix]
+    if: ${{ !cancelled() && needs.detect.outputs.suites != '[]' && needs.autofix.result != 'failure' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -82,6 +134,8 @@ jobs:
     name: test (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -99,7 +153,7 @@ jobs:
           if-no-files-found: ignore
 
   build:
-    needs: [detect, lint, test]
+    needs: [detect, autofix, lint, test]
     if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     strategy:
@@ -116,6 +170,8 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -134,7 +190,7 @@ jobs:
   # Pull requests build without pushing. The Dockerfile cross-compiles via $BUILDPLATFORM
   # (no QEMU needed), and deploy/smoke.sh is POSIX sh honouring HNE_IMAGE / HNE_SMOKE_HOST (T047).
   image:
-    needs: [detect, test]
+    needs: [detect, autofix, test]
     if: ${{ !cancelled() && needs.detect.outputs.image == 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -142,6 +198,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
       - uses: docker/setup-buildx-action@v4
       - if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
