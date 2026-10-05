@@ -35,23 +35,35 @@ that can be tested on its own.
   subnet never seen before.
 - Allowed runtime dependencies (plan.md): `modernc.org/sqlite`, `github.com/mdlayher/arp`,
   `golang.org/x/sys`, `golang.org/x/net`, `golang.org/x/crypto`. Test-only:
-  `github.com/santhosh-tekuri/jsonschema/v6`. Adding any other dependency requires a Complexity
+  `github.com/santhosh-tekuri/jsonschema/v6` and `gopkg.in/yaml.v3` (to read the OpenAPI file). Adding any other dependency requires a Complexity
   Tracking entry in plan.md (Principle III).
 
 ---
+
+## Implementation notes (recorded during /speckit-implement)
+
+- The server assembly and the built-in scan loop live in `internal/app` (not `cmd/hne-server`),
+  so integration tests start the same server as `main` (T031, T041).
+- `Rebuild` lives in `internal/inventory` (`inventory.Rebuild` / `RebuildTx`), because `store`
+  cannot import the projection code (T040). `app.App.Rebuild` runs it under the ingester lock.
+- `contract.Validate(run)` takes no clock: skew is reported, never rejected (T008/T015).
+- The over-limit fixtures (4097 observations, 17 subnets) are generated in code by
+  `internal/contract/contracttest` instead of being committed as large JSON files (T006).
+- `collection_runs` also stores each run's `interval_seconds`, so the offline rule uses the
+  interval in force for that run (R7).
 
 ## Phase 1: Setup (Shared Infrastructure)
 
 **Purpose**: project initialization and basic structure
 
-- [ ] T001 Create `go.mod` (module `github.com/atotmakov/home_net_explorer`, go 1.26). Add a
+- [X] T001 Create `go.mod` (module `github.com/atotmakov/home_net_explorer`, go 1.26). Add a
   package skeleton with a `doc.go` that states each package's purpose (from plan.md) in
   `internal/contract/`, `internal/collect/`, `internal/upload/`, `internal/ingest/`,
   `internal/inventory/`, `internal/store/`, `internal/auth/`, `internal/oui/`, `internal/web/`,
   `internal/clock/`. Add empty `main` packages in `cmd/hne-server/main.go` and
   `cmd/hne-collector/main.go`, and the directories `tests/contract/`, `tests/integration/`,
   `deploy/`, `tools/gen-oui/`
-- [ ] T002 [P] Create `Makefile` with these targets:
+- [X] T002 [P] Create `Makefile` with these targets:
   - `test` (`go test ./...`), `test-contract`, `test-integration`
   - `lint` (`gofmt -l` must be empty, plus `go vet ./...`, plus a check that no non-test `.go`
     file other than `internal/contract/private.go` contains an IPv4 CIDR literal, regex
@@ -63,13 +75,13 @@ that can be tested on its own.
   CI (`.github/workflows/ci.yml`, already in the repo) runs `make lint` and, for tests, the same
   package sets as `test`/`test-contract`/`test-integration`, so keep the targets and package paths
   in sync
-- [ ] T003 [P] Create `.gitignore` listing `dist/`, `data/`, `tmp-data/`, `spool/`, `*.exe`,
+- [X] T003 [P] Create `.gitignore` listing `dist/`, `data/`, `tmp-data/`, `spool/`, `*.exe`,
   `hne-collector.json`, `hne-collector.log*`, and `*.db*`
-- [ ] T004 [P] Vendor htmx (2.x) and Cytoscape.js (3.x) minified files into
+- [X] T004 [P] Vendor htmx (2.x) and Cytoscape.js (3.x) minified files into
   `internal/web/static/vendor/htmx.min.js` and `internal/web/static/vendor/cytoscape.min.js`.
   Record each file's version, source URL, and SHA-256 in `internal/web/static/vendor/VERSIONS.txt`.
   These files MUST be served locally, never from a CDN (FR-031, research R9)
-- [ ] T005 [P] Write the OUI generator `tools/gen-oui/main.go`. It downloads IEEE MA-L/MA-M/MA-S CSVs
+- [X] T005 [P] Write the OUI generator `tools/gen-oui/main.go`. It downloads IEEE MA-L/MA-M/MA-S CSVs
   **at development time only** and writes `internal/oui/oui.tsv.gz` (prefix-bits, prefix-hex,
   vendor). Add `//go:generate go run ../../tools/gen-oui` in `internal/oui/doc.go`, then run it
   once and commit the data file (research R11)
@@ -85,7 +97,7 @@ interfaces, and the ingest path. Every story needs these.
 
 ### Tests first
 
-- [ ] T006 [P] Create contract fixtures in `tests/contract/fixtures/`. Valid fixtures:
+- [X] T006 [P] Create contract fixtures in `tests/contract/fixtures/`. Valid fixtures:
   - `valid_minimal.json`: one subnet `192.168.1.0/24`, method `arp`, two observations
   - `valid_full.json`: two subnets `192.168.1.0/24` (`arp`) and `192.168.8.0/24` (`arp`), a
     vantage report with 2 interfaces and routes (`0.0.0.0/0` next hop `192.168.1.100`), and
@@ -102,7 +114,7 @@ interfaces, and the ingest path. Every story needs these.
   - `invalid_schema_version_2.json`, `invalid_unknown_field.json`
   - `invalid_public_subnet.json` (`8.8.8.0/24`), `invalid_skipped_without_reason.json`,
     `invalid_ip_in_skipped_subnet.json` (observation inside a `skipped` entry)
-- [ ] T007 [P] Write `tests/contract/schema_test.go`. It loads
+- [X] T007 [P] Write `tests/contract/schema_test.go`. It loads
   `specs/001-lan-inventory-topology/contracts/collector-upload-api.yaml`, extracts
   `components.schemas`, and checks that every `valid_*.json` passes and every `invalid_*` that is
   schema-detectable fails, using `santhosh-tekuri/jsonschema/v6`. `invalid_skipped_without_reason`
@@ -110,7 +122,7 @@ interfaces, and the ingest path. Every story needs these.
   RFC 1918 rules are checked only by Go validation (T008). It also checks that marshaling
   `contract.CollectionRun` built from each valid fixture produces JSON that still validates (a
   round trip)
-- [ ] T008 [P] Write `internal/contract/validate_test.go`, a table test over all fixtures from T006.
+- [X] T008 [P] Write `internal/contract/validate_test.go`, a table test over all fixtures from T006.
   `Validate(run, now)` must accept the valid ones and return the matching error code for each
   invalid one. Rules to quote exactly:
   - "`ip` must be inside a non-skipped subnet of the same run"
@@ -122,25 +134,25 @@ interfaces, and the ingest path. Every story needs these.
   - "`schema_version` must be supported"
   - "Every subnet `cidr` must be private (RFC 1918) with a prefix from /16 to /30"
   - `skip_reason` is required when method = `skipped`
-- [ ] T009 [P] Write `internal/store/store_test.go`. `Open(path)` on a temp dir must create the DB
+- [X] T009 [P] Write `internal/store/store_test.go`. `Open(path)` on a temp dir must create the DB
   in WAL mode with `foreign_keys=ON` and `busy_timeout` ≥ 5000 ms. Migrations must be idempotent:
   running Open twice gives the same `user_version`. Every table from data-model.md must exist.
   Add a **migration harness**: for every migration *k*, a database seeded with sample rows at
   version *k−1* migrates to *k* with row counts preserved. The harness has to exist from 0001
   onward, so later schema changes can't skip it (Constitution, Development Workflow)
-- [ ] T010 [P] Write `internal/auth/owner_test.go`. Cover:
+- [X] T010 [P] Write `internal/auth/owner_test.go`. Cover:
   - The password can be set only once, and must be ≥ 10 chars.
   - Verify works with bcrypt.
   - A session ID is 256-bit random, and only its SHA-256 is stored in `sessions(id_hash,
     created_at, expires_at)`.
   - Sessions expire after 30 days.
   - The login rate limit is "5 attempts per minute".
-- [ ] T011 [P] Write `internal/web/auth_test.go` (httptest). With no password set, every page
+- [X] T011 [P] Write `internal/web/auth_test.go` (httptest). With no password set, every page
   redirects to `/setup`. With a password set, pages redirect to `/login` until logged in. `/setup`
   returns 404 once a password exists. A POST whose `Origin` doesn't match the Host gets 403. The
   cookie is HttpOnly + SameSite=Strict. `/healthz` returns `200 ok` without auth, and `/api/v1/*`
   is not redirected (it uses bearer auth later)
-- [ ] T012 [P] Write `cmd/hne-server/config_test.go`. Cover:
+- [X] T012 [P] Write `cmd/hne-server/config_test.go`. Cover:
   - `HNE_LISTEN` defaults to `:8080`, `HNE_DATA` to `/data`, and `HNE_SCAN_INTERVAL` to `900s`.
   - With `HNE_SUBNETS` unset (the default), the config holds **no subnets**, meaning auto-discovery.
   - If set, `HNE_SUBNETS` must be comma-separated **private** IPv4 CIDRs with a prefix from /16
@@ -149,7 +161,7 @@ interfaces, and the ingest path. Every story needs these.
     fails (Principle I, research R2).
   - The `healthcheck` subcommand exits 0 against a test server returning 200 on `/healthz`, and
     exits 1 when nothing is listening.
-- [ ] T013 [P] Write `internal/ingest/ingest_test.go` against a temp store. Cover:
+- [X] T013 [P] Write `internal/ingest/ingest_test.go` against a temp store. Cover:
   - `Ingest(ctx, collectorID, run, receivedAt)` stores `collection_runs`, with `payload_gz` equal
     to the gzip of the original body.
   - It stores the `run_subnets` rows (`collection_id`, `cidr`, `method`, `complete`,
@@ -164,19 +176,19 @@ interfaces, and the ingest path. Every story needs these.
 
 ### Implementation
 
-- [ ] T014 Write `internal/contract/v1.go`: Go structs matching `CollectionRun`, `Vantage`,
+- [X] T014 Write `internal/contract/v1.go`: Go structs matching `CollectionRun`, `Vantage`,
   `SubnetScan`, `Observation`, `UploadResult`, and `Error` in
   `contracts/collector-upload-api.yaml`. Decode JSON with `DisallowUnknownFields`. Add constants
   `SchemaVersion = 1`, `MaxObservations = 4096`, `MaxSubnets = 16`, `MaxBodyBytes = 2 << 20`,
   `MaxAutoScanPrefixBits = 22`. Also write `internal/contract/private.go` with
   `IsPrivate(netip.Prefix) bool` over the RFC 1918 ranges. It is the only file allowed to contain
   range literals (depends on T006–T008)
-- [ ] T015 Write `internal/contract/validate.go`: `Validate(run *CollectionRun, now time.Time)
+- [X] T015 Write `internal/contract/validate.go`: `Validate(run *CollectionRun, now time.Time)
   error`, returning typed codes (`validation_failed` with detail, `unsupported_schema`) for each
   rule in T008. Make T007 and T008 pass
-- [ ] T016 [P] Write `internal/clock/clock.go`: a `Clock` interface (`Now() time.Time`) with a real
+- [X] T016 [P] Write `internal/clock/clock.go`: a `Clock` interface (`Now() time.Time`) with a real
   implementation, plus `internal/clock/fake.go` with a settable/advanceable fake for tests
-- [ ] T017 [P] Write `internal/collect/probe.go` with these interfaces:
+- [X] T017 [P] Write `internal/collect/probe.go` with these interfaces:
   - `Prober`: `Probe(ctx, iface, ip) (mac string, ok bool, err)`
   - `NeighborTable`: `Entries(ctx) ([]Neighbor, error)`
   - `RouteReader`: `Vantage(ctx) (contract.Vantage, error)`
@@ -184,7 +196,7 @@ interfaces, and the ingest path. Every story needs these.
 
   Also write `internal/collect/collecttest/fakes.go` with scriptable fakes of each, plus a
   `FakeNetwork` that maps IP → (mac, hostname, responds bool)
-- [ ] T018 Write `internal/store/migrations/0001_init.sql` and `internal/store/store.go`
+- [X] T018 Write `internal/store/migrations/0001_init.sql` and `internal/store/store.go`
   (`modernc.org/sqlite`, WAL, embedded migrations via `user_version`). Create every table in
   data-model.md:
   - Facts: `collectors`, `collection_runs`, `run_subnets`, `user_device_attrs`,
@@ -205,26 +217,26 @@ interfaces, and the ingest path. Every story needs these.
 
   Add `internal/store/projections.go` with `ResetProjections(tx)`, which truncates only the
   projection tables. Make T009 pass
-- [ ] T019 Write `internal/auth/owner.go`: owner password (bcrypt, cost 12) stored in `settings`;
+- [X] T019 Write `internal/auth/owner.go`: owner password (bcrypt, cost 12) stored in `settings`;
   sessions; and a per-IP login rate limiter (5/min). Make T010 pass
-- [ ] T020 Write `cmd/hne-server/config.go`: parse the env/flags from T012, with the flags
+- [X] T020 Write `cmd/hne-server/config.go`: parse the env/flags from T012, with the flags
   `--data`, `--listen`, and `--no-builtin-scan`, plus the `healthcheck` subcommand (GET
   `http://127.0.0.1<listen>/healthz`, exit 0 or 1). Make T012 pass
-- [ ] T021 Write `internal/web/server.go`: a `net/http` ServeMux with method+path patterns, plus
+- [X] T021 Write `internal/web/server.go`: a `net/http` ServeMux with method+path patterns, plus
   this middleware: request log, panic recovery, session-required (redirect to `/setup` or
   `/login`), and an Origin check on unsafe methods. Templates come from
   `internal/web/templates/*.html` via `embed`. The base layout `internal/web/templates/layout.html`
   has nav links Home/Devices/Timeline/Map/Collectors/Settings and links only local
   `/static/...` assets. Add static file serving from `internal/web/static/` and `/healthz`
-- [ ] T022 Write `internal/web/auth_handlers.go` and `internal/web/templates/{setup,login}.html`:
+- [X] T022 Write `internal/web/auth_handlers.go` and `internal/web/templates/{setup,login}.html`:
   `GET/POST /setup`, `GET/POST /login`, and `POST /logout`. Make T011 pass
-- [ ] T023 Write `internal/ingest/ingest.go`: `Ingester` with
+- [X] T023 Write `internal/ingest/ingest.go`: `Ingester` with
   `Ingest(ctx, collectorID int64, raw []byte, run *contract.CollectionRun, receivedAt time.Time)
   (contract.UploadResult, error)`. It runs one transaction that inserts the run and its
   run_subnets **unchanged**, then calls `Applier.Apply(tx, run, collectorID) (newSubnets
   []string, err error)` and returns those as `new_subnets`. Duplicates are detected by PK conflict
   on `collection_id`. Ingest never filters observations (data-model.md). Make T013 pass
-- [ ] T024 Write `cmd/hne-server/main.go`. It loads config, opens the store, and ensures the
+- [X] T024 Write `cmd/hne-server/main.go`. It loads config, opens the store, and ensures the
   `builtin` collector row named `nas` (`interval_seconds` = scan interval). It seeds `settings`
   defaults (offline multiplier 3) and seeds **no subnets**. Then it starts the HTTP server with
   graceful shutdown on SIGTERM
@@ -245,13 +257,13 @@ friendly names that survive scans.
 
 ### Tests for User Story 1 ⚠️ write first, see them fail
 
-- [ ] T025 [P] [US1] Write `internal/oui/oui_test.go`. Cover:
+- [X] T025 [P] [US1] Write `internal/oui/oui_test.go`. Cover:
   - Known prefixes resolve: MA-L 24-bit, MA-M 28-bit, MA-S 36-bit, longest prefix wins.
   - An unknown prefix returns "".
   - `IsRandomized(mac)` is true when "locally-administered bit set (second-lowest bit of the first
     byte)", e.g. `da:a1:19:...` is true and `00:11:32:...` is false.
   - A randomized MAC gets manufacturer = "" ("Null for randomized or unknown MACs").
-- [ ] T026 [P] [US1] Write `internal/collect/engine_test.go` with `collecttest.FakeNetwork`. Cover:
+- [X] T026 [P] [US1] Write `internal/collect/engine_test.go` with `collecttest.FakeNetwork`. Cover:
   - **Auto targets** (no targets given): the engine scans every vantage interface subnet that is
     private and /22 or narrower. With fake interfaces `192.168.1.0/24`, `10.20.30.0/24`,
     `10.0.0.0/16`, and a public `203.0.113.0/24`, it scans the first two, reports `10.0.0.0/16` as
@@ -266,7 +278,7 @@ friendly names that survive scans.
   - Each observation's `observed_at` is within the run window.
   - Cancelling the context mid-scan gives `complete` false.
   - The output passes `contract.Validate`.
-- [ ] T027 [P] [US1] Write `internal/collect/names_test.go`. Cover:
+- [X] T027 [P] [US1] Write `internal/collect/names_test.go`. Cover:
   - The resolver queries PTR only at the configured DNS server, defaulting to the subnet's gateway
     from the vantage routes.
   - `NewNameResolver` returns an error if the DNS server is not a private (RFC 1918) address,
@@ -275,7 +287,7 @@ friendly names that survive scans.
     using `dnsmessage` and parses the answer from a recorded fixture.
   - There is a 1-second timeout per lookup.
   - `hostname_source` is `dns` or `mdns`, and DNS is preferred when both answer.
-- [ ] T028 [P] [US1] Write `internal/inventory/apply_test.go` (temp store, `clock.Fake`). Cover:
+- [X] T028 [P] [US1] Write `internal/inventory/apply_test.go` (temp store, `clock.Fake`). Cover:
   - The first run creates devices with `identity_key` `mac:<mac>` and `identity_strength`
     `strong`, plus manufacturer from OUI, `mac_randomized`, one `device_addresses` row
     (`current` true), and a sighting with `seen_count` 1.
@@ -290,7 +302,7 @@ friendly names that survive scans.
     creates no row and is not returned.
   - A `user_subnet_attrs` fact `ignored = true` makes `Apply` skip that subnet's observations (no
     sightings or devices), while the run remains stored. Renaming sets `subnets.name`.
-- [ ] T029 [P] [US1] Write `internal/inventory/offline_test.go`. The rule from research R7:
+- [X] T029 [P] [US1] Write `internal/inventory/offline_test.go`. The rule from research R7:
   - "A collector is **active** for subnet S at time *t* if it completed a scan of S within
     3 × its interval before *t*."
   - "After ingesting a completed scan R of subnet S, each device in S that R didn't see goes
@@ -309,11 +321,11 @@ friendly names that survive scans.
   - If every covering collector is inactive, devices keep their status, and
     `store.SubnetStatus(now)` reports the subnet **stale**.
   - The multiplier comes from `settings`.
-- [ ] T030 [P] [US1] Write `internal/store/devices_query_test.go`. `ListDevices(filter)` supports
+- [X] T030 [P] [US1] Write `internal/store/devices_query_test.go`. `ListDevices(filter)` supports
   `q` (matches IP, MAC, hostname, or name), `subnet`, `status`, `manufacturer`, `seen_after`,
   `seen_before`, and `sort` ∈ {ip (numeric order), mac, hostname, manufacturer, first_seen,
   last_seen} with `dir` asc/desc. `merged_away` devices are excluded
-- [ ] T031 [P] [US1] Write `tests/integration/us1_inventory_test.go`. Start the full server
+- [X] T031 [P] [US1] Write `tests/integration/us1_inventory_test.go`. Start the full server
   (httptest) with a temp DB, `--no-builtin-scan`, and a fake engine injected. Log in, then:
   - `POST /scan` returns 202. After completion, `GET /devices` lists the fake devices with IP,
     MAC, hostname, and manufacturer.
@@ -327,66 +339,66 @@ friendly names that survive scans.
 
 ### Implementation for User Story 1
 
-- [ ] T032 [P] [US1] Write `internal/oui/oui.go`: load the embedded `oui.tsv.gz` once, use a
+- [X] T032 [P] [US1] Write `internal/oui/oui.go`: load the embedded `oui.tsv.gz` once, use a
   longest-prefix lookup, and add `IsRandomized`. Make T025 pass
-- [ ] T033 [P] [US1] Write `internal/collect/arp_linux.go` (`//go:build linux`): a `Prober` using
+- [X] T033 [P] [US1] Write `internal/collect/arp_linux.go` (`//go:build linux`): a `Prober` using
   `mdlayher/arp` on the interface whose subnet contains the target, with 1 retry and a 300 ms
   timeout, rate limited to ≤ 200 requests/s. Also write `internal/collect/neighbor_linux.go`,
   which parses `/proc/net/arp` and skips incomplete entries (flags 0x0)
-- [ ] T034 [P] [US1] Write `internal/collect/routes_linux.go` (`//go:build linux`): a
+- [X] T034 [P] [US1] Write `internal/collect/routes_linux.go` (`//go:build linux`): a
   `RouteReader` built from `net.Interfaces()` plus `/proc/net/route`, which fills
   `contract.Vantage` interfaces (name, ip, prefix_len, mac) and routes (destination, next_hop,
   interface)
-- [ ] T035 [US1] Write `internal/collect/names.go`: a `Resolver` that does PTR queries via
+- [X] T035 [US1] Write `internal/collect/names.go`: a `Resolver` that does PTR queries via
   `net.Resolver` with a custom `Dial` pinned to the LAN DNS server (never the system resolver),
   plus an mDNS reverse query via `golang.org/x/net/dns/dnsmessage`. Make T027 pass
-- [ ] T036 [US1] Write `internal/collect/engine.go`: `Engine{Prober, NeighborTable, RouteReader,
+- [X] T036 [US1] Write `internal/collect/engine.go`: `Engine{Prober, NeighborTable, RouteReader,
   Resolver, Clock}` and `Scan(ctx, targets)`. It works out which subnets are on-link from the
   vantage report, picks auto targets via `contract.IsPrivate` and `MaxAutoScanPrefixBits` when
   none are given, probes in parallel (≤ 64), merges neighbor entries, resolves names in parallel,
   and assembles a `contract.CollectionRun` (including `skipped` entries). Make T026 pass
-- [ ] T037 [US1] Write `internal/inventory/identity.go` (MAC identity key and randomized flag) and
+- [X] T037 [US1] Write `internal/inventory/identity.go` (MAC identity key and randomized flag) and
   `internal/inventory/apply.go`, which implements `ingest.Applier`. It folds observations into
   `sightings`, `devices`, and `device_addresses` per data-model.md "Sighting" (extend `last_seen`
   when the tuple matches the latest sighting for the same collector and subnet, otherwise insert).
   It sets the manufacturer via `oui`. It also maintains the `subnets` projection: it creates
   rows for non-skipped CIDRs, returns them as new, applies `user_subnet_attrs` (name/ignored), and
   skips observations of ignored subnets. Make T028 pass
-- [ ] T038 [US1] Write `internal/inventory/offline.go`: `EvaluateStatus(tx, run)` sets `online` or
+- [X] T038 [US1] Write `internal/inventory/offline.go`: `EvaluateStatus(tx, run)` sets `online` or
   `offline` per R7, using only stored scan timestamps (no `now`). Call it only at the end of
   `Apply` for completed scans. Add `store.SubnetStatus(now)` (in T039) to compute staleness when a
   page loads. Nothing writes events on a timer. Make T029 pass
-- [ ] T039 [US1] Write `internal/store/devices_query.go`: `ListDevices`, `GetDevice`,
+- [X] T039 [US1] Write `internal/store/devices_query.go`: `ListDevices`, `GetDevice`,
   `SetDeviceAttr` (appends to `user_device_attrs` keyed by the device's `identity_key`; latest row
   wins across its aliases), `HomeCounts`, and `SubnetStatus(now)` (last scanned, by which
   collector, stale flag computed from `now`, never stored). Make T030 pass
-- [ ] T040 [US1] Write `internal/store/rebuild.go`: `Rebuild(ctx)` runs `ResetProjections`, then
+- [X] T040 [US1] Write `internal/store/rebuild.go`: `Rebuild(ctx)` runs `ResetProjections`, then
   replays **one merged stream**: `collection_runs` ordered by `received_at` and all user fact
   tables ordered by `at`, with the scan first on ties, through the `Applier` and the user-fact
   applier (data-model.md "Rebuild invariant"). Wire `hne-server rebuild` as a subcommand in
   `cmd/hne-server/main.go`
-- [ ] T041 [US1] Write `cmd/hne-server/scanner.go`: the built-in collector loop. It runs
+- [X] T041 [US1] Write `cmd/hne-server/scanner.go`: the built-in collector loop. It runs
   `Engine.Scan` with auto targets (or `HNE_SUBNETS` if set), passing the currently ignored subnets,
   every `interval_seconds` and on demand via a channel,
   then hands the run to `Ingester.Ingest` as collector `nas` (the same path as uploads, Principle
   IV). Only one scan runs at a time, and it exposes the current scan status
-- [ ] T042 [US1] Write `internal/web/devices.go` and the templates `devices.html`,
+- [X] T042 [US1] Write `internal/web/devices.go` and the templates `devices.html`,
   `devices_rows.html` (htmx partial), and `device.html` (addresses, user fields form). Routes:
   `GET /devices` (query params from contracts/web-ui.md), `GET /devices/{id}`, and
   `POST /devices/{id}/attrs`. The status column distinguishes online and offline. The list shows a
   **randomized MAC** badge (when `mac_randomized`) and a **weak ID** badge (when
   `identity_strength = weak`), and both can be used as filters
-- [ ] T043 [US1] Write `internal/web/scan.go`: `POST /scan` returns 202, and
+- [X] T043 [US1] Write `internal/web/scan.go`: `POST /scan` returns 202, and
   `GET /ui/scan-status` (htmx polling) shows progress and when the last scan finished
-- [ ] T044 [US1] Write `internal/web/settings.go` + `settings.html`. It shows the subnets discovered
+- [X] T044 [US1] Write `internal/web/settings.go` + `settings.html`. It shows the subnets discovered
   so far (read-only list with first seen and discovered by; there is no "add subnet" form), the
   too-large subnets skipped in each collector's latest run (read from `run_subnets`), the built-in
   scan interval, and the offline multiplier. Changes apply without a restart
-- [ ] T045 [US1] Write `internal/web/home.go` + `home.html`: counts (online/offline), subnet
+- [X] T045 [US1] Write `internal/web/home.go` + `home.html`: counts (online/offline), subnet
   last-scanned and stale status, and a **Scan now** button. Make T031 pass
-- [ ] T046 [P] [US1] Write `internal/collect/arp_linux_hw_test.go` (`//go:build hwtest && linux`):
+- [X] T046 [P] [US1] Write `internal/collect/arp_linux_hw_test.go` (`//go:build hwtest && linux`):
   a real ARP scan of the host's subnet finds at least the default gateway with a MAC
-- [ ] T047 [P] [US1] Write `deploy/Dockerfile`: a multi-stage build, `CGO_ENABLED=0`. The build
+- [X] T047 [P] [US1] Write `deploy/Dockerfile`: a multi-stage build, `CGO_ENABLED=0`. The build
   stage MUST be `FROM --platform=$BUILDPLATFORM golang:1.26` and cross-compile with
   `GOOS=$TARGETOS GOARCH=$TARGETARCH`, because the CI runner has no QEMU emulation. The final stage
   only COPYs files (no `RUN`). Final image
