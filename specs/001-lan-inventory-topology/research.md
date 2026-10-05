@@ -264,8 +264,11 @@ Each section resolves an unknown from the plan's Technical Context.
     the `icmp_tcp` fallback (R3).
   - **Server side**: the first run that reports a subnet creates it (auto-tracked) and records
     it in `new_subnets`. The owner sees a notice and can **ignore** the subnet. Ignored subnets
-    are returned by `/api/v1/ping`, skipped by collectors, and their observations are dropped at
-    ingest.
+    are returned by `/api/v1/ping` and skipped by collectors. Any observations for them that
+    still arrive are stored in the raw run but not folded into the derived tables (data-model.md
+    "Ingest never filters").
+  - Skipped subnets (too large or ignored) never become subnet records. They are visible only
+    in the per-run scan list.
 - **Rationale**: the owner adds routers, VLANs, and access points over time, and the system must
   follow without a configuration change or restart. Restricting scans to private ranges keeps
   the tool from ever probing outside the home.

@@ -1,0 +1,178 @@
+# CI for Home Net Explorer: validate → test → build → package.
+#
+# Constitution II: a change is done only when this workflow is green.
+# The `detect` job turns jobs on as the matching tasks land:
+#   contract lint    → always (specs/*/contracts/*.yaml)
+#   go lint          → Makefile (T002)
+#   tests            → go.mod (unit), tests/contract, tests/integration
+#   binaries         → cmd/hne-server + cmd/hne-collector (T001)
+#   container image  → deploy/Dockerfile + deploy/smoke.sh (T047)
+# Hardware tests (-tags hwtest) need real NICs and run only on the NAS/desktop (T096).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CGO_ENABLED: "0"
+  GOFLAGS: -mod=readonly
+  GOTESTSUM: gotest.tools/gotestsum@v1.13.0
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      make: ${{ steps.f.outputs.make }}
+      suites: ${{ steps.f.outputs.suites }}
+      cmd: ${{ steps.f.outputs.cmd }}
+      image: ${{ steps.f.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: f
+        run: |
+          has() { [ -n "$(git ls-files -- "$@")" ]; }
+          flag() { if "$@"; then echo true; else echo false; fi; }
+          echo "make=$(flag has Makefile)" >> "$GITHUB_OUTPUT"
+          echo "cmd=$(flag has cmd/hne-server/main.go cmd/hne-collector/main.go)" >> "$GITHUB_OUTPUT"
+          echo "image=$(flag has deploy/Dockerfile)" >> "$GITHUB_OUTPUT"
+          s='[]'
+          add() { s=$(echo "$s" | jq -c --arg n "$1" --arg p "$2" '. + [{name: $n, pkgs: $p}]'); }
+          has go.mod && add unit './internal/... ./cmd/...'
+          has 'tests/contract/*_test.go' && add contract './tests/contract/...'
+          has 'tests/integration/*_test.go' && add integration './tests/integration/...'
+          echo "suites=$s" >> "$GITHUB_OUTPUT"
+          echo "suites: $s"
+
+  contract-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: npx --yes @redocly/cli@2 lint --extends=minimal specs/*/contracts/*.yaml
+
+  lint:
+    needs: detect
+    if: needs.detect.outputs.make == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: make lint   # gofmt, go vet, no subnet literals outside internal/contract/private.go (T002)
+
+  test:
+    needs: detect
+    if: needs.detect.outputs.suites != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.suites) }}
+    name: test (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # -short skips the SC-007 perf test on shared runners.
+      - run: go run $GOTESTSUM --junitfile report.xml --format testname -- -short -coverprofile=coverage.out ${{ matrix.pkgs }}
+      - if: always()
+        run: |
+          echo "### ${{ matrix.name }} coverage" >> "$GITHUB_STEP_SUMMARY"
+          [ -f coverage.out ] && go tool cover -func=coverage.out | tail -n 1 >> "$GITHUB_STEP_SUMMARY" || true
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-${{ matrix.name }}
+          path: report.xml
+          if-no-files-found: ignore
+
+  build:
+    needs: [detect, lint, test]
+    if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { bin: hne-server, goos: linux, goarch: amd64 }
+          - { bin: hne-server, goos: linux, goarch: arm64 }
+          - { bin: hne-collector, goos: windows, goarch: amd64 }
+          - { bin: hne-collector, goos: linux, goarch: amd64 }
+          - { bin: hne-collector, goos: linux, goarch: arm64 }
+    name: build (${{ matrix.bin }} ${{ matrix.goos }}/${{ matrix.goarch }})
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: |
+          if [ "$GOOS" = windows ]; then EXT=.exe; else EXT=; fi
+          VERSION="${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+          VERSION="${VERSION:-${GITHUB_SHA::7}}"
+          go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
+            -o "dist/${{ matrix.bin }}-${GOOS}-${GOARCH}${EXT}" "./cmd/${{ matrix.bin }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.bin }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+
+  # Multi-arch server image → ghcr.io, then a smoke test on a fresh volume.
+  # Pull requests build without pushing. The Dockerfile cross-compiles via $BUILDPLATFORM
+  # (no QEMU needed), and deploy/smoke.sh is POSIX sh honouring HNE_IMAGE / HNE_SMOKE_HOST (T047).
+  image:
+    needs: [detect, test]
+    if: ${{ !cancelled() && needs.detect.outputs.image == 'true' && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: hne-server:smoke
+          cache-from: type=gha
+      - run: HNE_IMAGE=hne-server:smoke sh deploy/smoke.sh

@@ -108,7 +108,9 @@ cmd/
 └── hne-collector/       # main: CLI (check | scan | run | version)
 
 internal/
+├── clock/               # Clock interface + fake (no wall-clock reads in projections)
 ├── contract/            # v1 upload types, validation, schema_version constants (shared)
+│   └── private.go       #   RFC 1918 table: the only IPv4 range literals allowed in code
 ├── collect/             # scan engine: plans subnets, runs probes in parallel, builds a CollectionRun
 │   ├── probe.go         #   Prober / NeighborTable / RouteReader / Resolver interfaces
 │   ├── arp_linux.go     #   raw ARP + /proc/net/arp
@@ -119,7 +121,7 @@ internal/
 ├── upload/              # collector side: HTTP client, spool, backoff
 ├── ingest/              # server side: validate → store run → fold into projections
 ├── inventory/           # identity, merge/split, sightings, events, offline rule, link inference
-├── store/               # SQLite open/migrate, queries, rebuild
+├── store/               # SQLite open/migrate, queries, rebuild, userfacts.go
 ├── auth/                # owner password/session, collector tokens
 ├── oui/                 # embedded IEEE OUI table + lookup
 └── web/                 # handlers, templates/, static/ (htmx, cytoscape, css) via embed
@@ -129,8 +131,12 @@ tests/
 └── integration/         # server end-to-end with temporary SQLite and scripted runs
 
 deploy/
-├── Dockerfile           # multi-stage → static binary on scratch/distroless
-└── compose.yaml         # host network, NET_RAW, ./data:/data
+├── Dockerfile           # multi-stage, cross-compiled via $BUILDPLATFORM → distroless static
+├── compose.yaml         # host network, NET_RAW, ./data:/data (no subnet settings)
+└── smoke.sh             # POSIX sh: fresh volume → healthy → restart → healthy (CI + local)
+
+.github/workflows/
+└── ci.yml               # GitHub Actions: contract lint, Go lint/tests, binaries, ghcr.io image + smoke
 
 tools/
 └── gen-oui/             # release-time OUI table refresh (go generate)

@@ -159,8 +159,9 @@ on) is deferred to a separate, later feature.
   the subnet is tracked automatically. The owner is notified and can choose to ignore the
   subnet. Ignored subnets are no longer scanned or shown.
 - **Very large subnets**: a directly attached subnet wider than /22 (e.g., a /16) is not scanned
-  automatically. The UI shows it as skipped, and the owner can narrow it in that collector's
-  settings.
+  automatically. The UI shows it as skipped. To scan part of it, the owner lists the narrower
+  subnets explicitly: in the NAS container's environment for the built-in collector, or in the
+  desktop collector's configuration file.
 - **Non-private networks**: subnets outside the private address ranges (e.g., a public
   address on a laptop) are never scanned.
 - **Duplicate uploads**: if the same collection is uploaded twice, it does not create duplicate

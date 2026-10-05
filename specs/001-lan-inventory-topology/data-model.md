@@ -7,7 +7,11 @@ Storage is a single SQLite database (see [research.md](research.md) R5). Tables 
 - **Facts**: append-only, the source of truth. These are `collection_runs` and the `user_*`
   tables.
 - **Projections**: derived, and can be rebuilt from the facts by `hne-server rebuild`. These are
-  `sightings`, `devices`, `device_addresses`, `events`, and `links`.
+  `subnets`, `sightings`, `devices`, `device_addresses`, `events`, and `links`.
+
+**Ingest never filters.** Every accepted run is stored unchanged in `collection_runs` and
+`run_subnets`, even if it covers ignored subnets. Filtering (ignored subnets, skipped entries)
+happens only in the projection code (the `Applier`), so raw history is complete (Principle V).
 
 All timestamps are UTC, stored as RFC 3339 text with milliseconds. IDs are integers unless noted.
 
@@ -30,20 +34,26 @@ A source of observations. The server's built-in scanner is the collector named `
 | last_report_at | ts? | Projection convenience, updated on ingest |
 | last_clock_skew_ms | int? | `sent_at` minus server receive time |
 
-### Subnet
+### Subnet (projection)
+
+Listed here because other facts refer to it. `subnets` is a **projection** rebuilt from runs plus
+`user_subnet_attrs`, and `ResetProjections` clears it.
 
 | Field | Type | Rules |
 |-------|------|-------|
-| id | int | PK |
+| id | int | PK. Assigned in ingest order |
 | cidr | text | unique. A **private (RFC 1918)** IPv4 CIDR with a prefix from /16 to /30 |
-| name | text | optional label, e.g. "Home LAN" |
-| ignored | bool | default false. When true, the subnet is hidden, collectors skip it, and its observations are dropped at ingest |
-| first_seen_at | ts | when a run first reported it |
-| discovered_by | int | FK → Collector |
+| name | text | optional label, e.g. "Home LAN" (from `user_subnet_attrs`) |
+| ignored | bool | default false (from `user_subnet_attrs`). When true, the subnet is hidden, collectors skip it (via `/api/v1/ping`), and the `Applier` does not fold its observations. Raw runs are still stored |
+| first_seen_at | ts | `started_at` of the first run that scanned it |
+| discovered_by | int | FK → Collector of that run |
 
-There is **no initial subnet list**. A subnet row is created when a run first reports it
-(research R14). The owner's ignore and rename actions are user facts (below), so a rebuild
-reproduces them.
+- There is **no initial subnet list**. The `Applier` creates a subnet row the first time a run
+  contains a **non-skipped** `SubnetScan` for that CIDR (research R14) and reports it back as
+  "new" (→ `new_subnets` in the upload response).
+- **Skipped entries** (`too_large`, `ignored`) live only in `run_subnets`. They never create a
+  subnet row and never appear in `new_subnets`. The Settings page lists too-large subnets from
+  each collector's latest run.
 
 ### CollectionRun (source of truth)
 
@@ -172,7 +182,8 @@ current addresses on different subnets (multi-homed edge case).
 - The offline rule is defined in research.md R7. It is evaluated only at ingest, using scan
   timestamps.
 - If every collector covering a device's subnet is silent, the device keeps its status, and the
-  subnet is marked **stale**. Devices are not marked offline in this case.
+  subnet is reported as **stale** (computed when a page loads, never stored). Devices are not
+  marked offline in this case.
 - `merged_away`: a terminal status for a device record absorbed into another by a merge. It is
   hidden from lists and kept for history.
 
@@ -229,7 +240,8 @@ User facts ──(apply)──▶ Device / Link
 ## Validation summary (enforced at ingest; failures → 400/422 per contract)
 
 - Every subnet `cidr` must be private (RFC 1918) with a prefix from /16 to /30.
-- `ip` must be inside a scanned subnet of the same run.
+- `ip` must be inside a non-skipped subnet of the same run.
+- `skip_reason` is required when `method` = `skipped`.
 - `mac` format must be valid. MAC is required when method is `arp`.
 - `observed_at` must be within the run window. The run window must be no longer than 1 hour and must
   not be more than 5 minutes in the future relative to `sent_at`.

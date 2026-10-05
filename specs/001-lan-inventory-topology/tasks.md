@@ -59,6 +59,10 @@ that can be tested on its own.
   - `build-server` (linux/amd64 + linux/arm64, `CGO_ENABLED=0`)
   - `build-collector` (windows/amd64 `.exe`, linux/amd64, linux/arm64, `CGO_ENABLED=0`), output to `dist/`
   - `hwtest` (`go test -tags hwtest ./internal/collect/...`)
+
+  CI (`.github/workflows/ci.yml`, already in the repo) runs `make lint` and, for tests, the same
+  package sets as `test`/`test-contract`/`test-integration`, so keep the targets and package paths
+  in sync
 - [ ] T003 [P] Create `.gitignore` listing `dist/`, `data/`, `tmp-data/`, `spool/`, `*.exe`,
   `hne-collector.json`, `hne-collector.log*`, and `*.db*`
 - [ ] T004 [P] Vendor htmx (2.x) and Cytoscape.js (3.x) minified files into
@@ -96,17 +100,20 @@ interfaces, and the ingest path. Every story needs these.
     `invalid_future_window.json`
   - `invalid_too_many_observations.json` (4097), `invalid_too_many_subnets.json` (17)
   - `invalid_schema_version_2.json`, `invalid_unknown_field.json`
-  - `invalid_public_subnet.json` (`8.8.8.0/24`), `invalid_skipped_without_reason.json`
+  - `invalid_public_subnet.json` (`8.8.8.0/24`), `invalid_skipped_without_reason.json`,
+    `invalid_ip_in_skipped_subnet.json` (observation inside a `skipped` entry)
 - [ ] T007 [P] Write `tests/contract/schema_test.go`. It loads
   `specs/001-lan-inventory-topology/contracts/collector-upload-api.yaml`, extracts
   `components.schemas`, and checks that every `valid_*.json` passes and every `invalid_*` that is
-  schema-detectable fails, using `santhosh-tekuri/jsonschema/v6`. It also checks that marshaling
+  schema-detectable fails, using `santhosh-tekuri/jsonschema/v6`. `invalid_skipped_without_reason`
+  is schema-detectable via the `if`/`then` rule on `SubnetScan`, while the subnet-membership and
+  RFC 1918 rules are checked only by Go validation (T008). It also checks that marshaling
   `contract.CollectionRun` built from each valid fixture produces JSON that still validates (a
   round trip)
 - [ ] T008 [P] Write `internal/contract/validate_test.go`, a table test over all fixtures from T006.
   `Validate(run, now)` must accept the valid ones and return the matching error code for each
   invalid one. Rules to quote exactly:
-  - "`ip` must be inside a scanned subnet of the same run"
+  - "`ip` must be inside a non-skipped subnet of the same run"
   - "MAC is required when method is `arp`"
   - "`observed_at` must be within the run window"
   - "The run window must be no longer than 1 hour and must not be more than 5 minutes in the
@@ -150,7 +157,10 @@ interfaces, and the ingest path. Every story needs these.
   - It returns `stored`.
   - A second call with the same `collection_id` returns `duplicate` and changes no rows.
   - It updates the collector's `last_report_at` and `last_clock_skew_ms = sent_at - received_at`.
-  - It calls the projection applier exactly once per stored run (use a fake applier).
+  - It calls the projection applier exactly once per stored run (use a fake applier), and copies
+    the subnets the applier reports as new into `UploadResult.new_subnets`.
+  - **Ingest never filters**: a run covering a subnet the fake applier treats as ignored is still
+    stored byte-for-byte in `collection_runs`, with all its `run_subnets` rows.
 
 ### Implementation
 
@@ -177,11 +187,11 @@ interfaces, and the ingest path. Every story needs these.
 - [ ] T018 Write `internal/store/migrations/0001_init.sql` and `internal/store/store.go`
   (`modernc.org/sqlite`, WAL, embedded migrations via `user_version`). Create every table in
   data-model.md:
-  - Facts: `collectors`, `subnets`, `collection_runs`, `run_subnets`, `user_device_attrs`,
+  - Facts: `collectors`, `collection_runs`, `run_subnets`, `user_device_attrs`,
     `user_identity_alias`, `user_links`, `user_acks`, `user_subnet_attrs`, `settings`, `sessions`.
     User fact tables reference **`identity_key`** (and `cidr` for subnets), never `devices.id`
     (data-model.md "User facts")
-  - Projections: `sightings`, `devices`, `device_addresses`, `events`, `links`
+  - Projections: `subnets`, `sightings`, `devices`, `device_addresses`, `events`, `links`
 
   Include these constraints exactly:
   - `collectors.name` unique, 1–64 chars, `[a-z0-9-]`; `kind` in (`builtin`,`remote`)
@@ -211,8 +221,9 @@ interfaces, and the ingest path. Every story needs these.
 - [ ] T023 Write `internal/ingest/ingest.go`: `Ingester` with
   `Ingest(ctx, collectorID int64, raw []byte, run *contract.CollectionRun, receivedAt time.Time)
   (contract.UploadResult, error)`. It runs one transaction that inserts the run and its
-  run_subnets, then calls `Applier.Apply(tx, run, collectorID)`. Duplicates are detected by PK
-  conflict on `collection_id`. Make T013 pass
+  run_subnets **unchanged**, then calls `Applier.Apply(tx, run, collectorID) (newSubnets
+  []string, err error)` and returns those as `new_subnets`. Duplicates are detected by PK conflict
+  on `collection_id`. Ingest never filters observations (data-model.md). Make T013 pass
 - [ ] T024 Write `cmd/hne-server/main.go`. It loads config, opens the store, and ensures the
   `builtin` collector row named `nas` (`interval_seconds` = scan interval). It seeds `settings`
   defaults (offline multiplier 3) and seeds **no subnets**. Then it starts the HTTP server with
@@ -272,11 +283,22 @@ friendly names that survive scans.
     row.
   - A changed hostname creates a new sighting row.
   - `display_name` is "user name, else hostname, else IP".
-  - Device IDs are assigned in order of first observation.
-- [ ] T029 [P] [US1] Write `internal/inventory/offline_test.go`. Rule from research R7: "offline
-  when it has not been seen by any collector covering its subnet for at least 3 completed runs of
-  each such collector **and** for at least 3 × that collector's interval". Cover:
-  The rule above is now refined by "active collectors" in research R7. Cover:
+  - Device IDs are assigned in ingest order.
+  - **Subnet projection (F1)**: the first run with a non-skipped `SubnetScan` for a CIDR creates a
+    `subnets` row (`first_seen_at` = the run's `started_at`, `discovered_by` = its collector), and
+    `Apply` returns it as new. The second run returns nothing new. A `skipped`/`too_large` entry
+    creates no row and is not returned.
+  - A `user_subnet_attrs` fact `ignored = true` makes `Apply` skip that subnet's observations (no
+    sightings or devices), while the run remains stored. Renaming sets `subnets.name`.
+- [ ] T029 [P] [US1] Write `internal/inventory/offline_test.go`. The rule from research R7:
+  - "A collector is **active** for subnet S at time *t* if it completed a scan of S within
+    3 × its interval before *t*."
+  - "After ingesting a completed scan R of subnet S, each device in S that R didn't see goes
+    **offline** when both of these hold: (1) every collector that is active for S at
+    `R.finished_at` has completed ≥ 3 scans of S since the device's `last_seen`, and none of those
+    scans saw it, and (2) `R.finished_at − last_seen` ≥ 3 × the interval of R's collector."
+
+  Cover:
   - Incomplete or skipped runs (`complete` false) don't count.
   - **NAS active, desktop silent**: the device goes offline after 3 NAS scans. The silent
     collector neither blocks nor triggers it.
@@ -327,7 +349,9 @@ friendly names that survive scans.
   `internal/inventory/apply.go`, which implements `ingest.Applier`. It folds observations into
   `sightings`, `devices`, and `device_addresses` per data-model.md "Sighting" (extend `last_seen`
   when the tuple matches the latest sighting for the same collector and subnet, otherwise insert).
-  It sets the manufacturer via `oui`. Make T028 pass
+  It sets the manufacturer via `oui`. It also maintains the `subnets` projection: it creates
+  rows for non-skipped CIDRs, returns them as new, applies `user_subnet_attrs` (name/ignored), and
+  skips observations of ignored subnets. Make T028 pass
 - [ ] T038 [US1] Write `internal/inventory/offline.go`: `EvaluateStatus(tx, run)` sets `online` or
   `offline` per R7, using only stored scan timestamps (no `now`). Call it only at the end of
   `Apply` for completed scans. Add `store.SubnetStatus(now)` (in T039) to compute staleness when a
@@ -356,19 +380,27 @@ friendly names that survive scans.
   `GET /ui/scan-status` (htmx polling) shows progress and when the last scan finished
 - [ ] T044 [US1] Write `internal/web/settings.go` + `settings.html`. It shows the subnets discovered
   so far (read-only list with first seen and discovered by; there is no "add subnet" form), the
-  built-in scan interval, and the offline multiplier. Changes apply without a restart
+  too-large subnets skipped in each collector's latest run (read from `run_subnets`), the built-in
+  scan interval, and the offline multiplier. Changes apply without a restart
 - [ ] T045 [US1] Write `internal/web/home.go` + `home.html`: counts (online/offline), subnet
   last-scanned and stale status, and a **Scan now** button. Make T031 pass
 - [ ] T046 [P] [US1] Write `internal/collect/arp_linux_hw_test.go` (`//go:build hwtest && linux`):
   a real ARP scan of the host's subnet finds at least the default gateway with a MAC
-- [ ] T047 [P] [US1] Write `deploy/Dockerfile`: a multi-stage build, `CGO_ENABLED=0`, final image
+- [ ] T047 [P] [US1] Write `deploy/Dockerfile`: a multi-stage build, `CGO_ENABLED=0`. The build
+  stage MUST be `FROM --platform=$BUILDPLATFORM golang:1.26` and cross-compile with
+  `GOOS=$TARGETOS GOARCH=$TARGETARCH`, because the CI runner has no QEMU emulation. The final stage
+  only COPYs files (no `RUN`). Final image
   `gcr.io/distroless/static:nonroot` with the server binary,
   `HEALTHCHECK CMD ["/hne-server","healthcheck"]` (distroless has no curl), and `VOLUME /data`.
   Write `deploy/compose.yaml` with `network_mode: host`, `cap_add: [NET_RAW]`, `./data:/data`,
   and `restart: unless-stopped`, and **no subnet settings**. The binary needs `CAP_NET_RAW` as a
   file capability or the container must run as root. Pick `setcap` in the build stage and
-  document it in comments. Also write `deploy/smoke.sh`, which:
-  1. builds the image,
+  document it in comments. Also write `deploy/smoke.sh`. It MUST be POSIX `sh` (no bash-isms),
+  use only `docker` and `curl`, and honour two variables: `HNE_IMAGE` (use this prebuilt image and
+  skip the build) and `HNE_SMOKE_HOST` (default `127.0.0.1`). It runs the container with
+  `-p 8080:8080 --no-builtin-scan` (not host networking), so it works in CI
+  (`.github/workflows/ci.yml` job `image`). The script:
+  1. builds the image (unless `HNE_IMAGE` is set),
   2. runs it on an empty temp volume and waits for healthy,
   3. completes `/setup`,
   4. restarts it on the same volume,
@@ -443,9 +475,11 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
   - **New subnet (SC-010)**: uploading `valid_new_subnet.json` (never-seen `10.20.30.0/24`) with no
     prior configuration stores it, returns it in `new_subnets`, auto-creates the `subnets` row
     (`ignored` false), shows its devices on `/devices`, and shows a "new subnet" notice on `/`.
-    The skipped `10.0.0.0/16` is listed as too large.
-  - After the owner ignores `10.20.30.0/24`: `GET /api/v1/ping` lists it in `ignored_subnets`,
-    observations for it in later uploads are dropped, and it is hidden from lists.
+    The skipped `10.0.0.0/16` gets **no** `subnets` row and is **not** in `new_subnets`; `/settings`
+    lists it as skipped (too large) from the latest run.
+  - After the owner ignores `10.20.30.0/24`: `GET /api/v1/ping` lists it in `ignored_subnets`. A
+    later upload still containing observations for it is stored in full, but those observations
+    don't appear in any device data, and the subnet is hidden from lists.
   - After revoke, uploads get 401.
 - [ ] T056 [P] [US2] Write `cmd/hne-collector/main_test.go`. Config loading: the file
   `hne-collector.json` next to the binary, with env `HNE_SERVER_URL`/`HNE_TOKEN`/`HNE_SUBNETS`
@@ -463,11 +497,9 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
   `GET /api/v1/ping`. Bearer auth applies to `/api/v1/*` only, with no session or Origin checks
   there. Make T049 pass
 - [ ] T059 [US2] Extend `internal/ingest/ingest.go`. Compute `clock_skew_ms` and return it in
-  `UploadResult`. Flag the collector when |skew| > 300000 ms. Auto-create unknown CIDRs in
-  `subnets` (`first_seen_at`, `discovered_by`) and return them in `new_subnets`. Drop
-  observations for ignored subnets. Add T055's skew, new-subnet, and ignored assertions to
-  `internal/ingest/ingest_test.go` first. The built-in collector goes through this same path, so
-  the NAS's own subnet is discovered the same way
+  `UploadResult`. Flag the collector when |skew| > 300000 ms. Add the skew assertion from T055
+  to `internal/ingest/ingest_test.go` first. Subnet auto-creation, `new_subnets`, and
+  ignored-subnet handling already exist from US1 (T023, T037), and T055 checks them over HTTP
 - [ ] T060 [US2] Extend `internal/inventory/identity.go` and `internal/inventory/apply.go` with
   weak identity keys, fold-in of weak devices when the MAC becomes known, and multi-subnet
   `device_addresses`. Make T054 pass
@@ -682,7 +714,8 @@ subnet, the gateways and the desktop bridge are visible, and a manual link persi
   Add `internal/web/security_test.go` asserting the headers and that the hostname
   `<script>alert(1)</script>` is rendered escaped
 - [ ] T096 Run `make lint test test-contract test-integration` and `deploy/smoke.sh`, and fix
-  anything flagged. Then run the `hwtest` targets on the NAS and the desktop
+  anything flagged. Confirm the GitHub Actions CI run on `main` is green, including the `image`
+  job. Then run the `hwtest` targets on the NAS and the desktop
 - [ ] T097 Run quickstart.md §1–§7 end to end on the real NAS and desktop, including the
   new-subnet check in §4. Record the results (SC-001…SC-010) in
   `specs/001-lan-inventory-topology/checklists/validation.md`

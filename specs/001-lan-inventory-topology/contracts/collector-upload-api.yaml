@@ -141,6 +141,15 @@ components:
     SubnetScan:
       type: object
       required: [cidr, method, complete, hosts_probed]
+      if:
+        properties:
+          method: { const: skipped }
+      then:
+        required: [skip_reason]
+        properties:
+          skip_reason: { type: string }
+          complete: { const: false }
+          hosts_probed: { const: 0 }
       properties:
         cidr:
           type: string
