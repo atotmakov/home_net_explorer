@@ -1,0 +1,20 @@
+# Home Net Explorer on the NAS (quickstart.md §3). No subnet settings: the server discovers
+# the subnets it is attached to. Start with: docker compose up -d
+services:
+  hne-server:
+    image: ghcr.io/atotmakov/home_net_explorer:latest
+    # Host networking puts the container on the real LAN, so it can send ARP requests.
+    network_mode: host
+    cap_add: [NET_RAW]
+    volumes:
+      # A named volume inherits the image's /data ownership (non-root user 65532). To use a
+      # host folder instead: mkdir data && sudo chown 65532:65532 data, then "./data:/data".
+      - hne-data:/data
+    environment:
+      HNE_LISTEN: ":8080"
+      # HNE_SCAN_INTERVAL: "900s"   # default built-in scan interval (also editable in Settings)
+      # HNE_DNS_SERVER: ""          # optional private DNS server for hostnames; default: the gateway
+    restart: unless-stopped
+
+volumes:
+  hne-data:
