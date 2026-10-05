@@ -2,6 +2,8 @@ package web
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"html/template"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/auth"
 	"github.com/atotmakov/home_net_explorer/internal/clock"
+	"github.com/atotmakov/home_net_explorer/internal/store"
 )
 
 //go:embed templates/*.html
@@ -26,9 +29,33 @@ const SessionCookie = "hne_session"
 
 // Options are the server's dependencies.
 type Options struct {
-	Owner *auth.Owner
-	Clock clock.Clock
-	Log   *slog.Logger
+	Owner   *auth.Owner
+	Clock   clock.Clock
+	Log     *slog.Logger
+	Store   *store.Store
+	Scanner Scanner     // nil when the built-in collector is disabled
+	Facts   FactWriter  // serializes user edits with ingest
+	Version string
+}
+
+// Scanner is the built-in collector as seen by the UI.
+type Scanner interface {
+	Trigger() bool
+	Status() ScanStatus
+}
+
+// ScanStatus describes the built-in collector's current/last scan.
+type ScanStatus struct {
+	Running      bool
+	LastStarted  time.Time
+	LastFinished time.Time
+	LastFound    int
+	LastError    string
+}
+
+// FactWriter runs a user-fact transaction serialized with ingest (ingest.Ingester.Do).
+type FactWriter interface {
+	Do(ctx context.Context, f func(tx *sql.Tx) error) error
 }
 
 // Server is the HTTP front end: owner UI and /api/v1.
@@ -93,6 +120,7 @@ func (s *Server) loadTemplates() error {
 }
 
 var funcs = template.FuncMap{
+	"statuses": func() []string { return []string{"online", "offline", "new", "new_offline"} },
 	"fmtTime": func(t time.Time) string {
 		if t.IsZero() {
 			return "—"
@@ -114,6 +142,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /login", s.handleLogin)
 	s.mux.HandleFunc("POST /logout", s.handleLogout)
 	s.mux.HandleFunc("GET /{$}", s.handleHome)
+	s.mux.HandleFunc("GET /devices", s.handleDevices)
+	s.mux.HandleFunc("GET /devices/{id}", s.handleDevice)
+	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
+	s.mux.HandleFunc("POST /scan", s.handleScan)
+	s.mux.HandleFunc("GET /ui/scan-status", s.handleScanStatus)
+	s.mux.HandleFunc("GET /settings", s.handleSettings)
+	s.mux.HandleFunc("POST /settings", s.handleSettingsSave)
 }
 
 // Handler returns the full middleware chain.
@@ -125,8 +160,6 @@ func (s *Server) Handler() http.Handler {
 	return s.logRequests(h)
 }
 
-// Handle registers an extra route (used by later stories' handlers in this package).
-func (s *Server) handle(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }
 
 // authGate: first run → /setup; afterwards every page needs an owner session (FR-030).
 func (s *Server) authGate(next http.Handler) http.Handler {
@@ -226,6 +259,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 
 // renderPartial executes a named block (htmx fragment) without the layout.
 func (s *Server) renderPartial(w http.ResponseWriter, r *http.Request, name, block string, data any) {
+	s.renderPartialStatus(w, r, http.StatusOK, name, block, data)
+}
+
+// renderPartialStatus is renderPartial with an explicit status code.
+func (s *Server) renderPartialStatus(w http.ResponseWriter, r *http.Request, status int, name, block string, data any) {
 	t, ok := s.pages[name]
 	if !ok {
 		s.serverError(w, r, fmt.Errorf("unknown template %s", name))
@@ -237,5 +275,6 @@ func (s *Server) renderPartial(w http.ResponseWriter, r *http.Request, name, blo
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	buf.WriteTo(w)
 }

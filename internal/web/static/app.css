@@ -35,3 +35,19 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .s-online { color: var(--ok); } .s-offline { color: var(--muted); } .s-new, .s-new_offline { color: var(--new); }
 .warn { color: var(--warn); }
 .table-wrap { overflow-x: auto; }
+h2 { font-size: 1.1rem; margin: 20px 0 10px; }
+.card h2 { margin-top: 0; }
+section { margin-bottom: 20px; }
+.stats { display: flex; flex-wrap: wrap; gap: 12px; }
+.stat { min-width: 120px; }
+.stat .num { display: block; font-size: 1.8rem; font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.filters input, .filters select { width: auto; margin: 0; }
+.filters input[type=search] { flex: 1 1 220px; }
+label.inline { display: inline-flex; align-items: center; gap: 4px; margin: 0; }
+label.inline input { width: auto; margin: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+code { font-size: .9em; }

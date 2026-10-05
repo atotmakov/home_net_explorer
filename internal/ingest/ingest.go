@@ -31,10 +31,12 @@ func New(s *store.Store, a Applier) *Ingester {
 	return &Ingester{store: s, applier: a}
 }
 
-// Lock serializes other writers (user facts) with ingest; the returned func unlocks.
-func (in *Ingester) Lock() func() {
+// Do runs f in a transaction serialized with ingest. User facts are written through Do so
+// their order relative to runs is the order a rebuild replays.
+func (in *Ingester) Do(ctx context.Context, f func(tx *sql.Tx) error) error {
 	in.mu.Lock()
-	return in.mu.Unlock
+	defer in.mu.Unlock()
+	return in.store.Tx(ctx, f)
 }
 
 // Ingest stores the run unchanged (raw body gzip-compressed, plus its run_subnets) and applies

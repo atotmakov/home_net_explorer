@@ -1,0 +1,36 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Settings</h1>
+<section class="card">
+  <h2>Subnets</h2>
+  <p class="muted">Subnets are discovered automatically from each collector's network adapters. Only private ranges are ever scanned.</p>
+  {{if .Subnets}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Subnet</th><th>Name</th><th>First seen</th><th>Discovered by</th><th>Devices</th><th>Status</th></tr></thead>
+    <tbody>
+    {{range .Subnets}}
+      <tr>
+        <td>{{.CIDR}}</td><td>{{.Name}}</td><td>{{fmtTime .FirstSeen}}</td><td>{{.DiscoveredBy}}</td><td>{{.Devices}}</td>
+        <td>{{if .Ignored}}<span class="badge">ignored</span>{{else if .Stale}}<span class="badge warn">stale</span>{{else}}<span class="badge s-online">current</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="muted">None yet.</p>{{end}}
+  {{if .Skipped}}
+  <h3>Skipped (too large to scan automatically)</h3>
+  <ul>{{range .Skipped}}<li>{{.CIDR}} <span class="muted">seen by {{.Collector}}</span></li>{{end}}</ul>
+  <p class="muted">To scan part of one, list narrower subnets in HNE_SUBNETS (NAS) or in the collector's hne-collector.json.</p>
+  {{end}}
+</section>
+<section class="card">
+  <h2>Scanning</h2>
+  <form method="post" action="/settings">
+    <label>Built-in scan interval (minutes) <input type="number" name="interval_minutes" min="1" max="1440" value="{{.IntervalMinutes}}" {{if not .BuiltinEnabled}}disabled{{end}}></label>
+    <label>Mark a device offline after this many missed scans <input type="number" name="offline_multiplier" min="1" max="10" value="{{.OfflineMultiplier}}"></label>
+    <button type="submit">Save</button>
+  </form>
+</section>
+<p class="muted">Home Net Explorer {{.Version}}</p>
+{{end}}
+{{end}}

@@ -94,7 +94,3 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
-
-func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, "home.html", page{Title: "Home", Nav: true, Active: "home"})
-}

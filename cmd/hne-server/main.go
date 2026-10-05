@@ -2,7 +2,8 @@
 // built-in collector for the NAS's own subnets.
 //
 //	hne-server [serve] [--listen :8080] [--data /data] [--no-builtin-scan]
-//	hne-server healthcheck
+//	hne-server rebuild       recompute all projections from the stored runs and user facts
+//	hne-server healthcheck   exit 0 if the server answers /healthz (container HEALTHCHECK)
 package main
 
 import (
@@ -13,29 +14,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/atotmakov/home_net_explorer/internal/auth"
-	"github.com/atotmakov/home_net_explorer/internal/clock"
-	"github.com/atotmakov/home_net_explorer/internal/store"
-	"github.com/atotmakov/home_net_explorer/internal/web"
+	"github.com/atotmakov/home_net_explorer/internal/app"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
-// Settings keys and defaults.
-const (
-	settingOfflineMultiplier = "offline_multiplier"
-	builtinCollector         = "nas"
-)
-
 func main() {
 	args := os.Args[1:]
 	cmd := "serve"
-	if len(args) > 0 && (args[0] == "serve" || args[0] == "healthcheck") {
+	if len(args) > 0 && (args[0] == "serve" || args[0] == "healthcheck" || args[0] == "rebuild") {
 		cmd, args = args[0], args[1:]
 	}
 	cfg, err := loadConfig(args, os.Getenv)
@@ -46,53 +37,54 @@ func main() {
 	switch cmd {
 	case "healthcheck":
 		os.Exit(runHealthcheck(cfg.Listen))
+	case "rebuild":
+		err = rebuild(cfg)
 	default:
-		if err := serve(cfg); err != nil {
-			slog.Error("hne-server stopped", "err", err)
-			os.Exit(1)
-		}
+		err = serve(cfg)
+	}
+	if err != nil {
+		slog.Error("hne-server", "cmd", cmd, "err", err)
+		os.Exit(1)
+	}
+}
+
+func options(cfg Config, log *slog.Logger, noScan bool) app.Options {
+	return app.Options{
+		DataDir:       cfg.DataDir,
+		Log:           log,
+		ScanInterval:  cfg.ScanInterval,
+		Subnets:       cfg.Subnets,
+		DNSServer:     cfg.DNSServer,
+		NoBuiltinScan: noScan,
+		Version:       version,
 	}
 }
 
 func serve(cfg Config) error {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
-	log.Info("starting", "version", version, "listen", cfg.Listen, "data", cfg.DataDir)
-
-	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
-		return err
-	}
-	st, err := store.Open(filepath.Join(cfg.DataDir, "hne.db"))
-	if err != nil {
-		return err
-	}
-	defer st.Close()
+	log.Info("starting", "version", version, "listen", cfg.Listen, "data", cfg.DataDir, "builtin_scan", !cfg.NoBuiltinScan)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if _, err := st.EnsureCollector(ctx, builtinCollector, store.KindBuiltin, int(cfg.ScanInterval.Seconds())); err != nil {
-		return err
-	}
-	if err := st.SetDefaultSetting(ctx, settingOfflineMultiplier, "3"); err != nil {
-		return err
-	}
-
-	clk := clock.Real{}
-	srv, err := web.New(web.Options{Owner: auth.NewOwner(st.DB(), clk), Clock: clk, Log: log})
+	a, err := app.New(ctx, options(cfg, log, cfg.NoBuiltinScan))
 	if err != nil {
 		return err
 	}
+	a.Start(ctx)
+	defer a.Close()
+
 	httpSrv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           srv.Handler(),
+		Handler:           a.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.ListenAndServe() }()
 	select {
 	case err := <-errc:
+		stop()
 		if !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
@@ -102,4 +94,19 @@ func serve(cfg Config) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpSrv.Shutdown(shutdownCtx)
+}
+
+func rebuild(cfg Config) error {
+	ctx := context.Background()
+	a, err := app.New(ctx, options(cfg, slog.Default(), true))
+	if err != nil {
+		return err
+	}
+	defer a.Close()
+	start := time.Now()
+	if err := a.Rebuild(ctx); err != nil {
+		return err
+	}
+	fmt.Printf("rebuilt projections in %s\n", time.Since(start).Round(time.Millisecond))
+	return nil
 }

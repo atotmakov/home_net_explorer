@@ -1,4 +1,56 @@
 {{define "content"}}
+{{with .Data}}
 <h1>Home</h1>
-<p>No scans yet.</p>
+<section class="stats">
+  <div class="card stat"><span class="num">{{.Counts.Total}}</span> devices</div>
+  <div class="card stat"><span class="num s-online">{{.Counts.Online}}</span> online</div>
+  <div class="card stat"><span class="num s-offline">{{.Counts.Offline}}</span> offline</div>
+  <div class="card stat"><span class="num s-new">{{.Counts.New}}</span> new</div>
+</section>
+
+<section class="card">
+  <h2>Built-in scan</h2>
+  {{template "scan-status" .Scan}}
+</section>
+
+<section>
+  <h2>Subnets</h2>
+  {{if .Subnets}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Subnet</th><th>Devices</th><th>Last scanned</th><th>By</th><th>Status</th></tr></thead>
+    <tbody>
+    {{range .Subnets}}{{if not .Ignored}}
+      <tr>
+        <td><a href="/devices?subnet={{.CIDR}}">{{.CIDR}}</a>{{if .Name}} <span class="muted">{{.Name}}</span>{{end}}</td>
+        <td>{{.Devices}}</td>
+        <td>{{fmtTime .LastScanned}}</td>
+        <td>{{.LastScannedBy}}</td>
+        <td>{{if .Stale}}<span class="badge warn" title="No collector covering this subnet is reporting">stale</span>{{else}}<span class="badge s-online">current</span>{{end}}</td>
+      </tr>
+    {{end}}{{end}}
+    </tbody>
+  </table></div>
+  {{else}}
+  <p class="muted">No subnets yet. They appear automatically after the first scan.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+
+{{define "scan-status"}}
+<div id="scan-status" {{if .Status.Running}}hx-get="/ui/scan-status" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
+{{if .Enabled}}
+  {{if .Status.Running}}
+    <p>Scanning…</p>
+  {{else}}
+    <p>
+      Last scan: {{fmtTime .Status.LastFinished}}{{if not .Status.LastFinished.IsZero}}, {{.Status.LastFound}} addresses found{{end}}.
+      {{if .Status.LastError}}<span class="error">{{.Status.LastError}}</span>{{end}}
+    </p>
+    <button type="button" hx-post="/scan" hx-target="#scan-status" hx-swap="outerHTML">Scan now</button>
+  {{end}}
+{{else}}
+  <p class="muted">The built-in collector is disabled (--no-builtin-scan).</p>
+{{end}}
+</div>
 {{end}}
