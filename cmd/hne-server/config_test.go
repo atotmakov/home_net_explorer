@@ -51,13 +51,13 @@ func TestConfigEnvAndFlags(t *testing.T) {
 
 func TestConfigRejects(t *testing.T) {
 	bad := []map[string]string{
-		{"HNE_SUBNETS": "8.8.8.0/24"},        // not private
-		{"HNE_SUBNETS": "192.168.0.0/15"},    // wider than /16
-		{"HNE_SUBNETS": "10.0.0.0/31"},       // narrower than /30
-		{"HNE_SUBNETS": "192.168.1.0"},       // not a CIDR
-		{"HNE_DNS_SERVER": "8.8.8.8"},        // public resolver (Principle I)
-		{"HNE_DNS_SERVER": "nonsense"},       // not an address
-		{"HNE_SCAN_INTERVAL": "0s"},          // must be positive
+		{"HNE_SUBNETS": "8.8.8.0/24"},         // not private
+		{"HNE_SUBNETS": "192.168.0.0/15"},     // wider than /16
+		{"HNE_SUBNETS": "10.0.0.0/31"},        // narrower than /30
+		{"HNE_SUBNETS": "192.168.1.0"},        // not a CIDR
+		{"HNE_DNS_SERVER": "8.8.8.8"},         // public resolver (Principle I)
+		{"HNE_DNS_SERVER": "nonsense"},        // not an address
+		{"HNE_SCAN_INTERVAL": "0s"},           // must be positive
 		{"HNE_SCAN_INTERVAL": "fifteen mins"}, // unparsable
 	}
 	for _, m := range bad {
