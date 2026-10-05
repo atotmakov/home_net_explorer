@@ -24,6 +24,7 @@ CREATE TABLE collection_runs (
     finished_at    TEXT NOT NULL,
     sent_at        TEXT NOT NULL,
     received_at    TEXT NOT NULL,
+    interval_seconds INTEGER NOT NULL DEFAULT 0, -- the run's own interval (offline rule, R7)
     payload_gz     BLOB NOT NULL
 );
 CREATE INDEX collection_runs_received ON collection_runs (received_at);

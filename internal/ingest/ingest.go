@@ -57,10 +57,10 @@ func (in *Ingester) Ingest(ctx context.Context, collectorID int64, raw []byte, r
 
 	err = in.store.Tx(ctx, func(tx *sql.Tx) error {
 		r, err := tx.ExecContext(ctx, `INSERT INTO collection_runs
-			(collection_id, collector_id, schema_version, started_at, finished_at, sent_at, received_at, payload_gz)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (collection_id) DO NOTHING`,
+			(collection_id, collector_id, schema_version, started_at, finished_at, sent_at, received_at, interval_seconds, payload_gz)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (collection_id) DO NOTHING`,
 			run.CollectionID, collectorID, run.SchemaVersion, store.FormatTime(run.StartedAt),
-			store.FormatTime(run.FinishedAt), store.FormatTime(run.SentAt), store.FormatTime(receivedAt), payload)
+			store.FormatTime(run.FinishedAt), store.FormatTime(run.SentAt), store.FormatTime(receivedAt), run.IntervalSeconds, payload)
 		if err != nil {
 			return err
 		}
