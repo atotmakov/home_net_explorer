@@ -44,7 +44,7 @@ Deploy it from the Windows desktop with the same flow as the cctv-ui project:
 
 ```powershell
 Copy-Item .env.deploy.example .env.deploy   # once: set NAS_HOST, NAS_USER, SSH_KEY, IMAGE_PLATFORM, HNE_PORT
-.deploy.ps1
+.\deploy.ps1
 ```
 
 `deploy.ps1` pulls the image with crane, streams it to the NAS over SSH, runs `docker load`,
