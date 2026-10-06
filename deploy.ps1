@@ -125,10 +125,15 @@ cd '$NasDir'
 echo '  -> Loading image...'
 sudo docker load < '$RemoteArchive'
 rm -f '$RemoteArchive'
-echo '  -> Preparing data folder (owned by the image user 65532)...'
-sudo mkdir -p data
-sudo chown 65532:65532 data
-printf 'HNE_PORT=%s\n' '$Port' > .env
+# The container runs as this SSH user (HNE_UID/HNE_GID), so the data folder needs no sudo:
+# only docker itself runs with sudo, which DSM allows without a password.
+echo '  -> Preparing data folder...'
+mkdir -p data
+if [ ! -w data ]; then
+    echo "  !! '$NasDir/data' is not writable by `$(id -un). Fix once on the NAS: sudo chown -R `$(id -u):`$(id -g) '$NasDir/data'" >&2
+    exit 1
+fi
+printf 'HNE_PORT=%s\nHNE_UID=%s\nHNE_GID=%s\n' '$Port' "`$(id -u)" "`$(id -g)" > .env
 echo '  -> Starting container...'
 sudo docker compose up -d --remove-orphans
 sudo docker compose ps

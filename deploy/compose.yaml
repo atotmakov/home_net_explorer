@@ -1,10 +1,13 @@
 # Home Net Explorer on the NAS (quickstart.md §3). deploy.ps1 uploads this file as
-# docker-compose.yml, creates ./data (owned by the image user 65532) and writes HNE_PORT to .env.
+# docker-compose.yml, creates ./data as the SSH user and writes HNE_PORT/HNE_UID/HNE_GID to .env.
 # No subnet settings: the server discovers the subnets it is attached to.
 services:
   hne-server:
     image: ghcr.io/atotmakov/home_net_explorer:latest
     container_name: home-net-explorer
+    # Run as the NAS user that owns ./data (deploy.ps1 writes HNE_UID/HNE_GID to .env). Raw ARP
+    # still works because the binary carries the CAP_NET_RAW file capability. Default: image user.
+    user: "${HNE_UID:-65532}:${HNE_GID:-65532}"
     # Host networking puts the container on the real LAN, so it can send ARP requests.
     # (There is no port mapping; the UI listens on HNE_PORT directly on the NAS.)
     network_mode: host
