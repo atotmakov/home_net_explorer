@@ -1,0 +1,29 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Home Net Explorer</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/vendor/htmx.min.js" defer></script>
+</head>
+<body>
+{{if .Nav}}
+<nav class="top">
+  <span class="brand">Home Net Explorer</span>
+  <a href="/" {{if eq .Active "home"}}aria-current="page"{{end}}>Home</a>
+  <a href="/devices" {{if eq .Active "devices"}}aria-current="page"{{end}}>Devices</a>
+  <a href="/timeline" {{if eq .Active "timeline"}}aria-current="page"{{end}}>Timeline</a>
+  <a href="/map" {{if eq .Active "map"}}aria-current="page"{{end}}>Map</a>
+  <a href="/collectors" {{if eq .Active "collectors"}}aria-current="page"{{end}}>Collectors</a>
+  <a href="/settings" {{if eq .Active "settings"}}aria-current="page"{{end}}>Settings</a>
+  <form method="post" action="/logout" class="logout"><button type="submit">Log out</button></form>
+</nav>
+{{end}}
+<main>
+{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+{{template "content" .}}
+</main>
+</body>
+</html>
+{{end}}

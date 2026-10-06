@@ -1,0 +1,49 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Devices</h1>
+<form class="filters" method="get" action="/devices"
+      hx-get="/devices" hx-target="#device-rows" hx-trigger="input changed delay:300ms, change" hx-push-url="true">
+  <input type="search" name="q" value="{{.Filter.Q}}" placeholder="Search name, IP, MAC, vendor" aria-label="Search">
+  <select name="subnet" aria-label="Subnet">
+    <option value="">All subnets</option>
+    {{range .Subnets}}{{if not .Ignored}}<option value="{{.CIDR}}" {{if eq .CIDR $.Data.Filter.Subnet}}selected{{end}}>{{.CIDR}}</option>{{end}}{{end}}
+  </select>
+  <select name="status" aria-label="Status">
+    <option value="">Any status</option>
+    {{range $s := statuses}}<option value="{{$s}}" {{if eq $s $.Data.Filter.Status}}selected{{end}}>{{$s}}</option>{{end}}
+  </select>
+  <input type="text" name="manufacturer" value="{{.Filter.Manufacturer}}" placeholder="Manufacturer" aria-label="Manufacturer">
+  <select name="sort" aria-label="Sort by">
+    {{range .Sorts}}<option value="{{.}}" {{if eq . $.Data.Filter.Sort}}selected{{end}}>sort: {{.}}</option>{{end}}
+  </select>
+  <select name="dir" aria-label="Direction">
+    <option value="asc">ascending</option>
+    <option value="desc" {{if eq .Dir "desc"}}selected{{end}}>descending</option>
+  </select>
+  <label class="inline"><input type="checkbox" name="randomized" value="1" {{if .Filter.Randomized}}checked{{end}}> randomized MAC</label>
+  <label class="inline"><input type="checkbox" name="weak" value="1" {{if .Filter.Weak}}checked{{end}}> weak ID</label>
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>IP</th><th>MAC</th><th>Hostname</th><th>Manufacturer</th><th>Status</th><th>First seen</th><th>Last seen</th></tr></thead>
+  <tbody id="device-rows">{{template "rows" .}}</tbody>
+</table></div>
+{{end}}
+{{end}}
+
+{{define "rows"}}
+{{range .Rows}}
+<tr>
+  <td><a href="/devices/{{.ID}}">{{.DisplayName}}</a>{{if .Type}} <span class="muted">{{.Type}}</span>{{end}}</td>
+  <td>{{range $i, $a := .Addresses}}{{if $i}}<br>{{end}}{{$a.IP}}{{end}}</td>
+  <td><code>{{.MAC}}</code>{{if .MACRandomized}} <span class="badge" title="Locally administered (randomized) MAC">randomized MAC</span>{{end}}{{if .Weak}} <span class="badge warn" title="Identified by IP/hostname, no MAC">weak ID</span>{{end}}</td>
+  <td>{{.Hostname}}</td>
+  <td>{{.Manufacturer}}</td>
+  <td><span class="badge s-{{.Status}}">{{.Status}}</span></td>
+  <td>{{fmtTime .FirstSeen}}</td>
+  <td>{{fmtTime .LastSeen}}</td>
+</tr>
+{{else}}
+<tr><td colspan="8" class="muted">No devices match.</td></tr>
+{{end}}
+{{end}}

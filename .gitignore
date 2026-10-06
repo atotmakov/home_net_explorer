@@ -17,3 +17,20 @@ hne-collector.log*
 
 # Local agent settings (may contain machine-specific or private values)
 .claude/settings.local.json
+
+# Go test/coverage output
+*.test
+*.out
+report.xml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# NAS deploy (deploy.ps1)
+.env.deploy
+*.tar.gz

@@ -1,0 +1,11 @@
+{{define "content"}}
+<section class="card narrow">
+  <h1>Welcome</h1>
+  <p>Set the owner password. Everything this tool collects stays on your home network.</p>
+  <form method="post" action="/setup">
+    <label>Password <input type="password" name="password" minlength="10" required autofocus autocomplete="new-password"></label>
+    <label>Confirm password <input type="password" name="confirm" minlength="10" required autocomplete="new-password"></label>
+    <button type="submit">Set password</button>
+  </form>
+</section>
+{{end}}

@@ -108,6 +108,7 @@ cmd/
 └── hne-collector/       # main: CLI (check | scan | run | version)
 
 internal/
+├── app/                 # server assembly + built-in scan loop (used by main and integration tests)
 ├── clock/               # Clock interface + fake (no wall-clock reads in projections)
 ├── contract/            # v1 upload types, validation, schema_version constants (shared)
 │   └── private.go       #   RFC 1918 table: the only IPv4 range literals allowed in code
@@ -120,7 +121,7 @@ internal/
 │   └── names.go         #   reverse DNS (LAN-only resolver) + mDNS
 ├── upload/              # collector side: HTTP client, spool, backoff
 ├── ingest/              # server side: validate → store run → fold into projections
-├── inventory/           # identity, merge/split, sightings, events, offline rule, link inference
+├── inventory/           # identity, merge/split, sightings, events, offline rule, links, rebuild
 ├── store/               # SQLite open/migrate, queries, rebuild, userfacts.go
 ├── auth/                # owner password/session, collector tokens
 ├── oui/                 # embedded IEEE OUI table + lookup

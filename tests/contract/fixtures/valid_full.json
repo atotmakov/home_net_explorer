@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "collection_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "collector": {
+    "name": "desktop",
+    "version": "dev",
+    "os": "windows"
+  },
+  "started_at": "2026-10-05T10:05:00.000Z",
+  "finished_at": "2026-10-05T10:06:30.000Z",
+  "sent_at": "2026-10-05T10:06:31.000Z",
+  "interval_seconds": 900,
+  "vantage": {
+    "hostname": "desktop",
+    "interfaces": [
+      {
+        "name": "home",
+        "ip": "192.168.1.10",
+        "prefix_len": 24,
+        "mac": "10:7b:44:01:02:03"
+      },
+      {
+        "name": "internet",
+        "ip": "192.168.8.176",
+        "prefix_len": 24,
+        "mac": "10:7b:44:01:02:04"
+      }
+    ],
+    "routes": [
+      {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.168.1.100",
+        "interface": "home"
+      },
+      {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.168.8.1",
+        "interface": "internet"
+      },
+      {
+        "destination": "192.168.1.0/24",
+        "interface": "home"
+      },
+      {
+        "destination": "192.168.8.0/24",
+        "interface": "internet"
+      }
+    ]
+  },
+  "subnets": [
+    {
+      "cidr": "192.168.1.0/24",
+      "method": "arp",
+      "complete": true,
+      "hosts_probed": 254
+    },
+    {
+      "cidr": "192.168.8.0/24",
+      "method": "arp",
+      "complete": true,
+      "hosts_probed": 254
+    }
+  ],
+  "observations": [
+    {
+      "observed_at": "2026-10-05T10:05:10.000Z",
+      "ip": "192.168.1.100",
+      "mac": "a0:b1:c2:d3:e4:f5",
+      "hostname": "router.lan",
+      "hostname_source": "dns",
+      "method": "arp"
+    },
+    {
+      "observed_at": "2026-10-05T10:05:11.000Z",
+      "ip": "192.168.1.20",
+      "mac": "00:11:32:aa:bb:cc",
+      "hostname": "nas.local",
+      "hostname_source": "mdns",
+      "method": "arp"
+    },
+    {
+      "observed_at": "2026-10-05T10:05:40.000Z",
+      "ip": "192.168.8.1",
+      "mac": "b4:0f:3b:10:20:30",
+      "hostname": "homerouter.cpe",
+      "hostname_source": "dns",
+      "method": "arp"
+    },
+    {
+      "observed_at": "2026-10-05T10:05:42.000Z",
+      "ip": "192.168.8.23",
+      "mac": "3c:22:fb:44:55:66",
+      "hostname": "printer.local",
+      "hostname_source": "mdns",
+      "method": "neighbor_cache"
+    }
+  ]
+}

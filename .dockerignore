@@ -1,0 +1,17 @@
+.git/
+.github/
+.claude/
+.specify/
+specs/
+dist/
+data/
+tmp-data/
+spool/
+*.exe
+*.log*
+.env*
+coverage/
+*.out
+report.xml
+Dockerfile*
+.dockerignore
