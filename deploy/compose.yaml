@@ -17,6 +17,9 @@ services:
       - ./data:/data
     environment:
       HNE_LISTEN: ":${HNE_PORT:-8080}"
+      # Empty = auto-discovery. Set (via HNE_SUBNETS in .env.deploy) when the NAS's own netmask
+      # is wider than /22, e.g. a /16, which is never swept automatically.
+      HNE_SUBNETS: "${HNE_SUBNETS:-}"
       # HNE_SCAN_INTERVAL: "900s"   # default built-in scan interval (also editable in Settings)
       # HNE_DNS_SERVER: ""          # optional private DNS server for hostnames; default: the gateway
     restart: unless-stopped

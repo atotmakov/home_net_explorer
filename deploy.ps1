@@ -31,6 +31,7 @@ $SshKey   = if ($config['SSH_KEY'])        { $config['SSH_KEY'] }        else { 
 $Image    = if ($config['IMAGE'])          { $config['IMAGE'] }          else { 'ghcr.io/atotmakov/home_net_explorer:latest' }
 $Platform = if ($config['IMAGE_PLATFORM']) { $config['IMAGE_PLATFORM'] } else { 'linux/amd64' }
 $Port     = if ($config['HNE_PORT'])       { $config['HNE_PORT'] }       else { '8080' }
+$Subnets  = if ($config['HNE_SUBNETS'])    { $config['HNE_SUBNETS'] }    else { '' }
 $Archive  = if ($config['IMAGE_ARCHIVE'])  { $config['IMAGE_ARCHIVE'] }  else { 'home-net-explorer.tar.gz' }
 $RemoteArchive = 'home-net-explorer.tar.gz'
 
@@ -133,7 +134,14 @@ if [ ! -w data ]; then
     echo "  !! '$NasDir/data' is not writable by `$(id -un). Fix once on the NAS: sudo chown -R `$(id -u):`$(id -g) '$NasDir/data'" >&2
     exit 1
 fi
-printf 'HNE_PORT=%s\nHNE_UID=%s\nHNE_GID=%s\n' '$Port' "`$(id -u)" "`$(id -g)" > .env
+printf 'HNE_PORT=%s\nHNE_UID=%s\nHNE_GID=%s\nHNE_SUBNETS=%s\n' '$Port' "`$(id -u)" "`$(id -g)" '$Subnets' > .env
+# Synology shares grant write through ACLs, typically to group "administrators", not via the
+# Unix mode bits. Give the container the SSH user's supplementary groups too, so it can write
+# ./data exactly like this user can (compose loads the override file automatically).
+{
+    printf 'services:\n  hne-server:\n    group_add:\n'
+    for g in `$(id -G); do printf '      - "%s"\n' "`$g"; done
+} > docker-compose.override.yml
 echo '  -> Starting container...'
 sudo docker compose up -d --remove-orphans
 sudo docker compose ps
