@@ -39,13 +39,20 @@ confirm that the empty inventory and the Collectors page both render.
 
 ## 3. Deploy to the NAS (User Story 1)
 
-```sh
-docker buildx build --platform linux/amd64,linux/arm64 -t hne-server:dev .
-# copy compose.yaml to the NAS; it sets network_mode: host, cap_add: [NET_RAW], ./data:/data
-docker compose up -d
+CI publishes `ghcr.io/atotmakov/home_net_explorer:latest` (multi-arch) on every merge to `main`.
+Deploy it from the Windows desktop with the same flow as the cctv-ui project:
+
+```powershell
+Copy-Item .env.deploy.example .env.deploy   # once: set NAS_HOST, NAS_USER, SSH_KEY, IMAGE_PLATFORM, HNE_PORT
+.deploy.ps1
 ```
 
-1. Open `http://<nas-ip>:8080`, run `/setup`, and log in.
+`deploy.ps1` pulls the image with crane, streams it to the NAS over SSH, runs `docker load`,
+prepares `NAS_DIR/data` (owned by uid 65532), uploads `deploy/compose.yaml` as
+`docker-compose.yml` (host networking, `NET_RAW`, `./data:/data`) and runs
+`docker compose up -d`. It finishes with a `/healthz` check from the desktop.
+
+1. Open `http://<nas-ip>:<HNE_PORT>`, run `/setup`, and log in.
 2. Click **Scan now**. Nothing about subnets is configured beforehand.
 3. In **Settings → Subnets**, confirm that the NAS's own subnet appeared automatically.
 

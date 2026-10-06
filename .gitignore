@@ -30,3 +30,7 @@ report.xml
 Thumbs.db
 *.swp
 *.tmp
+
+# NAS deploy (deploy.ps1)
+.env.deploy
+*.tar.gz
