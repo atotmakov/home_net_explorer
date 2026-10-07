@@ -271,14 +271,19 @@ func (c *collector) ignored(ctx context.Context) ([]netip.Prefix, error) {
 		}
 	}
 	if b, err := json.Marshal(ping.IgnoredSubnets); err == nil {
-		os.MkdirAll(c.spool.Dir, 0o700)
-		os.WriteFile(filepath.Join(c.spool.Dir, "ignored-subnets.json"), b, 0o600)
+		os.WriteFile(c.ignoredCache(), b, 0o600)
 	}
 	return out, nil
 }
 
+// ignoredCache keeps the last ignored_subnets from the server (outside spool/, which holds
+// only runs) for scans while the server is unreachable.
+func (c *collector) ignoredCache() string {
+	return filepath.Join(c.env.dir, "hne-collector.ignored")
+}
+
 func (c *collector) lastIgnored() []netip.Prefix {
-	b, err := os.ReadFile(filepath.Join(c.spool.Dir, "ignored-subnets.json"))
+	b, err := os.ReadFile(c.ignoredCache())
 	if err != nil {
 		return nil
 	}
