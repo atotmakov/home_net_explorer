@@ -5,13 +5,16 @@
 FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 ARG TARGETOS
 ARG TARGETARCH
+# VERSION and COMMIT are stamped by CI (T099); a plain local build reports dev/unknown.
 ARG VERSION=dev
+ARG COMMIT=unknown
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o /out/hne-server ./cmd/hne-server
+    go build -trimpath -ldflags "-s -w -X main.version=$VERSION -X main.commit=$(echo $COMMIT | cut -c1-7)" \
+    -o /out/hne-server ./cmd/hne-server
 # Raw ARP needs CAP_NET_RAW. Granting it as a file capability lets the binary run as the
 # distroless non-root user; Docker keeps NET_RAW in the container's capability set
 # (compose.yaml also adds it explicitly).
@@ -23,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin \
 # platform, so a multi-arch build compiles them once.
 FROM --platform=$BUILDPLATFORM golang:1.26 AS collectors
 ARG VERSION=dev
+ARG COMMIT=unknown
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -30,7 +34,8 @@ COPY . .
 RUN for t in windows/amd64 linux/amd64 linux/arm64; do \
         os=${t%/*}; arch=${t#*/}; ext=""; \
         if [ "$os" = windows ]; then ext=.exe; fi; \
-        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
+        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
+            -ldflags "-s -w -X main.version=$VERSION -X main.commit=$(echo $COMMIT | cut -c1-7)" \
             -o /out/downloads/hne-collector-$os-$arch$ext ./cmd/hne-collector || exit 1; \
     done
 

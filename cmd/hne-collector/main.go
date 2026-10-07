@@ -32,8 +32,11 @@ import (
 	"github.com/atotmakov/home_net_explorer/internal/upload"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
+// version and commit are set at build time with -ldflags "-X main.version=... -X main.commit=...".
+var (
+	version = "dev"
+	commit  = "unknown"
+)
 
 // Exit codes (contracts/collector-cli.md).
 const (
@@ -157,7 +160,7 @@ func run(args []string, env environment) int {
 		}
 	}
 	if cmd == "version" {
-		fmt.Fprintf(env.stdout, "hne-collector %s (schema versions: %d)\n", version, contract.SchemaVersion)
+		fmt.Fprintf(env.stdout, "hne-collector %s (commit %s, schema versions: %d)\n", version, commit, contract.SchemaVersion)
 		return exitOK
 	}
 	if cmd != "check" && cmd != "scan" && cmd != "run" {

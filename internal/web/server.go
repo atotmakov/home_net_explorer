@@ -36,7 +36,8 @@ type Options struct {
 	Store    *store.Store
 	Scanner  Scanner  // nil when the built-in collector is disabled
 	Ingester Ingester // uploads, and user edits serialized with ingest
-	Version  string
+	Version  string // app version, shown in every page footer
+	Commit   string // short commit hash (footer tooltip)
 	// DownloadsDir holds the collector binaries served at /downloads/ (built into the image).
 	DownloadsDir string
 }
@@ -74,6 +75,8 @@ type Server struct {
 
 // page is the data passed to every full-page template.
 type page struct {
+	Version string // filled in by render
+	Commit  string
 	Title  string
 	Nav    bool   // show the navigation bar (logged in)
 	Active string // highlighted nav item
@@ -141,6 +144,9 @@ func (s *Server) routes() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte("ok"))
 	})
+	s.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"version": s.opts.Version, "commit": s.opts.Commit})
+	})
 	s.mux.HandleFunc("GET /setup", s.handleSetupForm)
 	s.mux.HandleFunc("POST /setup", s.handleSetup)
 	s.mux.HandleFunc("GET /login", s.handleLoginForm)
@@ -176,7 +182,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) authGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/healthz" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/api/v1/") {
+		if p == "/healthz" || p == "/version" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/api/v1/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -258,6 +264,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		s.serverError(w, r, fmt.Errorf("unknown template %s", name))
 		return
 	}
+	p.Version, p.Commit = s.opts.Version, s.opts.Commit
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", p); err != nil {
 		s.serverError(w, r, err)

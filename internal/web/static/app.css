@@ -57,3 +57,4 @@ code { font-size: .9em; }
 .inline-form label { display: flex; gap: 6px; align-items: center; margin: 0; }
 pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; }
 a.button { display: inline-block; padding: 7px 14px; border-radius: 6px; background: var(--accent); color: #fff; text-decoration: none; }
+footer { max-width: 1200px; margin: 24px auto; padding: 0 16px 16px; font-size: .85rem; }

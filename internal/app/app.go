@@ -42,6 +42,7 @@ type Options struct {
 	Engine        *collect.Engine // override the platform scan engine (tests)
 	DownloadsDir  string          // collector binaries for /downloads/
 	Version       string
+	Commit        string
 }
 
 // App is an assembled server.
@@ -110,7 +111,8 @@ func New(ctx context.Context, o Options) (*App, error) {
 		Scanner:      scanner,
 		Ingester:     a.Ingester,
 		DownloadsDir: o.DownloadsDir,
-		Version:      o.Version,
+		Version:      version(o.Version),
+		Commit:       o.Commit,
 	})
 	if err != nil {
 		a.Close()

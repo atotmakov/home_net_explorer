@@ -215,7 +215,6 @@ type settingsData struct {
 	IntervalMinutes   int
 	OfflineMultiplier int
 	BuiltinEnabled    bool
-	Version           string
 }
 
 func (s *Server) settingInt(r *http.Request, key string, def int) int {
@@ -236,7 +235,6 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 		IntervalMinutes:   s.settingInt(r, "builtin_interval_seconds", 900) / 60,
 		OfflineMultiplier: s.settingInt(r, "offline_multiplier", inventory.DefaultOfflineMultiplier),
 		BuiltinEnabled:    s.opts.Scanner != nil,
-		Version:           s.opts.Version,
 	}
 	var err error
 	if data.Subnets, err = s.opts.Store.SubnetStatus(r.Context(), s.opts.Clock.Now()); err != nil {

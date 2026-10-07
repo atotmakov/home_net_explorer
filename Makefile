@@ -1,6 +1,7 @@
 # Keep targets in sync with .github/workflows/ci.yml (T002).
 GO ?= go
-LDFLAGS := -s -w -X main.version=$(or $(VERSION),dev)
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+LDFLAGS := -s -w -X main.version=$(or $(VERSION),dev) -X main.commit=$(COMMIT)
 GOFILES = $(shell git ls-files '*.go')
 # IPv4 CIDR literals are allowed only in test code and internal/contract/private.go (FR-006).
 CIDR_RE := [0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}

@@ -24,6 +24,7 @@ type Collector struct {
 	IntervalSeconds int
 	LastReportAt    time.Time // zero when never reported
 	LastClockSkewMs int64
+	LastVersion     string // collector build of the latest run
 }
 
 // ErrNotFound is returned when a row does not exist.
@@ -49,13 +50,13 @@ func (s *Store) EnsureCollector(ctx context.Context, name, kind string, interval
 }
 
 const collectorCols = `id, name, kind, token_hash, created_at, COALESCE(revoked_at, ''),
-	interval_seconds, COALESCE(last_report_at, ''), COALESCE(last_clock_skew_ms, 0)`
+	interval_seconds, COALESCE(last_report_at, ''), COALESCE(last_clock_skew_ms, 0), last_version`
 
 func scanCollector(row interface{ Scan(...any) error }) (Collector, error) {
 	var c Collector
 	var created, revoked, last string
 	if err := row.Scan(&c.ID, &c.Name, &c.Kind, &c.TokenHash, &created, &revoked,
-		&c.IntervalSeconds, &last, &c.LastClockSkewMs); err != nil {
+		&c.IntervalSeconds, &last, &c.LastClockSkewMs, &c.LastVersion); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c, ErrNotFound
 		}
