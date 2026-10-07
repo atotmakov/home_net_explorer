@@ -152,8 +152,23 @@ jobs:
           path: report.xml
           if-no-files-found: ignore
 
+  # The desktop collector runs on Windows: run its packages there too, not just cross-compile.
+  test-windows:
+    needs: [detect, autofix]
+    if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && needs.autofix.result != 'failure' }}
+    runs-on: windows-latest
+    name: test (windows collector)
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -short ./internal/collect/... ./internal/upload/... ./internal/contract/... ./cmd/hne-collector/...
+
   build:
-    needs: [detect, autofix, lint, test]
+    needs: [detect, autofix, lint, test, test-windows]
     if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     strategy:
