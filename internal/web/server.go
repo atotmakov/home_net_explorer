@@ -15,6 +15,7 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/auth"
 	"github.com/atotmakov/home_net_explorer/internal/clock"
+	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/store"
 )
 
@@ -29,13 +30,16 @@ const SessionCookie = "hne_session"
 
 // Options are the server's dependencies.
 type Options struct {
-	Owner   *auth.Owner
-	Clock   clock.Clock
-	Log     *slog.Logger
-	Store   *store.Store
-	Scanner Scanner    // nil when the built-in collector is disabled
-	Facts   FactWriter // serializes user edits with ingest
-	Version string
+	Owner    *auth.Owner
+	Clock    clock.Clock
+	Log      *slog.Logger
+	Store    *store.Store
+	Scanner  Scanner  // nil when the built-in collector is disabled
+	Ingester Ingester // uploads, and user edits serialized with ingest
+	Version  string   // app version, shown in every page footer
+	Commit   string   // short commit hash (footer tooltip)
+	// DownloadsDir holds the collector binaries served at /downloads/ (built into the image).
+	DownloadsDir string
 }
 
 // Scanner is the built-in collector as seen by the UI.
@@ -53,8 +57,10 @@ type ScanStatus struct {
 	LastError    string
 }
 
-// FactWriter runs a user-fact transaction serialized with ingest (ingest.Ingester.Do).
-type FactWriter interface {
+// Ingester stores uploaded runs and runs user-fact transactions serialized with ingest
+// (implemented by ingest.Ingester).
+type Ingester interface {
+	Ingest(ctx context.Context, collectorID int64, raw []byte, run *contract.CollectionRun, receivedAt time.Time) (contract.UploadResult, error)
 	Do(ctx context.Context, f func(tx *sql.Tx) error) error
 }
 
@@ -69,11 +75,13 @@ type Server struct {
 
 // page is the data passed to every full-page template.
 type page struct {
-	Title  string
-	Nav    bool   // show the navigation bar (logged in)
-	Active string // highlighted nav item
-	Error  string
-	Data   any
+	Version string // filled in by render
+	Commit  string
+	Title   string
+	Nav     bool   // show the navigation bar (logged in)
+	Active  string // highlighted nav item
+	Error   string
+	Data    any
 }
 
 // New builds a server.
@@ -136,6 +144,9 @@ func (s *Server) routes() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte("ok"))
 	})
+	s.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"version": s.opts.Version, "commit": s.opts.Commit})
+	})
 	s.mux.HandleFunc("GET /setup", s.handleSetupForm)
 	s.mux.HandleFunc("POST /setup", s.handleSetup)
 	s.mux.HandleFunc("GET /login", s.handleLoginForm)
@@ -149,6 +160,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /ui/scan-status", s.handleScanStatus)
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSettingsSave)
+	s.mux.HandleFunc("POST /subnets", s.handleSubnetAttrs)
+	s.mux.HandleFunc("GET /collectors", s.handleCollectors)
+	s.mux.HandleFunc("POST /collectors", s.handleCollectorCreate)
+	s.mux.HandleFunc("POST /collectors/{id}/revoke", s.handleCollectorRevoke)
+	s.mux.HandleFunc("GET /downloads/{file}", s.handleDownload)
+	s.mux.HandleFunc("POST /api/v1/collections", s.handleUpload)
+	s.mux.HandleFunc("GET /api/v1/ping", s.handlePing)
 }
 
 // Handler returns the full middleware chain.
@@ -164,7 +182,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) authGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/healthz" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/api/v1/") {
+		if p == "/healthz" || p == "/version" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/api/v1/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -246,6 +264,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		s.serverError(w, r, fmt.Errorf("unknown template %s", name))
 		return
 	}
+	p.Version, p.Commit = s.opts.Version, s.opts.Commit
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", p); err != nil {
 		s.serverError(w, r, err)

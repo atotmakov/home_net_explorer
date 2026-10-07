@@ -7,6 +7,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -33,7 +34,8 @@ type env struct {
 }
 
 type envOpts struct {
-	builtinScan bool // run the built-in scan loop
+	builtinScan bool              // run the built-in scan loop
+	downloads   map[string]string // files served under /downloads/
 }
 
 // newEnv starts the full server over a temp data dir with a fake network behind the
@@ -51,7 +53,14 @@ func newEnv(t *testing.T, o envOpts) *env {
 		Clock:     clk,
 		Collector: contract.CollectorInfo{Name: "nas", Version: "test", OS: "linux"},
 	}
+	dl := t.TempDir()
+	for name, content := range o.downloads {
+		if err := os.WriteFile(filepath.Join(dl, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	a, err := app.New(context.Background(), app.Options{
+		DownloadsDir:  dl,
 		DataDir:       filepath.Join(t.TempDir(), "data"),
 		Clock:         clk,
 		ScanInterval:  15 * time.Minute,

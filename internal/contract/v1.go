@@ -126,6 +126,9 @@ type PingResponse struct {
 	IgnoredSubnets          []string  `json:"ignored_subnets"`
 }
 
+// SkewFlagged reports whether a collector clock skew "exceeds 5 minutes" (either direction).
+func SkewFlagged(ms int64) bool { return ms > ClockSkewFlagMs || ms < -ClockSkewFlagMs }
+
 // Error is a contract violation with a machine-readable code.
 type Error struct {
 	Code   string

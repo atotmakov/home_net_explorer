@@ -369,3 +369,27 @@ func NewUUID() string {
 	b[8] = b[8]&0x3f | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
+
+// PlannedSubnet is how a scan will treat one subnet (shown by `hne-collector check`).
+type PlannedSubnet struct {
+	Prefix     netip.Prefix
+	Interface  string // on-link interface; "" for a routed subnet
+	Method     string // contract.MethodARP, MethodICMPTCP or MethodSkipped
+	SkipReason string
+}
+
+// Plan reports which subnets a scan with these options would cover, and how.
+func Plan(v contract.Vantage, opts ScanOptions) []PlannedSubnet {
+	var out []PlannedSubnet
+	for _, t := range planTargets(v, opts) {
+		p := PlannedSubnet{Prefix: t.prefix, Interface: t.iface, Method: contract.MethodARP}
+		switch {
+		case t.skip != "":
+			p.Method, p.SkipReason = contract.MethodSkipped, t.skip
+		case t.iface == "":
+			p.Method = contract.MethodICMPTCP
+		}
+		out = append(out, p)
+	}
+	return out
+}

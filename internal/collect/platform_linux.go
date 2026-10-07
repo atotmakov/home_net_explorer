@@ -18,10 +18,10 @@ import (
 )
 
 // Platform returns the Linux implementations: raw ARP, /proc/net/arp and /proc/net/route.
-// close releases the raw sockets. The routed-subnet PresenceProber arrives with US2 (T063).
+// close releases the raw sockets.
 func Platform() (Prober, PresenceProber, NeighborTable, RouteReader, func() error) {
 	p := NewARPProber()
-	return p, nil, ProcNeighbors{Path: "/proc/net/arp"}, SystemRoutes{RoutePath: "/proc/net/route"}, p.Close
+	return p, NewPresenceProber(), ProcNeighbors{Path: "/proc/net/arp"}, SystemRoutes{RoutePath: "/proc/net/route"}, p.Close
 }
 
 // ProcNeighbors reads the kernel neighbor table from /proc/net/arp.

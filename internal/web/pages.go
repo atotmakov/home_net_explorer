@@ -16,9 +16,10 @@ import (
 // ---------------------------------------------------------------- home
 
 type homeData struct {
-	Counts  store.Counts
-	Subnets []store.SubnetInfo
-	Scan    *scanView
+	Counts     store.Counts
+	Subnets    []store.SubnetInfo
+	NewSubnets []store.SubnetInfo
+	Scan       *scanView
 }
 
 type scanView struct {
@@ -45,6 +46,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 			s.serverError(w, r, err)
 			return
 		}
+		data.NewSubnets = newSubnets(data.Subnets, s.opts.Clock.Now())
 	}
 	s.render(w, r, http.StatusOK, "home.html", page{Title: "Home", Nav: true, Active: "home", Data: data})
 }
@@ -189,7 +191,7 @@ func (s *Server) handleDeviceAttrs(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(changes) > 0 {
 		at := s.opts.Clock.Now()
-		err := s.opts.Facts.Do(r.Context(), func(tx *sql.Tx) error {
+		err := s.opts.Ingester.Do(r.Context(), func(tx *sql.Tx) error {
 			for _, c := range changes {
 				if err := inventory.SetDeviceAttr(r.Context(), tx, d.IdentityKey, c[0], c[1], at); err != nil {
 					return err
@@ -213,7 +215,6 @@ type settingsData struct {
 	IntervalMinutes   int
 	OfflineMultiplier int
 	BuiltinEnabled    bool
-	Version           string
 }
 
 func (s *Server) settingInt(r *http.Request, key string, def int) int {
@@ -234,7 +235,6 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 		IntervalMinutes:   s.settingInt(r, "builtin_interval_seconds", 900) / 60,
 		OfflineMultiplier: s.settingInt(r, "offline_multiplier", inventory.DefaultOfflineMultiplier),
 		BuiltinEnabled:    s.opts.Scanner != nil,
-		Version:           s.opts.Version,
 	}
 	var err error
 	if data.Subnets, err = s.opts.Store.SubnetStatus(r.Context(), s.opts.Clock.Now()); err != nil {

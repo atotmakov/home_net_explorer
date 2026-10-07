@@ -83,9 +83,9 @@ func (in *Ingester) Ingest(ctx context.Context, collectorID int64, raw []byte, r
 		}
 
 		interval := run.IntervalSeconds
-		if _, err := tx.ExecContext(ctx, `UPDATE collectors SET last_report_at = ?, last_clock_skew_ms = ?,
+		if _, err := tx.ExecContext(ctx, `UPDATE collectors SET last_report_at = ?, last_clock_skew_ms = ?, last_version = ?,
 			interval_seconds = CASE WHEN ? > 0 THEN ? ELSE interval_seconds END WHERE id = ?`,
-			store.FormatTime(receivedAt), res.ClockSkewMs, interval, interval, collectorID); err != nil {
+			store.FormatTime(receivedAt), res.ClockSkewMs, run.Collector.Version, interval, interval, collectorID); err != nil {
 			return err
 		}
 

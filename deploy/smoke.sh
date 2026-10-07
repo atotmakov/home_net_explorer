@@ -3,6 +3,7 @@
 # fresh volume -> healthy -> setup -> restart -> healthy again and the password still works.
 # POSIX sh; needs docker and curl. HNE_IMAGE: prebuilt image (skips the build).
 # HNE_SMOKE_HOST: where the published port is reachable (default 127.0.0.1).
+# HNE_EXPECT_VERSION: if set, /version must report exactly this version (T099).
 set -eu
 
 IMAGE=${HNE_IMAGE:-}
@@ -50,6 +51,13 @@ status() { # method path [form]
 docker run -d --name "$NAME" -p "$PORT:8080" -v "$VOL:/data" "$IMAGE" --no-builtin-scan >/dev/null
 wait_healthy
 echo "smoke: healthy on a fresh volume"
+
+version=$(curl -s "$BASE/version")
+echo "smoke: /version = $version"
+case "$version" in *version*) ;; *) fail "/version did not answer with a version" ;; esac
+if [ -n "${HNE_EXPECT_VERSION:-}" ]; then
+    case "$version" in *"\"$HNE_EXPECT_VERSION\""*) ;; *) fail "/version is not $HNE_EXPECT_VERSION" ;; esac
+fi
 
 [ "$(status GET /setup)" = 200 ] || fail "first run should offer /setup"
 [ "$(status POST /setup "password=$PASSWORD&confirm=$PASSWORD")" = 303 ] || fail "setup failed"

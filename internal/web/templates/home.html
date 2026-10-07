@@ -1,6 +1,13 @@
 {{define "content"}}
 {{with .Data}}
 <h1>Home</h1>
+{{if .NewSubnets}}
+<section class="card notice" role="status">
+  <h2>New subnet discovered</h2>
+  <ul>{{range .NewSubnets}}<li><a href="/devices?subnet={{.CIDR}}">{{.CIDR}}</a> <span class="muted">found by {{.DiscoveredBy}}, {{fmtTime .FirstSeen}}</span></li>{{end}}</ul>
+  <p class="muted">Name or ignore subnets in <a href="/settings">Settings</a>.</p>
+</section>
+{{end}}
 <section class="stats">
   <div class="card stat"><span class="num">{{.Counts.Total}}</span> devices</div>
   <div class="card stat"><span class="num s-online">{{.Counts.Online}}</span> online</div>

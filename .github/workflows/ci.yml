@@ -44,6 +44,7 @@ jobs:
       suites: ${{ steps.f.outputs.suites }}
       cmd: ${{ steps.f.outputs.cmd }}
       image: ${{ steps.f.outputs.image }}
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - id: f
@@ -60,6 +61,17 @@ jobs:
           has 'tests/integration/*_test.go' && add integration './tests/integration/...'
           echo "suites=$s" >> "$GITHUB_OUTPUT"
           echo "suites: $s"
+      # App version (T099): the git tag for releases, else <VERSION major.minor>.<run number>,
+      # so every build gets a higher version with nothing to bump by hand.
+      - id: v
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            v="${GITHUB_REF_NAME#v}"
+          else
+            v="$(tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0).$GITHUB_RUN_NUMBER"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version: $v"
 
   autofix:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -152,8 +164,23 @@ jobs:
           path: report.xml
           if-no-files-found: ignore
 
+  # The desktop collector runs on Windows: run its packages there too, not just cross-compile.
+  test-windows:
+    needs: [detect, autofix]
+    if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && needs.autofix.result != 'failure' }}
+    runs-on: windows-latest
+    name: test (windows collector)
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -short ./internal/collect/... ./internal/upload/... ./internal/contract/... ./cmd/hne-collector/...
+
   build:
-    needs: [detect, autofix, lint, test]
+    needs: [detect, autofix, lint, test, test-windows]
     if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     strategy:
@@ -177,9 +204,8 @@ jobs:
           go-version-file: go.mod
       - run: |
           if [ "$GOOS" = windows ]; then EXT=.exe; else EXT=; fi
-          VERSION="${{ github.ref_type == 'tag' && github.ref_name || '' }}"
-          VERSION="${VERSION:-${GITHUB_SHA::7}}"
-          go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
+          COMMIT="${{ needs.autofix.outputs.sha || github.sha }}" # the commit actually built (not the PR merge ref)
+          go build -trimpath -ldflags "-s -w -X main.version=${{ needs.detect.outputs.version }} -X main.commit=${COMMIT::7}" \
             -o "dist/${{ matrix.bin }}-${GOOS}-${GOARCH}${EXT}" "./cmd/${{ matrix.bin }}"
       - uses: actions/upload-artifact@v7
         with:
@@ -213,6 +239,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha
+            type=raw,value=${{ needs.detect.outputs.version }}
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
       - uses: docker/build-push-action@v7
@@ -220,6 +247,9 @@ jobs:
           context: .
           file: deploy/Dockerfile
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ needs.detect.outputs.version }}
+            COMMIT=${{ needs.autofix.outputs.sha || github.sha }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -232,5 +262,8 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: hne-server:smoke
+          build-args: |
+            VERSION=${{ needs.detect.outputs.version }}
+            COMMIT=${{ needs.autofix.outputs.sha || github.sha }}
           cache-from: type=gha
-      - run: HNE_IMAGE=hne-server:smoke sh deploy/smoke.sh
+      - run: HNE_IMAGE=hne-server:smoke HNE_EXPECT_VERSION=${{ needs.detect.outputs.version }} sh deploy/smoke.sh

@@ -21,7 +21,10 @@ import (
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "unknown"
+)
 
 func main() {
 	args := os.Args[1:]
@@ -56,14 +59,16 @@ func options(cfg Config, log *slog.Logger, noScan bool) app.Options {
 		Subnets:       cfg.Subnets,
 		DNSServer:     cfg.DNSServer,
 		NoBuiltinScan: noScan,
+		DownloadsDir:  cfg.DownloadsDir,
 		Version:       version,
+		Commit:        commit,
 	}
 }
 
 func serve(cfg Config) error {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
-	log.Info("starting", "version", version, "listen", cfg.Listen, "data", cfg.DataDir, "builtin_scan", !cfg.NoBuiltinScan)
+	log.Info("starting", "version", version, "commit", commit, "listen", cfg.Listen, "data", cfg.DataDir, "builtin_scan", !cfg.NoBuiltinScan)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

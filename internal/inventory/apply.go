@@ -50,7 +50,7 @@ func (a *Applier) Apply(ctx context.Context, tx *sql.Tx, collectorID int64, run 
 		if sn == nil || sn.ignored {
 			continue // ignored subnets stay in the raw run but are never folded
 		}
-		devID, err := a.observe(ctx, tx, collectorID, sn.id, o)
+		devID, err := a.observe(ctx, tx, collectorID, sn, o)
 		if err != nil {
 			return nil, err
 		}
@@ -127,18 +127,36 @@ type device struct {
 	hostnameAt string
 }
 
-// observe folds one observation and returns the device id (0 if the observation can't be
-// attributed yet, e.g. no MAC before weak identities exist).
-func (a *Applier) observe(ctx context.Context, tx *sql.Tx, collectorID, subnetID int64, o contract.Observation) (int64, error) {
-	if o.MAC == "" {
-		return 0, nil
-	}
-	key := MACKey(o.MAC)
+// observe folds one observation and returns the device id. Identity (research R6): the MAC
+// when known; otherwise the device that currently holds the address, else a weak identity.
+func (a *Applier) observe(ctx context.Context, tx *sql.Tx, collectorID int64, sn *scannedSubnet, o contract.Observation) (int64, error) {
+	subnetID := sn.id
 	at := store.FormatTime(o.ObservedAt)
 
-	d, err := loadDevice(ctx, tx, key)
-	if errors.Is(err, sql.ErrNoRows) {
-		d, err = a.createDevice(ctx, tx, key, o, at)
+	var d device
+	var err error
+	if o.MAC != "" {
+		d, err = loadDevice(ctx, tx, MACKey(o.MAC))
+		if errors.Is(err, sql.ErrNoRows) {
+			d, err = a.createDevice(ctx, tx, MACKey(o.MAC), StrengthStrong, o, at)
+		}
+		if err == nil {
+			err = foldWeakDevices(ctx, tx, d.id, sn, o.IP, o.Hostname, at)
+		}
+	} else {
+		var holder int64
+		holder, err = currentHolder(ctx, tx, subnetID, o.IP)
+		switch {
+		case err != nil:
+		case holder != 0:
+			d, err = loadDeviceByID(ctx, tx, holder)
+		default:
+			key := WeakKey(sn.scan.CIDR, o.IP, o.Hostname)
+			d, err = loadDevice(ctx, tx, key)
+			if errors.Is(err, sql.ErrNoRows) {
+				d, err = a.createDevice(ctx, tx, key, StrengthWeak, o, at)
+			}
+		}
 	}
 	if err != nil {
 		return 0, err
@@ -185,25 +203,51 @@ func (a *Applier) observe(ctx context.Context, tx *sql.Tx, collectorID, subnetID
 	return d.id, nil
 }
 
+const deviceSelect = `SELECT id, status, last_seen, hostname, hostname_at FROM devices `
+
 func loadDevice(ctx context.Context, tx *sql.Tx, key string) (device, error) {
 	var d device
-	err := tx.QueryRowContext(ctx, `SELECT id, status, last_seen, hostname, hostname_at FROM devices WHERE identity_key = ?`, key).
+	err := tx.QueryRowContext(ctx, deviceSelect+`WHERE identity_key = ?`, key).
 		Scan(&d.id, &d.status, &d.lastSeen, &d.hostname, &d.hostnameAt)
 	return d, err
 }
 
-func (a *Applier) createDevice(ctx context.Context, tx *sql.Tx, key string, o contract.Observation, at string) (device, error) {
+func loadDeviceByID(ctx context.Context, tx *sql.Tx, id int64) (device, error) {
+	var d device
+	err := tx.QueryRowContext(ctx, deviceSelect+`WHERE id = ?`, id).
+		Scan(&d.id, &d.status, &d.lastSeen, &d.hostname, &d.hostnameAt)
+	return d, err
+}
+
+// currentHolder returns the device that currently has ip on the subnet (0 if none),
+// preferring a MAC-identified one.
+func currentHolder(ctx context.Context, tx *sql.Tx, subnetID int64, ip string) (int64, error) {
+	var id int64
+	err := tx.QueryRowContext(ctx, `SELECT d.id FROM device_addresses a JOIN devices d ON d.id = a.device_id
+		WHERE a.subnet_id = ? AND a.ip = ? AND a.current = 1 AND d.status != 'merged_away'
+		ORDER BY d.identity_strength = 'strong' DESC, a.as_of DESC LIMIT 1`, subnetID, ip).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return id, err
+}
+
+func (a *Applier) createDevice(ctx context.Context, tx *sql.Tx, key, strength string, o contract.Observation, at string) (device, error) {
 	hostAt := ""
 	if o.Hostname != "" {
 		hostAt = at
 	}
-	manufacturer := ""
-	if a.Manufacturer != nil {
-		manufacturer = a.Manufacturer(o.MAC)
+	var mac any
+	manufacturer, randomized := "", false
+	if o.MAC != "" {
+		mac, randomized = o.MAC, oui.IsRandomized(o.MAC)
+		if a.Manufacturer != nil {
+			manufacturer = a.Manufacturer(o.MAC)
+		}
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO devices (identity_key, identity_strength, mac, mac_randomized, manufacturer,
-		hostname, hostname_at, status, first_seen, last_seen, display_name) VALUES (?, 'strong', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		key, o.MAC, oui.IsRandomized(o.MAC), manufacturer, o.Hostname, hostAt, StatusOnline, at, at, o.IP)
+		hostname, hostname_at, status, first_seen, last_seen, display_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		key, strength, mac, randomized, manufacturer, o.Hostname, hostAt, StatusOnline, at, at, o.IP)
 	if err != nil {
 		return device{}, err
 	}

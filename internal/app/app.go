@@ -40,7 +40,9 @@ type Options struct {
 	DNSServer     netip.Addr     // optional private DNS server for PTR lookups
 	NoBuiltinScan bool
 	Engine        *collect.Engine // override the platform scan engine (tests)
+	DownloadsDir  string          // collector binaries for /downloads/
 	Version       string
+	Commit        string
 }
 
 // App is an assembled server.
@@ -102,13 +104,15 @@ func New(ctx context.Context, o Options) (*App, error) {
 	}
 
 	a.Web, err = web.New(web.Options{
-		Owner:   auth.NewOwner(st.DB(), o.Clock),
-		Clock:   o.Clock,
-		Log:     o.Log,
-		Store:   st,
-		Scanner: scanner,
-		Facts:   a.Ingester,
-		Version: o.Version,
+		Owner:        auth.NewOwner(st.DB(), o.Clock),
+		Clock:        o.Clock,
+		Log:          o.Log,
+		Store:        st,
+		Scanner:      scanner,
+		Ingester:     a.Ingester,
+		DownloadsDir: o.DownloadsDir,
+		Version:      version(o.Version),
+		Commit:       o.Commit,
 	})
 	if err != nil {
 		a.Close()

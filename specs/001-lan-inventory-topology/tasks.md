@@ -51,6 +51,12 @@ that can be tested on its own.
   `internal/contract/contracttest` instead of being committed as large JSON files (T006).
 - `collection_runs` also stores each run's `interval_seconds`, so the offline rule uses the
   interval in force for that run (R7).
+- Windows collector (T061/T062): the legacy IPv4 calls `GetIpNetTable` and `GetIpForwardTable`
+  are used instead of the `…2` variants (same IPv4 data, simpler fixed-size structs). A CI job
+  runs the collector packages on `windows-latest`.
+- A refused TCP connection (RST) also counts as "present" for routed subnets.
+- The collector caches the last `ignored_subnets` in `hne-collector.ignored` next to its config,
+  for scans while the server is unreachable.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
@@ -436,13 +442,13 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
 
 ### Tests for User Story 2 ⚠️ write first, see them fail
 
-- [ ] T048 [P] [US2] Write `internal/auth/token_test.go`. Cover:
+- [X] T048 [P] [US2] Write `internal/auth/token_test.go`. Cover:
   - `NewCollectorToken()` returns a 256-bit random token, base64url.
   - Only SHA-256 is stored in `collectors.token_hash`.
   - `Authenticate(token)` returns the collector, and fails for an unknown token or one whose
     `revoked_at` is set.
   - The comparison is constant-time.
-- [ ] T049 [P] [US2] Write `tests/contract/server_upload_test.go` (httptest + temp store). Every
+- [X] T049 [P] [US2] Write `tests/contract/server_upload_test.go` (httptest + temp store). Every
   `valid_*` fixture gets 201 `stored`, and re-posting it gets 200 `duplicate`. Other cases:
   - No, unknown, or revoked bearer → 401 `invalid_token`
   - Schema-invalid → 400 `validation_failed`
@@ -453,21 +459,21 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
   - A subnet that is public or wider than /16 → 400 `validation_failed`
 
   Every response body must validate against `UploadResult` or `Error` in the OpenAPI file
-- [ ] T050 [P] [US2] Write `tests/contract/collector_payload_test.go`. A collector built with
+- [X] T050 [P] [US2] Write `tests/contract/collector_payload_test.go`. A collector built with
   `collecttest` fakes uploads to an httptest server that validates the request body against
   `CollectionRun` in the OpenAPI file and checks for the `Authorization: Bearer` header
-- [ ] T051 [P] [US2] Write `internal/upload/spool_test.go`. The run is written to
+- [X] T051 [P] [US2] Write `internal/upload/spool_test.go`. The run is written to
   `spool/<collection_id>.json` before upload and deleted after 201/200. Pending files are listed
   oldest first. A partially written file (simulated crash) is ignored and cleaned up (use
   write-temp + rename)
-- [ ] T052 [P] [US2] Write `internal/upload/client_test.go`. Backoff is exponential, "1 minute up to
+- [X] T052 [P] [US2] Write `internal/upload/client_test.go`. Backoff is exponential, "1 minute up to
   1 hour". A 401/403 stops retries and returns `ErrTokenRejected`. Network errors keep the file. A
   413/400 moves the file to `spool/rejected/` and logs the server's `detail`
-- [ ] T053 [P] [US2] Write `internal/collect/engine_routed_test.go`. A target subnet that is not
+- [X] T053 [P] [US2] Write `internal/collect/engine_routed_test.go`. A target subnet that is not
   on-link uses method `icmp_tcp`: an ICMP echo and then TCP connect probes on ports 80, 443, 445,
   22, and 62078. Observations have no MAC, `method` is `icmp` or `tcp`, and the run still passes
   `contract.Validate`
-- [ ] T054 [P] [US2] Write `internal/inventory/identity_weak_test.go`. Cover:
+- [X] T054 [P] [US2] Write `internal/inventory/identity_weak_test.go`. Cover:
   - With no MAC, the identity is `host:<subnet>:<hostname>` when there is a hostname, otherwise
     `ip:<subnet>:<ip>`, with `identity_strength` `weak`.
   - When the same IP+hostname is later seen with a MAC, the weak device is folded into the
@@ -476,7 +482,7 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
     from both (SC-006).
   - The same MAC in two subnets gives one device with two current `device_addresses`
     (multi-homed).
-- [ ] T055 [P] [US2] Write `tests/integration/us2_collector_test.go`. Cover:
+- [X] T055 [P] [US2] Write `tests/integration/us2_collector_test.go`. Cover:
   - The owner creates the collector `desktop` via `POST /collectors`. The response shows the token
     once, and a `hne-collector.json` download with `server_url`, `name`, `token`, `subnets`, and
     `interval_seconds`.
@@ -493,7 +499,7 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
     later upload still containing observations for it is stored in full, but those observations
     don't appear in any device data, and the subnet is hidden from lists.
   - After revoke, uploads get 401.
-- [ ] T056 [P] [US2] Write `cmd/hne-collector/main_test.go`. Config loading: the file
+- [X] T056 [P] [US2] Write `cmd/hne-collector/main_test.go`. Config loading: the file
   `hne-collector.json` next to the binary, with env `HNE_SERVER_URL`/`HNE_TOKEN`/`HNE_SUBNETS`
   overriding it. Empty `subnets` (the default) means "discover every on-link **private** IPv4 subnet
   with a prefix of /22 or narrower at each scan". A non-private entry in `subnets` is a config
@@ -502,54 +508,54 @@ check that devices on subnets only the desktop sees appear within 1 minute witho
 
 ### Implementation for User Story 2
 
-- [ ] T057 [P] [US2] Write `internal/auth/token.go`. Make T048 pass
-- [ ] T058 [US2] Write `internal/web/api_upload.go`. `POST /api/v1/collections` uses
+- [X] T057 [P] [US2] Write `internal/auth/token.go`. Make T048 pass
+- [X] T058 [US2] Write `internal/web/api_upload.go`. `POST /api/v1/collections` uses
   `http.MaxBytesReader(2 MiB)` (exceeding it gives 413), bearer auth, decode, `contract.Validate`,
   and `Ingester.Ingest`, with status codes exactly as in the OpenAPI file. Add
   `GET /api/v1/ping`. Bearer auth applies to `/api/v1/*` only, with no session or Origin checks
   there. Make T049 pass
-- [ ] T059 [US2] Extend `internal/ingest/ingest.go`. Compute `clock_skew_ms` and return it in
+- [X] T059 [US2] Extend `internal/ingest/ingest.go`. Compute `clock_skew_ms` and return it in
   `UploadResult`. Flag the collector when |skew| > 300000 ms. Add the skew assertion from T055
   to `internal/ingest/ingest_test.go` first. Subnet auto-creation, `new_subnets`, and
   ignored-subnet handling already exist from US1 (T023, T037), and T055 checks them over HTTP
-- [ ] T060 [US2] Extend `internal/inventory/identity.go` and `internal/inventory/apply.go` with
+- [X] T060 [US2] Extend `internal/inventory/identity.go` and `internal/inventory/apply.go` with
   weak identity keys, fold-in of weak devices when the MAC becomes known, and multi-subnet
   `device_addresses`. Make T054 pass
-- [ ] T061 [P] [US2] Write `internal/collect/arp_windows.go` (`//go:build windows`): a `Prober`
+- [X] T061 [P] [US2] Write `internal/collect/arp_windows.go` (`//go:build windows`): a `Prober`
   using `iphlpapi.dll` `SendARP` via `golang.org/x/sys/windows` (`NewLazySystemDLL`). Also write
   `internal/collect/neighbor_windows.go`, which reads `GetIpNetTable2` (IPv4, skipping
   unreachable/incomplete states). No admin rights and no Npcap (research R3)
-- [ ] T062 [P] [US2] Write `internal/collect/routes_windows.go` (`//go:build windows`): a
+- [X] T062 [P] [US2] Write `internal/collect/routes_windows.go` (`//go:build windows`): a
   `RouteReader` using `GetAdaptersAddresses` (interfaces, prefix, MAC) and `GetIpForwardTable2`
   (routes). It must report every IPv4 interface and route present, with nothing filtered by
   address. T069 checks the output against `Get-NetIPAddress`/`Get-NetRoute` on the real machine
-- [ ] T063 [US2] Write `internal/collect/icmp_tcp.go`: the routed-subnet fallback. On Windows it
+- [X] T063 [US2] Write `internal/collect/icmp_tcp.go`: the routed-subnet fallback. On Windows it
   uses `IcmpSendEcho` (iphlpapi, no admin). On Linux it uses `golang.org/x/net/icmp` privileged
   mode. TCP connect probes on the ports from T053 have a 500 ms timeout. Extend `engine.go` to
   pick `arp` or `icmp_tcp` per target. Make T053 pass
-- [ ] T064 [US2] Write `internal/upload/spool.go` and `internal/upload/client.go`. Make T051 and
+- [X] T064 [US2] Write `internal/upload/spool.go` and `internal/upload/client.go`. Make T051 and
   T052 pass
-- [ ] T065 [US2] Write `cmd/hne-collector/main.go`: the commands `check`, `scan --once [--dry-run]`,
+- [X] T065 [US2] Write `cmd/hne-collector/main.go`: the commands `check`, `scan --once [--dry-run]`,
   `run`, and `version`, plus the global `--json` flag. Before each scan it calls
   `GET /api/v1/ping` to fetch `ignored_subnets` (if unreachable, it uses the last known list).
   Human-readable output goes to stderr. Each
   summary line includes "subnets scanned, hosts found, run duration, and the upload result". In
   `run` mode it logs to `hne-collector.log`, rotating at 1 MiB × 3 files. Make T050 and T056 pass
-- [ ] T066 [US2] Write `internal/web/collectors.go` + `collectors.html`. Routes: `GET /collectors`
+- [X] T066 [US2] Write `internal/web/collectors.go` + `collectors.html`. Routes: `GET /collectors`
   (name, kind, subnets, last report, skew flag, revoked), `POST /collectors` (name rule
   `[a-z0-9-]{1,64}`; the token is shown once along with the config download), and
   `POST /collectors/{id}/revoke`. The page shows the copy-paste `schtasks` command from
   contracts/collector-cli.md "Scheduling"
-- [ ] T067 [US2] Write `internal/web/downloads.go`:
+- [X] T067 [US2] Write `internal/web/downloads.go`:
   `GET /downloads/hne-collector-{os}-{arch}[.exe]` serves files from `HNE_DOWNLOADS` (default
   `/app/downloads`), and returns 404 if they are missing. Update `deploy/Dockerfile` to build the
   collector for windows/amd64, linux/amd64, and linux/arm64 in the build stage and copy them to
   `/app/downloads`. Make T055 pass
-- [ ] T068 [US2] Extend `internal/web/settings.go`, `settings.html`, and `home.html`. Show newly
+- [X] T068 [US2] Extend `internal/web/settings.go`, `settings.html`, and `home.html`. Show newly
   discovered subnets with a notice. Add **Rename** and **Ignore/Unignore** actions, written as
   `user_subnet_attrs` facts, and list skipped too-large subnets per collector. Ignoring takes
   effect on the collectors' next ping
-- [ ] T069 [P] [US2] Write `internal/collect/arp_windows_hw_test.go`
+- [X] T069 [P] [US2] Write `internal/collect/arp_windows_hw_test.go`
   (`//go:build hwtest && windows`): `SendARP` to the default gateway returns a MAC, the run needs
   no elevation, and the `RouteReader` output matches the interfaces and routes Windows reports
   for the machine
@@ -731,6 +737,17 @@ subnet, the gateways and the desktop bridge are visible, and a manual link persi
 - [ ] T097 Run quickstart.md §1–§7 end to end on the real NAS and desktop, including the
   new-subnet check in §4. Record the results (SC-001…SC-010) in
   `specs/001-lan-inventory-topology/checklists/validation.md`
+
+- [X] T099 Show the app version and bump it with every build. Tests first:
+  `internal/web/version_test.go` (every page's footer shows the injected version, with the commit
+  as a tooltip; public `GET /version` returns `{"version","commit"}`), `internal/ingest/ingest_test.go`
+  (each upload records the collector's `collector.version` as `collectors.last_version`), and a
+  `deploy/smoke.sh` check that `/version` reports `HNE_EXPECT_VERSION`. Then: the version scheme
+  is `<VERSION file major.minor>.<CI run number>` (e.g. `0.2.57`), or the git tag without `v`
+  for releases; CI computes it once (`detect` job) and stamps it with `-X main.version` /
+  `-X main.commit` into hne-server, hne-collector and the image (`build-args`), and tags the
+  image with it. Migration `0002` adds `collectors.last_version` (seeded migration test in
+  `internal/store/testdata/seed_1.sql`); the Collectors page shows each collector's version.
 
 ---
 
