@@ -30,10 +30,10 @@ const SessionCookie = "hne_session"
 
 // Options are the server's dependencies.
 type Options struct {
-	Owner   *auth.Owner
-	Clock   clock.Clock
-	Log     *slog.Logger
-	Store   *store.Store
+	Owner    *auth.Owner
+	Clock    clock.Clock
+	Log      *slog.Logger
+	Store    *store.Store
 	Scanner  Scanner  // nil when the built-in collector is disabled
 	Ingester Ingester // uploads, and user edits serialized with ingest
 	Version  string

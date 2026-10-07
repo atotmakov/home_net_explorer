@@ -103,14 +103,14 @@ func New(ctx context.Context, o Options) (*App, error) {
 	}
 
 	a.Web, err = web.New(web.Options{
-		Owner:   auth.NewOwner(st.DB(), o.Clock),
-		Clock:   o.Clock,
-		Log:     o.Log,
-		Store:   st,
-		Scanner: scanner,
-		Ingester: a.Ingester,
+		Owner:        auth.NewOwner(st.DB(), o.Clock),
+		Clock:        o.Clock,
+		Log:          o.Log,
+		Store:        st,
+		Scanner:      scanner,
+		Ingester:     a.Ingester,
 		DownloadsDir: o.DownloadsDir,
-		Version: o.Version,
+		Version:      o.Version,
 	})
 	if err != nil {
 		a.Close()
