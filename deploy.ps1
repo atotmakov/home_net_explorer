@@ -1,7 +1,13 @@
 #Requires -Version 5.1
 # Deploy Home Net Explorer to the NAS (quickstart.md §3).
-# Pulls the image on this PC with crane, streams it to the NAS over SSH, loads it there and
+# Gets the image (local archive, else crane pull), streams it to the NAS over SSH, loads it and
 # (re)starts the container with docker compose. Same flow as the cctv-ui project.
+#
+# Image source: a local archive (IMAGE_ARCHIVE) is used if it exists; only when it is absent is
+# the image pulled from GitHub (ghcr.io) with crane. The archive is kept for the next deploy.
+#   .\deploy.ps1          use the local archive if present, else pull
+#   .\deploy.ps1 -Pull    always pull a fresh image from GitHub (refreshes the archive)
+param([switch]$Pull)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -25,7 +31,9 @@ $SshKey   = if ($config['SSH_KEY'])        { $config['SSH_KEY'] }        else { 
 $Image    = if ($config['IMAGE'])          { $config['IMAGE'] }          else { 'ghcr.io/atotmakov/home_net_explorer:latest' }
 $Platform = if ($config['IMAGE_PLATFORM']) { $config['IMAGE_PLATFORM'] } else { 'linux/amd64' }
 $Port     = if ($config['HNE_PORT'])       { $config['HNE_PORT'] }       else { '8080' }
-$Archive  = 'home-net-explorer.tar.gz'
+$Subnets  = if ($config['HNE_SUBNETS'])    { $config['HNE_SUBNETS'] }    else { '' }
+$Archive  = if ($config['IMAGE_ARCHIVE'])  { $config['IMAGE_ARCHIVE'] }  else { 'home-net-explorer.tar.gz' }
+$RemoteArchive = 'home-net-explorer.tar.gz'
 
 # SSH/SCP option arrays
 $SshOpts = @('-o', 'StrictHostKeyChecking=no')
@@ -67,33 +75,45 @@ function Invoke-RemoteScript {
     return $proc.ExitCode
 }
 
-# ── Install crane if not present ──────────────────────────────────────────────
-$craneDir = "$env:LOCALAPPDATA\crane"
-$craneBin = "$craneDir\crane.exe"
-if (-not (Test-Path $craneBin)) {
-    Write-Host "==> crane not found, installing..."
-    New-Item -ItemType Directory -Force -Path $craneDir | Out-Null
-    $tgz = "$env:TEMP\crane.tar.gz"
-    curl.exe -fsSL -o $tgz "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Windows_x86_64.tar.gz"
-    if ($LASTEXITCODE -ne 0) { throw "Failed to download crane" }
-    & "$env:SystemRoot\System32\tar.exe" -xzf $tgz -C $craneDir crane.exe
-    Remove-Item $tgz
-    Write-Host "==> crane installed at $craneBin"
-}
-$env:PATH = "$craneDir;$env:PATH"
+# ── Step 1: Find the image: local archive first, GitHub only if absent ───────
+$useLocal = (Test-Path $Archive) -and -not $Pull
+if ($useLocal) {
+    $info = Get-Item $Archive
+    Write-Host ("==> Using local image archive {0} ({1:N0} MB, saved {2:yyyy-MM-dd HH:mm})" -f $info.FullName, ($info.Length / 1MB), $info.LastWriteTime)
+    Write-Host "    (run .\deploy.ps1 -Pull to fetch the latest image from GitHub instead)"
+} else {
+    # ── Install crane if not present ──────────────────────────────────────────────
+    $craneDir = "$env:LOCALAPPDATA\crane"
+    $craneBin = "$craneDir\crane.exe"
+    if (-not (Test-Path $craneBin)) {
+        Write-Host "==> crane not found, installing..."
+        New-Item -ItemType Directory -Force -Path $craneDir | Out-Null
+        $tgz = "$env:TEMP\crane.tar.gz"
+        curl.exe -fsSL -o $tgz "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Windows_x86_64.tar.gz"
+        if ($LASTEXITCODE -ne 0) { throw "Failed to download crane" }
+        & "$env:SystemRoot\System32\tar.exe" -xzf $tgz -C $craneDir crane.exe
+        Remove-Item $tgz
+        Write-Host "==> crane installed at $craneBin"
+    }
+    $env:PATH = "$craneDir;$env:PATH"
 
-# ── Step 1: Pull image from registry ─────────────────────────────────────────
-# The image is multi-arch; pick the NAS's architecture (IMAGE_PLATFORM).
-Write-Host "==> Pulling Docker image $Image ($Platform)..."
-& $craneBin pull --platform=$Platform --format=tarball $Image $Archive
-if ($LASTEXITCODE -ne 0) { throw "crane pull failed" }
+    # The image is multi-arch; pick the NAS's architecture (IMAGE_PLATFORM). Pull to a temp file
+    # so a failed download never replaces a good archive.
+    if ($Pull) { Write-Host "==> -Pull: fetching a fresh image from GitHub" } else { Write-Host "==> No local archive at $Archive" }
+    Write-Host "==> Pulling Docker image $Image ($Platform)..."
+    $tmpArchive = "$Archive.partial"
+    & $craneBin pull --platform=$Platform --format=tarball $Image $tmpArchive
+    if ($LASTEXITCODE -ne 0) { Remove-Item -Force -ErrorAction SilentlyContinue $tmpArchive; throw "crane pull failed" }
+    Move-Item -Force $tmpArchive $Archive
+    Write-Host "==> Saved image archive to $Archive"
+}
 
 # ── Step 2: Upload archive + compose file ────────────────────────────────────
 Write-Host "==> Uploading to ${NasUser}@${NasHost}:${NasDir}/ ..."
 & $sshBin @SshOpts "${NasUser}@${NasHost}" "mkdir -p '$NasDir' && chown `$USER '$NasDir'"
 if ($LASTEXITCODE -ne 0) { throw "Failed to create directory $NasDir on NAS" }
 Write-Host "  -> Transferring archive..."
-Send-FileViaSsh $Archive "${NasDir}/${Archive}"
+Send-FileViaSsh $Archive "${NasDir}/${RemoteArchive}"
 Write-Host "  -> Transferring docker-compose.yml..."
 Send-FileViaSsh deploy/compose.yaml "${NasDir}/docker-compose.yml"
 
@@ -104,12 +124,24 @@ set -euo pipefail
 export PATH="`$PATH:/usr/local/bin:/usr/bin"
 cd '$NasDir'
 echo '  -> Loading image...'
-sudo docker load < '$Archive'
-rm -f '$Archive'
-echo '  -> Preparing data folder (owned by the image user 65532)...'
-sudo mkdir -p data
-sudo chown 65532:65532 data
-printf 'HNE_PORT=%s\n' '$Port' > .env
+sudo docker load < '$RemoteArchive'
+rm -f '$RemoteArchive'
+# The container runs as this SSH user (HNE_UID/HNE_GID), so the data folder needs no sudo:
+# only docker itself runs with sudo, which DSM allows without a password.
+echo '  -> Preparing data folder...'
+mkdir -p data
+if [ ! -w data ]; then
+    echo "  !! '$NasDir/data' is not writable by `$(id -un). Fix once on the NAS: sudo chown -R `$(id -u):`$(id -g) '$NasDir/data'" >&2
+    exit 1
+fi
+printf 'HNE_PORT=%s\nHNE_UID=%s\nHNE_GID=%s\nHNE_SUBNETS=%s\n' '$Port' "`$(id -u)" "`$(id -g)" '$Subnets' > .env
+# Synology shares grant write through ACLs, typically to group "administrators", not via the
+# Unix mode bits. Give the container the SSH user's supplementary groups too, so it can write
+# ./data exactly like this user can (compose loads the override file automatically).
+{
+    printf 'services:\n  hne-server:\n    group_add:\n'
+    for g in `$(id -G); do printf '      - "%s"\n' "`$g"; done
+} > docker-compose.override.yml
 echo '  -> Starting container...'
 sudo docker compose up -d --remove-orphans
 sudo docker compose ps
@@ -117,11 +149,7 @@ sudo docker compose ps
 $exitCode = Invoke-RemoteScript -Script $remoteScript
 if ($exitCode -ne 0) { throw "Remote deploy failed" }
 
-# ── Step 4: Clean up local archive ───────────────────────────────────────────
-Write-Host "==> Cleaning up local archive..."
-Remove-Item -Force $Archive
-
-# ── Step 5: Health check from this PC ────────────────────────────────────────
+# ── Step 4: Health check from this PC ────────────────────────────────────────
 Write-Host "==> Waiting for http://${NasHost}:${Port}/healthz ..."
 $healthy = $false
 for ($i = 0; $i -lt 30; $i++) {
