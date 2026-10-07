@@ -36,8 +36,8 @@ type Options struct {
 	Store    *store.Store
 	Scanner  Scanner  // nil when the built-in collector is disabled
 	Ingester Ingester // uploads, and user edits serialized with ingest
-	Version  string // app version, shown in every page footer
-	Commit   string // short commit hash (footer tooltip)
+	Version  string   // app version, shown in every page footer
+	Commit   string   // short commit hash (footer tooltip)
 	// DownloadsDir holds the collector binaries served at /downloads/ (built into the image).
 	DownloadsDir string
 }
@@ -77,11 +77,11 @@ type Server struct {
 type page struct {
 	Version string // filled in by render
 	Commit  string
-	Title  string
-	Nav    bool   // show the navigation bar (logged in)
-	Active string // highlighted nav item
-	Error  string
-	Data   any
+	Title   string
+	Nav     bool   // show the navigation bar (logged in)
+	Active  string // highlighted nav item
+	Error   string
+	Data    any
 }
 
 // New builds a server.
