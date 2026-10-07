@@ -738,6 +738,17 @@ subnet, the gateways and the desktop bridge are visible, and a manual link persi
   new-subnet check in §4. Record the results (SC-001…SC-010) in
   `specs/001-lan-inventory-topology/checklists/validation.md`
 
+- [ ] T099 Show the app version and bump it with every build. Tests first:
+  `internal/web/version_test.go` (every page's footer shows the injected version, with the commit
+  as a tooltip; public `GET /version` returns `{"version","commit"}`), `internal/ingest/ingest_test.go`
+  (each upload records the collector's `collector.version` as `collectors.last_version`), and a
+  `deploy/smoke.sh` check that `/version` reports `HNE_EXPECT_VERSION`. Then: the version scheme
+  is `<VERSION file major.minor>.<CI run number>` (e.g. `0.2.57`), or the git tag without `v`
+  for releases; CI computes it once (`detect` job) and stamps it with `-X main.version` /
+  `-X main.commit` into hne-server, hne-collector and the image (`build-args`), and tags the
+  image with it. Migration `0002` adds `collectors.last_version` (seeded migration test in
+  `internal/store/testdata/seed_1.sql`); the Collectors page shows each collector's version.
+
 ---
 
 ## Dependencies & Execution Order

@@ -126,6 +126,27 @@ func TestIngestStoresRunAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// Each upload records the collector build that sent it (T099).
+func TestIngestRecordsCollectorVersion(t *testing.T) {
+	ctx := context.Background()
+	s := storetest.New(t)
+	cid, _ := s.EnsureCollector(ctx, "desktop", store.KindRemote, 900)
+	in := ingest.New(s, &fakeApplier{})
+	raw := contracttest.Modify(t, "valid_minimal.json", func(m map[string]any) {
+		m["collector"].(map[string]any)["version"] = "0.2.57"
+	})
+	if _, err := in.Ingest(ctx, cid, raw, decode(t, raw), time.Date(2026, 10, 5, 10, 1, 3, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.GetCollector(ctx, cid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.LastVersion != "0.2.57" {
+		t.Errorf("last_version = %q, want 0.2.57", c.LastVersion)
+	}
+}
+
 // Clock skew is reported and flagged above 5 minutes, never rejected (T059).
 func TestClockSkewFlag(t *testing.T) {
 	ctx := context.Background()
