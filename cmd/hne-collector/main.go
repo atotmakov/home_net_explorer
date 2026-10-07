@@ -53,9 +53,8 @@ type config struct {
 	Name            string   `json:"name"`
 	Token           string   `json:"token"`
 	Subnets         []string `json:"subnets"`
-	IntervalSeconds *int     `json:"interval_seconds"`
+	IntervalSeconds int      `json:"interval_seconds"`
 
-	interval int
 	prefixes []netip.Prefix
 }
 
@@ -76,7 +75,7 @@ func main() {
 }
 
 func loadConfig(dir string, getenv func(string) string) (config, error) {
-	var cfg config
+	cfg := config{IntervalSeconds: 900} // default when the file omits it
 	b, err := os.ReadFile(filepath.Join(dir, configFile))
 	if err != nil {
 		return cfg, fmt.Errorf("read %s (download it from the server's Collectors page): %w", configFile, err)
@@ -104,12 +103,8 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 	if !contract.ValidCollectorName(cfg.Name) {
 		return cfg, fmt.Errorf("name %q must match [a-z0-9-]{1,64}", cfg.Name)
 	}
-	cfg.interval = 900
-	if cfg.IntervalSeconds != nil {
-		if *cfg.IntervalSeconds < 0 {
-			return cfg, errors.New("interval_seconds must be >= 0")
-		}
-		cfg.interval = *cfg.IntervalSeconds
+	if cfg.IntervalSeconds < 0 {
+		return cfg, errors.New("interval_seconds must be >= 0")
 	}
 	// Empty subnets (the default): discover every on-link private subnet at each scan.
 	for i, s := range cfg.Subnets {
@@ -185,7 +180,7 @@ func run(args []string, env environment) int {
 		return exitFailure
 	}
 	defer closeEngine()
-	engine.IntervalSeconds = cfg.interval
+	engine.IntervalSeconds = cfg.IntervalSeconds
 
 	c := &collector{
 		cfg:    cfg,
@@ -358,7 +353,7 @@ func (c *collector) loop(ctx context.Context) int {
 		c.log = slog.New(slog.NewTextHandler(io.MultiWriter(c.env.stderr, f), nil))
 		c.client.Log = c.log
 	}
-	interval := time.Duration(c.cfg.interval) * time.Second
+	interval := time.Duration(c.cfg.IntervalSeconds) * time.Second
 	if interval <= 0 {
 		interval = 15 * time.Minute
 	}

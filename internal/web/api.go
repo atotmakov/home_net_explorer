@@ -28,7 +28,14 @@ func writeAPIError(w http.ResponseWriter, status int, code, detail string) {
 
 func (s *Server) bearerCollector(w http.ResponseWriter, r *http.Request) (store.Collector, bool) {
 	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	c, err := auth.Authenticate(r.Context(), s.opts.Store.DB(), strings.TrimSpace(token))
+	if s.opts.Store == nil {
+		ok = false // no datastore (unit tests of the UI alone): no collector can authenticate
+	}
+	var c store.Collector
+	var err error
+	if ok {
+		c, err = auth.Authenticate(r.Context(), s.opts.Store.DB(), strings.TrimSpace(token))
+	}
 	if !ok || errors.Is(err, auth.ErrInvalidToken) {
 		writeAPIError(w, http.StatusUnauthorized, contract.CodeInvalidToken, "missing, unknown or revoked collector token")
 		return c, false
