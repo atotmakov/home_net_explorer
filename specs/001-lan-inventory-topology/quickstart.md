@@ -47,7 +47,9 @@ Copy-Item .env.deploy.example .env.deploy   # once: set NAS_HOST, NAS_USER, SSH_
 .\deploy.ps1
 ```
 
-`deploy.ps1` pulls the image with crane, streams it to the NAS over SSH, runs `docker load`,
+`deploy.ps1` uses the local image archive (`IMAGE_ARCHIVE`) if it exists, otherwise pulls the image
+with crane and keeps the archive for next time (`-Pull` forces a fresh download). It streams the
+image to the NAS over SSH, runs `docker load`,
 prepares `NAS_DIR/data` (owned by uid 65532), uploads `deploy/compose.yaml` as
 `docker-compose.yml` (host networking, `NET_RAW`, `./data:/data`) and runs
 `docker compose up -d`. It finishes with a `/healthz` check from the desktop.

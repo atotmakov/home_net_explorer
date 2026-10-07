@@ -34,4 +34,5 @@ Thumbs.db
 # NAS deploy (deploy.ps1)
 .env.deploy
 *.tar.gz
+*.partial
 hne-collector.ignored
