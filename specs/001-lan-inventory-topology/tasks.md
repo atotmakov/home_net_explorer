@@ -738,7 +738,7 @@ subnet, the gateways and the desktop bridge are visible, and a manual link persi
   new-subnet check in §4. Record the results (SC-001…SC-010) in
   `specs/001-lan-inventory-topology/checklists/validation.md`
 
-- [ ] T099 Show the app version and bump it with every build. Tests first:
+- [X] T099 Show the app version and bump it with every build. Tests first:
   `internal/web/version_test.go` (every page's footer shows the injected version, with the commit
   as a tooltip; public `GET /version` returns `{"version","commit"}`), `internal/ingest/ingest_test.go`
   (each upload records the collector's `collector.version` as `collectors.last_version`), and a
