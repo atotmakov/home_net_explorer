@@ -1,0 +1,61 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Collectors</h1>
+
+{{with .Created}}
+<section class="card notice" role="status">
+  <h2>Collector “{{.Name}}” created</h2>
+  <p>Save this file as <code>hne-collector.json</code> next to <code>hne-collector.exe</code>.
+     <strong>The token is shown only now</strong>; if you lose it, revoke this collector and create a new one.</p>
+  <pre id="collector-config">{{.ConfigJSON}}</pre>
+  <p><a class="button" download="hne-collector.json" href="{{.ConfigHref}}">Download hne-collector.json</a></p>
+</section>
+{{end}}
+
+<section>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Kind</th><th>Subnets (latest run)</th><th>Last report</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {{range .Collectors}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{if eq .Kind "builtin"}}built-in (NAS){{else}}remote{{end}}</td>
+        <td>{{range $i, $c := .Subnets}}{{if $i}}, {{end}}{{$c}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td>{{fmtTime .LastReportAt}}</td>
+        <td>
+          {{if not .RevokedAt.IsZero}}<span class="badge">revoked</span>
+          {{else if .SkewFlagged}}<span class="badge warn" title="Its clock differs from the server's by more than 5 minutes">clock skew</span>
+          {{else}}<span class="badge s-online">active</span>{{end}}
+        </td>
+        <td>{{if and (eq .Kind "remote") .RevokedAt.IsZero}}
+          <form method="post" action="/collectors/{{.ID}}/revoke"><button type="submit">Revoke</button></form>
+        {{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Add a collector</h2>
+  <p class="muted">A collector scans the subnets its computer is attached to and uploads them here.
+     Use one for each machine that can see networks the NAS can't.</p>
+  <form method="post" action="/collectors" class="inline-form">
+    <label>Name <input type="text" name="name" pattern="[a-z0-9-]{1,64}" maxlength="64" placeholder="desktop" required></label>
+    <button type="submit">Create</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Install on Windows</h2>
+  <ol>
+    <li>Download {{range .Downloads}}{{if eq . "hne-collector-windows-amd64.exe"}}<a href="/downloads/{{.}}">{{.}}</a>{{end}}{{else}}<span class="muted">(collector binaries are included in the server image)</span>{{end}}
+        and save it as <code>%USERPROFILE%\hne-collector\hne-collector.exe</code>, with <code>hne-collector.json</code> beside it.</li>
+    <li>Check it: <code>hne-collector.exe check</code>, then scan once: <code>hne-collector.exe scan --once</code>.</li>
+    <li>Run it at log-on (no administrator rights needed):
+      <pre>{{.Schtasks}}</pre></li>
+  </ol>
+  {{if .Downloads}}<p class="muted">Other builds: {{range .Downloads}}<a href="/downloads/{{.}}">{{.}}</a> {{end}}</p>{{end}}
+</section>
+{{end}}
+{{end}}

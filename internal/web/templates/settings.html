@@ -6,12 +6,22 @@
   <p class="muted">Subnets are discovered automatically from each collector's network adapters. Only private ranges are ever scanned.</p>
   {{if .Subnets}}
   <div class="table-wrap"><table>
-    <thead><tr><th>Subnet</th><th>Name</th><th>First seen</th><th>Discovered by</th><th>Devices</th><th>Status</th></tr></thead>
+    <thead><tr><th>Subnet</th><th>Name</th><th>First seen</th><th>Discovered by</th><th>Devices</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {{range .Subnets}}
       <tr>
-        <td>{{.CIDR}}</td><td>{{.Name}}</td><td>{{fmtTime .FirstSeen}}</td><td>{{.DiscoveredBy}}</td><td>{{.Devices}}</td>
+        <td>{{.CIDR}}</td>
+        <td><form method="post" action="/subnets" class="inline-form">
+          <input type="hidden" name="cidr" value="{{.CIDR}}">
+          <input type="text" name="name" value="{{.Name}}" maxlength="100" placeholder="name" aria-label="Name of {{.CIDR}}">
+          <button type="submit">Rename</button></form></td>
+        <td>{{fmtTime .FirstSeen}}</td><td>{{.DiscoveredBy}}</td><td>{{.Devices}}</td>
         <td>{{if .Ignored}}<span class="badge">ignored</span>{{else if .Stale}}<span class="badge warn">stale</span>{{else}}<span class="badge s-online">current</span>{{end}}</td>
+        <td><form method="post" action="/subnets">
+          <input type="hidden" name="cidr" value="{{.CIDR}}">
+          {{if .Ignored}}<input type="hidden" name="ignored" value="false"><button type="submit">Unignore</button>
+          {{else}}<input type="hidden" name="ignored" value="true"><button type="submit" title="Collectors stop scanning it; devices seen only there are hidden">Ignore</button>{{end}}
+        </form></td>
       </tr>
     {{end}}
     </tbody>

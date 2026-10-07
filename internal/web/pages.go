@@ -16,9 +16,10 @@ import (
 // ---------------------------------------------------------------- home
 
 type homeData struct {
-	Counts  store.Counts
-	Subnets []store.SubnetInfo
-	Scan    *scanView
+	Counts     store.Counts
+	Subnets    []store.SubnetInfo
+	NewSubnets []store.SubnetInfo
+	Scan       *scanView
 }
 
 type scanView struct {
@@ -45,6 +46,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 			s.serverError(w, r, err)
 			return
 		}
+		data.NewSubnets = newSubnets(data.Subnets, s.opts.Clock.Now())
 	}
 	s.render(w, r, http.StatusOK, "home.html", page{Title: "Home", Nav: true, Active: "home", Data: data})
 }
@@ -189,7 +191,7 @@ func (s *Server) handleDeviceAttrs(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(changes) > 0 {
 		at := s.opts.Clock.Now()
-		err := s.opts.Facts.Do(r.Context(), func(tx *sql.Tx) error {
+		err := s.opts.Ingester.Do(r.Context(), func(tx *sql.Tx) error {
 			for _, c := range changes {
 				if err := inventory.SetDeviceAttr(r.Context(), tx, d.IdentityKey, c[0], c[1], at); err != nil {
 					return err

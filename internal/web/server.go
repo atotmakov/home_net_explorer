@@ -15,6 +15,7 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/auth"
 	"github.com/atotmakov/home_net_explorer/internal/clock"
+	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/store"
 )
 
@@ -33,9 +34,11 @@ type Options struct {
 	Clock   clock.Clock
 	Log     *slog.Logger
 	Store   *store.Store
-	Scanner Scanner    // nil when the built-in collector is disabled
-	Facts   FactWriter // serializes user edits with ingest
-	Version string
+	Scanner  Scanner  // nil when the built-in collector is disabled
+	Ingester Ingester // uploads, and user edits serialized with ingest
+	Version  string
+	// DownloadsDir holds the collector binaries served at /downloads/ (built into the image).
+	DownloadsDir string
 }
 
 // Scanner is the built-in collector as seen by the UI.
@@ -53,8 +56,10 @@ type ScanStatus struct {
 	LastError    string
 }
 
-// FactWriter runs a user-fact transaction serialized with ingest (ingest.Ingester.Do).
-type FactWriter interface {
+// Ingester stores uploaded runs and runs user-fact transactions serialized with ingest
+// (implemented by ingest.Ingester).
+type Ingester interface {
+	Ingest(ctx context.Context, collectorID int64, raw []byte, run *contract.CollectionRun, receivedAt time.Time) (contract.UploadResult, error)
 	Do(ctx context.Context, f func(tx *sql.Tx) error) error
 }
 
@@ -149,6 +154,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /ui/scan-status", s.handleScanStatus)
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSettingsSave)
+	s.mux.HandleFunc("POST /subnets", s.handleSubnetAttrs)
+	s.mux.HandleFunc("GET /collectors", s.handleCollectors)
+	s.mux.HandleFunc("POST /collectors", s.handleCollectorCreate)
+	s.mux.HandleFunc("POST /collectors/{id}/revoke", s.handleCollectorRevoke)
+	s.mux.HandleFunc("GET /downloads/{file}", s.handleDownload)
+	s.mux.HandleFunc("POST /api/v1/collections", s.handleUpload)
+	s.mux.HandleFunc("GET /api/v1/ping", s.handlePing)
 }
 
 // Handler returns the full middleware chain.

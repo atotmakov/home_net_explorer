@@ -22,6 +22,7 @@ type Config struct {
 	Subnets       []netip.Prefix // HNE_SUBNETS: optional restriction; empty = auto-discovery
 	DNSServer     netip.Addr     // HNE_DNS_SERVER: optional; must be private (Principle I)
 	NoBuiltinScan bool           // --no-builtin-scan
+	DownloadsDir  string         // HNE_DOWNLOADS: collector binaries (default /app/downloads)
 }
 
 func loadConfig(args []string, getenv func(string) string) (Config, error) {
@@ -40,6 +41,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
+
+	cfg.DownloadsDir = def("HNE_DOWNLOADS", "/app/downloads")
 
 	interval, err := time.ParseDuration(def("HNE_SCAN_INTERVAL", "900s"))
 	if err != nil || interval <= 0 {

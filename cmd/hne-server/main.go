@@ -56,6 +56,7 @@ func options(cfg Config, log *slog.Logger, noScan bool) app.Options {
 		Subnets:       cfg.Subnets,
 		DNSServer:     cfg.DNSServer,
 		NoBuiltinScan: noScan,
+		DownloadsDir:  cfg.DownloadsDir,
 		Version:       version,
 	}
 }

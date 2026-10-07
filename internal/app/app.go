@@ -40,6 +40,7 @@ type Options struct {
 	DNSServer     netip.Addr     // optional private DNS server for PTR lookups
 	NoBuiltinScan bool
 	Engine        *collect.Engine // override the platform scan engine (tests)
+	DownloadsDir  string          // collector binaries for /downloads/
 	Version       string
 }
 
@@ -107,7 +108,8 @@ func New(ctx context.Context, o Options) (*App, error) {
 		Log:     o.Log,
 		Store:   st,
 		Scanner: scanner,
-		Facts:   a.Ingester,
+		Ingester: a.Ingester,
+		DownloadsDir: o.DownloadsDir,
 		Version: o.Version,
 	})
 	if err != nil {

@@ -69,7 +69,12 @@ func scanCollector(row interface{ Scan(...any) error }) (Collector, error) {
 
 // GetCollector loads a collector by id.
 func (s *Store) GetCollector(ctx context.Context, id int64) (Collector, error) {
-	return scanCollector(s.db.QueryRowContext(ctx, `SELECT `+collectorCols+` FROM collectors WHERE id = ?`, id))
+	return CollectorByID(ctx, s.db, id)
+}
+
+// CollectorByID loads a collector by id from db.
+func CollectorByID(ctx context.Context, db *sql.DB, id int64) (Collector, error) {
+	return scanCollector(db.QueryRowContext(ctx, `SELECT `+collectorCols+` FROM collectors WHERE id = ?`, id))
 }
 
 // CollectorByName loads a collector by name.
@@ -116,4 +121,40 @@ func (s *Store) SetSetting(ctx context.Context, key, value string) error {
 func (s *Store) SetDefaultSetting(ctx context.Context, key, value string) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`, key, value)
 	return err
+}
+
+// CollectorOverview is a collector as listed on the Collectors page.
+type CollectorOverview struct {
+	Collector
+	Subnets     []string // subnets scanned in its latest run
+	SkewFlagged bool     // last clock skew exceeds 5 minutes
+}
+
+// CollectorOverviews lists collectors with the subnets of their latest run.
+func (s *Store) CollectorOverviews(ctx context.Context) ([]CollectorOverview, error) {
+	cs, err := s.ListCollectors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CollectorOverview, 0, len(cs))
+	for _, c := range cs {
+		o := CollectorOverview{Collector: c}
+		o.SkewFlagged = c.LastClockSkewMs > 300000 || c.LastClockSkewMs < -300000
+		rows, err := s.db.QueryContext(ctx, `SELECT cidr FROM run_subnets WHERE method != 'skipped' AND collection_id =
+			(SELECT collection_id FROM collection_runs WHERE collector_id = ? ORDER BY rowid DESC LIMIT 1) ORDER BY cidr`, c.ID)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var cidr string
+			if err := rows.Scan(&cidr); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			o.Subnets = append(o.Subnets, cidr)
+		}
+		rows.Close()
+		out = append(out, o)
+	}
+	return out, nil
 }
