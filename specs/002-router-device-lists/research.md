@@ -23,6 +23,10 @@ the read-only session against the owner's router on 2026-10-09 (firmware variant
      arguments are `Domain, IpAddr, MacAddr, Port, IpType, DevType, DevStatus, PortType, Time,
      HostName, IPv4Enabled, IPv6Enabled, DeviceType, UserDevAlias, UserSpecifiedDeviceType,
      LeaseTimeRemaining`. `USERDeviceNew` adds `RealMacAddr` after `MacAddr`.
+  The "someone else is logged in" reply was **not** captured in the verified session; until it
+  is, a login reply that is neither success, a known failure page (`FailStat`/`LockLeftTime`)
+  nor a recognizable error is reported as `session_busy` (the most likely cause) and recorded
+  for verification in T037.
   4. Logout: `POST /logout.cgi?RequestFile=html/logout.html` with `x.X_HW_Token=<onttoken>`,
      where `onttoken` is a hidden input on `index.asp`. The router also ends idle sessions
      within minutes (observed), so a missed logout is not fatal, but the collector always tries.
@@ -76,9 +80,14 @@ the read-only session against the owner's router on 2026-10-09 (firmware variant
   **succeeds**, that subnet is reported as `router_table` and is **not** also ICMP/TCP-probed in
   that run (the router list is better and includes non-pinging devices). If the read **fails**
   and the subnet is also an `extra_subnet`, the collector falls back to the ICMP/TCP probe for it
-  in the same run (method `icmp_tcp`). On-link subnets are always ARP-scanned; if a router also
-  covers an on-link subnet, its observations are merged into that ARP entry (one subnet entry,
-  method `arp`, both kinds of observation).
+  in the same run (method `icmp_tcp`) with `complete: false`: the fallback gives presence data
+  and sightings, but never counts as a completed scan, so devices only the router can see
+  (e.g. sleeping phones) are not marked offline because a router read failed (FR-010).
+  On-link subnets are always ARP-scanned; if a router also covers an on-link subnet, its
+  observations are merged into that ARP entry (one subnet entry, method `arp`). A run carries
+  **one observation per IP** in such a subnet: when the router and ARP both see the same IP and
+  MAC, the `router_table` observation is kept (it has the router hostname and `via`), so the
+  sighting tuple does not alternate between the two sources on every scan.
 - **Rationale**: keeps the v1 rule "a subnet appears once per run" and the offline semantics
   simple.
 
@@ -125,7 +134,7 @@ the read-only session against the owner's router on 2026-10-09 (firmware variant
 
 ## R9. Testing
 
-- Parser: the anonymized capture `hg8145v5_getlanuserdevinfo.fixture.asp` (no real MACs,
+- Parser: the anonymized capture `internal/collect/router/testdata/hg8145v5_getlanuserdevinfo.asp` (no real MACs,
   hostnames or model strings) plus hand-made variants (`isRealmac = 1`, empty list, garbled page).
 - Protocol: a fake HG8145V5 (`httptest`) implementing GetRandCount/login/data/logout with
   scripted failures (wrong password, locked, session busy, garbage page), asserting logout is

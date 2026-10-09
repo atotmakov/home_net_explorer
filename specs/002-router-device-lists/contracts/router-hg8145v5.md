@@ -6,7 +6,7 @@ performs the requests below.
 | Step | Request | Success | Failure mapping |
 |------|---------|---------|-----------------|
 | token | `POST /asp/GetRandCount.asp` | body: 48 hex chars (strip UTF-8 BOM) | connection error → `unreachable`; other body → `page_not_understood` |
-| login | cookie `Cookie=body:Language:english:id=-1`; `POST /login.cgi` form `UserName`, `PassWord`=Base64(password), `Language=english`, `x.X_HW_Token` | `Set-Cookie: Cookie=sid=…:…:id=…`, body redirects to `index.asp` | redirect to login: fetch `/` and read `LockLeftTime` (>0 → `locked`) and `FailStat`/`LoginTimes` (→ `login_rejected`); "already logged in" message → `session_busy`; anything else → `page_not_understood` |
+| login | cookie `Cookie=body:Language:english:id=-1`; `POST /login.cgi` form `UserName`, `PassWord`=Base64(password), `Language=english`, `x.X_HW_Token` | `Set-Cookie: Cookie=sid=…:…:id=…`, body redirects to `index.asp` | redirect to login: fetch `/` and read `LockLeftTime` (>0 → `locked`) and `FailStat`/`LoginTimes` (→ `login_rejected`); any other reply (incl. the unverified "already logged in" message) → `session_busy` |
 | list | `GET /html/bbsp/common/GetLanUserDevInfo.asp` with the session cookie | JS defining `var UserDevinfo = new Array(new USERDevice(…), …, null)` | no array / wrong arity → `page_not_understood` |
 | token for logout | `GET /index.asp` → hidden input `id="onttoken"` | 48 hex chars | missing → skip explicit logout (router expires the session) |
 | logout | `POST /logout.cgi?RequestFile=html/logout.html` form `x.X_HW_Token=<onttoken>` | any response | ignored (best effort) |

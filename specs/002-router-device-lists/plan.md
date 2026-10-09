@@ -50,7 +50,7 @@ from the contract and the UI.
 
 **Project Type**: an additive feature on the existing web service and CLI collector.
 
-**Performance Goals**: a router read takes under 5 s on the LAN (4 HTTP requests) and never
+**Performance Goals**: a router read takes under 5 s on the LAN (5 HTTP requests) and never
 delays the rest of the scan by more than its timeout (10 s).
 
 **Constraints**:

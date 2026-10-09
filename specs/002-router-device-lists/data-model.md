@@ -28,7 +28,8 @@ marker (research R6, FR-011).
 ### SubnetScan
 
 `method` adds `router_table`. Rules: `complete = true` only for a successful read;
-`hosts_probed` = number of entries in the router list (online + offline).
+`hosts_probed` = number of router entries inside the router's subnet (online + offline;
+entries outside the subnet, such as `0.0.0.0`, are not counted).
 
 ### Observation
 
@@ -47,7 +48,7 @@ marker (research R6, FR-011).
 | address | the router's private IPv4 address |
 | subnet | the subnet it serves |
 | outcome | `ok`, `unreachable`, `login_rejected`, `locked`, `session_busy`, `page_not_understood`, `skipped_after_rejection` |
-| online / offline | counts from the router list (0 unless `ok`) |
+| online / offline | counts of router entries inside its subnet (0 unless `ok`) |
 
 Validation: at most 8 sources per run; `address` private; `outcome` from the list. No credential
 fields exist in the contract.
