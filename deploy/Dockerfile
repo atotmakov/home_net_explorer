@@ -2,7 +2,7 @@
 # hne-server image (T047). The build stage runs on the build machine and cross-compiles for the
 # target platform, so multi-arch builds need no emulation; the final stage only copies files.
 
-FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/golang:1.26 AS build
 ARG TARGETOS
 ARG TARGETARCH
 # VERSION and COMMIT are stamped by CI (T099); a plain local build reports dev/unknown.
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin \
 
 # Collector binaries served at /downloads/ (T067). This stage doesn't depend on the target
 # platform, so a multi-arch build compiles them once.
-FROM --platform=$BUILDPLATFORM golang:1.26 AS collectors
+FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/golang:1.26 AS collectors
 ARG VERSION=dev
 ARG COMMIT=unknown
 WORKDIR /src
