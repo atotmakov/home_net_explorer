@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
@@ -21,6 +22,8 @@ import (
 //   - "`schema_version` must be supported"
 //   - "Every subnet `cidr` must be private (RFC 1918) with a prefix from /16 to /30"
 //   - `skip_reason` is required when method = `skipped`
+//   - feature 002: `router_table` observations need a MAC; `via` only on `router_table`, at most
+//     32 characters; at most 8 `sources`, each with a private address and a known outcome
 var fixtureCodes = map[string]string{
 	"valid_minimal.json":                   "",
 	"valid_full.json":                      "",
@@ -37,6 +40,14 @@ var fixtureCodes = map[string]string{
 	"invalid_public_subnet.json":           contract.CodeValidation,
 	"invalid_skipped_without_reason.json":  contract.CodeValidation,
 	"invalid_ip_in_skipped_subnet.json":    contract.CodeValidation,
+	"valid_router.json":                    "",
+	"valid_router_failed.json":             "",
+	"invalid_router_bad_outcome.json":      contract.CodeValidation,
+	"invalid_source_with_password.json":    contract.CodeValidation,
+	"invalid_via_too_long.json":            contract.CodeValidation,
+	"invalid_router_without_mac.json":      contract.CodeValidation,
+	"invalid_via_on_arp.json":              contract.CodeValidation,
+	"invalid_router_public_address.json":   contract.CodeValidation,
 }
 
 func decodeAndValidate(data []byte) error {
@@ -80,6 +91,45 @@ func TestValidateFixtures(t *testing.T) {
 func TestValidateLimits(t *testing.T) {
 	checkCode(t, "4097 observations", decodeAndValidate(contracttest.TooManyObservations(t)), contract.CodeValidation)
 	checkCode(t, "17 subnets", decodeAndValidate(contracttest.TooManySubnets(t)), contract.CodeValidation)
+	checkCode(t, "9 sources", decodeAndValidate(contracttest.TooManySources(t)), contract.CodeValidation)
+}
+
+func TestValidateRouterRules(t *testing.T) {
+	obs := func(m map[string]any, i int) map[string]any { return m["observations"].([]any)[i].(map[string]any) }
+	src := func(m map[string]any) map[string]any { return m["sources"].([]any)[0].(map[string]any) }
+	bad := map[string]func(m map[string]any){
+		"router_table observation outside every scanned subnet": func(m map[string]any) { obs(m, 1)["ip"] = "192.168.5.4" },
+		"via of 33 characters": func(m map[string]any) { obs(m, 1)["via"] = strings.Repeat("x", 33) },
+		"via on an icmp observation": func(m map[string]any) {
+			o := obs(m, 0)
+			delete(o, "mac")
+			o["method"] = "icmp"
+			o["via"] = "LAN1"
+		},
+		"unknown hostname_source": func(m map[string]any) { obs(m, 1)["hostname_source"] = "dhcp" },
+		"unknown source type":     func(m map[string]any) { src(m)["type"] = "switch" },
+		"public source address":   func(m map[string]any) { src(m)["address"] = "8.8.8.8" },
+		"source address not IPv4": func(m map[string]any) { src(m)["address"] = "router.lan" },
+		"public source subnet":    func(m map[string]any) { src(m)["subnet"] = "8.8.8.0/24" },
+		"source subnet too wide":  func(m map[string]any) { src(m)["subnet"] = "10.0.0.0/8" },
+		"unknown outcome":         func(m map[string]any) { src(m)["outcome"] = "rebooted" },
+		"negative online count":   func(m map[string]any) { src(m)["online"] = -1 },
+		"counts on a failed read": func(m map[string]any) { src(m)["outcome"] = "unreachable" },
+		"model too long":          func(m map[string]any) { src(m)["model"] = strings.Repeat("m", 65) },
+	}
+	for label, f := range bad {
+		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), contract.CodeValidation)
+	}
+	good := map[string]func(m map[string]any){
+		"via of 32 characters":           func(m map[string]any) { obs(m, 1)["via"] = strings.Repeat("x", 32) },
+		"failed read with zero counts":   func(m map[string]any) { src(m)["outcome"], src(m)["online"], src(m)["offline"] = "session_busy", 0, 0 },
+		"skipped after rejection":        func(m map[string]any) { src(m)["outcome"], src(m)["online"], src(m)["offline"] = "skipped_after_rejection", 0, 0 },
+		"router hostname on an arp entry": func(m map[string]any) { obs(m, 0)["hostname_source"] = "router" },
+		"no sources at all":              func(m map[string]any) { delete(m, "sources") },
+	}
+	for label, f := range good {
+		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), "")
+	}
 }
 
 func TestValidateSubnetRules(t *testing.T) {
