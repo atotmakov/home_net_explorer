@@ -248,6 +248,15 @@ User facts ──(apply)──▶ Device / Link
 - No more than 4096 observations and 16 subnets per run.
 - `schema_version` must be supported.
 
+## Feature 002 additions
+
+See `specs/002-router-device-lists/data-model.md`:
+- `router_table` scan and observation method (MAC required), `hostname_source: router`,
+  `Observation.via` and the run's `sources` (router read outcomes, no credentials).
+- `run_sources` fact table (one row per router read per run), and `run_subnets.method` accepts
+  `router_table` (migration 0003).
+- `sightings.via` is part of the sighting tuple (ip, mac, hostname, via).
+
 ## Rebuild invariant (tested)
 
 Delete all projections. Replay one merged stream: `collection_runs` ordered by `received_at`, and

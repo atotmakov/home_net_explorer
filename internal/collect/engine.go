@@ -27,6 +27,9 @@ type ScanOptions struct {
 	Targets []netip.Prefix
 	// Ignored subnets are reported as skipped/ignored and never probed.
 	Ignored []netip.Prefix
+	// Extra subnets are scanned in addition to Targets or auto-discovery (feature 002,
+	// FR-015): ARP when on-link, otherwise ICMP/TCP.
+	Extra []netip.Prefix
 }
 
 // Engine runs one collection: it plans subnets from the vantage report, probes them in
@@ -380,6 +383,30 @@ func planTargets(v contract.Vantage, opts ScanOptions, routers []router.Source) 
 			t.probe = t.iface == ""
 			out = append(out, t)
 		}
+	}
+	for _, p := range opts.Extra {
+		p = p.Masked()
+		if !contract.IsPrivate(p) || p.Bits() < contract.MinPrefixBits || p.Bits() > contract.MaxPrefixBits {
+			continue
+		}
+		if i := slices.IndexFunc(out, func(t target) bool { return t.prefix == p }); i >= 0 {
+			if out[i].skip == contract.SkipTooLarge {
+				out[i].skip = "" // listed explicitly by the owner
+			}
+			continue // already planned: scanned once, with the on-link method if attached (FR-016)
+		}
+		t := target{prefix: p}
+		for op, iface := range onlink {
+			if op.Bits() <= p.Bits() && op.Contains(p.Addr()) {
+				t.iface = iface
+				break
+			}
+		}
+		if ignored[p] {
+			t.skip = contract.SkipIgnored
+		}
+		t.probe = t.iface == ""
+		out = append(out, t)
 	}
 	for _, r := range routers {
 		p := r.Prefix().Masked()

@@ -52,16 +52,19 @@ const (
 
 const configFile = "hne-collector.json"
 
-// config is hne-collector.json, overridable by HNE_SERVER_URL, HNE_TOKEN and HNE_SUBNETS.
+// config is hne-collector.json, overridable by HNE_SERVER_URL, HNE_TOKEN, HNE_SUBNETS and
+// HNE_EXTRA_SUBNETS.
 type config struct {
 	ServerURL       string          `json:"server_url"`
 	Name            string          `json:"name"`
 	Token           string          `json:"token"`
 	Subnets         []string        `json:"subnets"`
+	ExtraSubnets    []string        `json:"extra_subnets"` // scanned in addition to subnets/auto-discovery
 	IntervalSeconds int             `json:"interval_seconds"`
 	Routers         []router.Config `json:"routers"` // opt-in router sources (feature 002)
 
-	prefixes []netip.Prefix
+	prefixes      []netip.Prefix
+	extraPrefixes []netip.Prefix
 }
 
 // environment is everything run needs from the outside world (replaced in tests).
@@ -102,6 +105,9 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 	if v := strings.TrimSpace(getenv("HNE_SUBNETS")); v != "" {
 		cfg.Subnets = strings.Split(v, ",")
 	}
+	if v := strings.TrimSpace(getenv("HNE_EXTRA_SUBNETS")); v != "" {
+		cfg.ExtraSubnets = strings.Split(v, ",")
+	}
 
 	u, err := url.Parse(cfg.ServerURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -125,6 +131,13 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 			return cfg, fmt.Errorf("subnets: %w", err)
 		}
 		cfg.prefixes = append(cfg.prefixes, p)
+	}
+	for _, s := range cfg.ExtraSubnets {
+		p, err := contract.ParseSubnet(strings.TrimSpace(s))
+		if err != nil {
+			return cfg, fmt.Errorf("extra_subnets: %w", err)
+		}
+		cfg.extraPrefixes = append(cfg.extraPrefixes, p)
 	}
 	if len(cfg.Routers) > contract.MaxSources {
 		return cfg, fmt.Errorf("routers: at most %d entries", contract.MaxSources)
@@ -265,7 +278,7 @@ func (c *collector) check(ctx context.Context) int {
 		fmt.Fprintf(w, "  %-20s %s/%d %s\n", ifc.Name, ifc.IP, ifc.PrefixLen, ifc.MAC)
 	}
 	fmt.Fprintln(w, "Subnets to scan:")
-	plan := collect.Plan(v, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: c.lastIgnored()}, c.engine.Routers)
+	plan := collect.Plan(v, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: c.lastIgnored(), Extra: c.cfg.extraPrefixes}, c.engine.Routers)
 	if len(plan) == 0 {
 		fmt.Fprintln(w, "  (none: no private subnet of /22 or narrower is attached)")
 	}
@@ -356,7 +369,7 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 	if err != nil && !dryRun {
 		c.log.Warn("server unreachable; using the last known ignored subnets", "err", err)
 	}
-	run, err := c.engine.Scan(ctx, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: ignored})
+	run, err := c.engine.Scan(ctx, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: ignored, Extra: c.cfg.extraPrefixes})
 	if err != nil {
 		c.log.Error("scan failed", "err", err)
 		return exitFailure

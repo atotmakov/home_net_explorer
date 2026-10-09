@@ -448,7 +448,7 @@ on-link subnets and `192.168.0.0/24` are all covered; a newly attached adapter i
 
 ### Tests for User Story 3 ⚠️ write first, see them fail
 
-- [ ] T030 [P] [US3] Write `internal/collect/engine_extra_test.go` (FR-015, FR-016, SC-007,
+- [X] T030 [P] [US3] Write `internal/collect/engine_extra_test.go` (FR-015, FR-016, SC-007,
   research R4/R7). Add `Extra []netip.Prefix` to the `ScanOptions` used in the tests.
   - No `Targets`, `Extra = [192.168.0.0/24]`: the run covers every on-link subnet (`arp`) plus
     `192.168.0.0/24` (`icmp_tcp`).
@@ -465,7 +465,7 @@ on-link subnets and `192.168.0.0/24` are all covered; a newly attached adapter i
     reports the failure.
   - `Plan` reports the extra with its method and, for a router subnet, `Router` plus a fallback
     marker.
-- [ ] T031 [P] [US3] Extend `cmd/hne-collector/main_test.go`:
+- [X] T031 [P] [US3] Extend `cmd/hne-collector/main_test.go`:
   - `extra_subnets` loads from the file, and env `HNE_EXTRA_SUBNETS` (comma-separated) overrides
     it.
   - A public (`8.8.8.0/24`), too-wide (`10.0.0.0/8`) or too-narrow (`/31`) extra → config error,
@@ -475,7 +475,7 @@ on-link subnets and `192.168.0.0/24` are all covered; a newly attached adapter i
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Extend `internal/collect/engine.go`:
+- [X] T032 [US3] Extend `internal/collect/engine.go`:
   - Add `ScanOptions.Extra`. `planTargets` builds the base list (auto-discovered or `Targets`),
     then adds each extra not already present: on-link → ARP target with its interface, otherwise
     `icmp_tcp`. Apply ignore and MaxSubnets as today.
@@ -486,7 +486,7 @@ on-link subnets and `192.168.0.0/24` are all covered; a newly attached adapter i
     extra.
 
   Make T030 pass
-- [ ] T033 [US3] Extend `cmd/hne-collector/main.go`:
+- [X] T033 [US3] Extend `cmd/hne-collector/main.go`:
   - `config.ExtraSubnets []string` (`json:"extra_subnets"`), parsed with `contract.ParseSubnet`
     into `cfg.extraPrefixes`, with error prefix `extra_subnets:`, plus the `HNE_EXTRA_SUBNETS`
     override.
@@ -502,13 +502,13 @@ gives presence data for that subnet.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T034 [P] Update `specs/001-lan-inventory-topology/contracts/collector-cli.md` with
+- [X] T034 [P] Update `specs/001-lan-inventory-topology/contracts/collector-cli.md` with
   `extra_subnets`, `HNE_EXTRA_SUBNETS`, `routers[]`, the `check` `Routers:` section, the
   `router=` summary field and the rejection-marker file, linking to
   `specs/002-router-device-lists/contracts/collector-config-and-cli.md`. Also update
   `specs/001-lan-inventory-topology/data-model.md` with pointers to the 002 additions
   (`run_sources`, `sightings.via`, `router_table`)
-- [ ] T035 [P] Security pass on `internal/collect/router` and the collector:
+- [X] T035 [P] Security pass on `internal/collect/router` and the collector:
   - Grep for any `slog`/`fmt` call that could print a `Config`, a response body, a cookie or a
     token.
   - Check that `http.Client` doesn't follow redirects to another host, that response bodies are
