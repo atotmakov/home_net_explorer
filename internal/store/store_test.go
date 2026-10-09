@@ -126,7 +126,7 @@ func rowCounts(t *testing.T, s *store.Store) map[string]int {
 	return counts
 }
 
-// TestMigration0003 (feature 002): seeded v2 data survives, sightings gain via = '', run_subnets
+// TestMigration0003 (feature 002): seeded v2 data survives, sightings gain via = ”, run_subnets
 // accepts router_table (and still rejects unknown methods), and run_sources is keyed by
 // (collection_id, idx).
 func TestMigration0003(t *testing.T) {

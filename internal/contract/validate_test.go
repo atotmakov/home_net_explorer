@@ -121,11 +121,13 @@ func TestValidateRouterRules(t *testing.T) {
 		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), contract.CodeValidation)
 	}
 	good := map[string]func(m map[string]any){
-		"via of 32 characters":           func(m map[string]any) { obs(m, 1)["via"] = strings.Repeat("x", 32) },
-		"failed read with zero counts":   func(m map[string]any) { src(m)["outcome"], src(m)["online"], src(m)["offline"] = "session_busy", 0, 0 },
-		"skipped after rejection":        func(m map[string]any) { src(m)["outcome"], src(m)["online"], src(m)["offline"] = "skipped_after_rejection", 0, 0 },
+		"via of 32 characters":         func(m map[string]any) { obs(m, 1)["via"] = strings.Repeat("x", 32) },
+		"failed read with zero counts": func(m map[string]any) { src(m)["outcome"], src(m)["online"], src(m)["offline"] = "session_busy", 0, 0 },
+		"skipped after rejection": func(m map[string]any) {
+			src(m)["outcome"], src(m)["online"], src(m)["offline"] = "skipped_after_rejection", 0, 0
+		},
 		"router hostname on an arp entry": func(m map[string]any) { obs(m, 0)["hostname_source"] = "router" },
-		"no sources at all":              func(m map[string]any) { delete(m, "sources") },
+		"no sources at all":               func(m map[string]any) { delete(m, "sources") },
 	}
 	for label, f := range good {
 		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), "")
