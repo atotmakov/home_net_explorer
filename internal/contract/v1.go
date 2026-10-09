@@ -19,6 +19,9 @@ const (
 	MaxRunWindow          = time.Hour
 	MaxFutureSkew         = 5 * time.Minute
 	ClockSkewFlagMs       = 300000
+	MaxSources            = 8  // router sources per run (feature 002)
+	MaxViaLen             = 32 // Observation.via
+	MaxModelLen           = 64 // RunSource.model
 )
 
 // Scan methods, observation methods, and skip reasons.
@@ -34,6 +37,10 @@ const (
 	SkipIgnored           = "ignored"
 	HostnameSourceDNS     = "dns"
 	HostnameSourceMDNS    = "mdns"
+	HostnameSourceRouter  = "router"
+	MethodRouterTable     = "router_table" // subnet covered by a router's device list
+	ObsRouterTable        = "router_table" // device listed as online by a router
+	SourceTypeRouter      = "router"
 	StatusStored          = "stored"
 	StatusDuplicate       = "duplicate"
 	CodeValidation        = "validation_failed"
@@ -41,6 +48,27 @@ const (
 	CodeInvalidToken      = "invalid_token"
 	CodePayloadTooLarge   = "payload_too_large"
 )
+
+// Router read outcomes (RunSource.Outcome).
+const (
+	OutcomeOK                    = "ok"
+	OutcomeUnreachable           = "unreachable"
+	OutcomeLoginRejected         = "login_rejected"
+	OutcomeLocked                = "locked"
+	OutcomeSessionBusy           = "session_busy"
+	OutcomePageNotUnderstood     = "page_not_understood"
+	OutcomeSkippedAfterRejection = "skipped_after_rejection"
+)
+
+// ValidOutcome reports whether s is a known router read outcome.
+func ValidOutcome(s string) bool {
+	switch s {
+	case OutcomeOK, OutcomeUnreachable, OutcomeLoginRejected, OutcomeLocked, OutcomeSessionBusy,
+		OutcomePageNotUnderstood, OutcomeSkippedAfterRejection:
+		return true
+	}
+	return false
+}
 
 // CollectionRun is one completed scan by one collector.
 type CollectionRun struct {
@@ -54,6 +82,19 @@ type CollectionRun struct {
 	Vantage         Vantage       `json:"vantage"`
 	Subnets         []SubnetScan  `json:"subnets"`
 	Observations    []Observation `json:"observations"`
+	Sources         []RunSource   `json:"sources,omitempty"`
+}
+
+// RunSource is the outcome of one router read in a run (feature 002). It deliberately has no
+// credential fields: router logins never leave the collector (FR-006).
+type RunSource struct {
+	Type    string `json:"type"`
+	Model   string `json:"model"`
+	Address string `json:"address"`
+	Subnet  string `json:"subnet"`
+	Outcome string `json:"outcome"`
+	Online  int    `json:"online"`
+	Offline int    `json:"offline"`
 }
 
 // CollectorInfo identifies the collector build that produced a run.
@@ -102,6 +143,7 @@ type Observation struct {
 	Hostname       string    `json:"hostname,omitempty"`
 	HostnameSource string    `json:"hostname_source,omitempty"`
 	Method         string    `json:"method"`
+	Via            string    `json:"via,omitempty"` // router port or Wi-Fi interface (router_table only)
 }
 
 // UploadResult is the server's answer to an upload.

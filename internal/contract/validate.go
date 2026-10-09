@@ -80,7 +80,7 @@ func Validate(run *CollectionRun) error {
 		}
 		seen[p] = true
 		switch s.Method {
-		case MethodARP, MethodICMPTCP:
+		case MethodARP, MethodICMPTCP, MethodRouterTable:
 			if s.SkipReason != "" {
 				return invalid("subnet %s: skip_reason is only allowed when method = skipped", s.CIDR)
 			}
@@ -103,6 +103,36 @@ func Validate(run *CollectionRun) error {
 	for i, o := range run.Observations {
 		if err := validateObservation(i, o, run, scanned); err != nil {
 			return err
+		}
+	}
+	return validateSources(run.Sources)
+}
+
+func validateSources(sources []RunSource) error {
+	if len(sources) > MaxSources {
+		return invalid("no more than %d sources per run", MaxSources)
+	}
+	for i, s := range sources {
+		if s.Type != SourceTypeRouter {
+			return invalid("sources[%d]: unknown type %q", i, s.Type)
+		}
+		if s.Model == "" || len(s.Model) > MaxModelLen {
+			return invalid("sources[%d]: model must be 1 to %d characters", i, MaxModelLen)
+		}
+		if a, err := netip.ParseAddr(s.Address); err != nil || !IsPrivateAddr(a) {
+			return invalid("sources[%d]: address %q must be a private IPv4 address", i, s.Address)
+		}
+		if _, err := ParseSubnet(s.Subnet); err != nil {
+			return invalid("sources[%d]: %v", i, err.(*Error).Detail)
+		}
+		if !ValidOutcome(s.Outcome) {
+			return invalid("sources[%d]: unknown outcome %q", i, s.Outcome)
+		}
+		if s.Online < 0 || s.Offline < 0 {
+			return invalid("sources[%d]: online and offline must be >= 0", i)
+		}
+		if s.Outcome != OutcomeOK && (s.Online != 0 || s.Offline != 0) {
+			return invalid("sources[%d]: online and offline must be 0 unless outcome is ok", i)
 		}
 	}
 	return nil
@@ -146,21 +176,27 @@ func validateObservation(i int, o Observation, run *CollectionRun, scanned []net
 		return invalid("observations[%d]: ip %s must be inside a non-skipped subnet of the same run", i, o.IP)
 	}
 	switch o.Method {
-	case ObsARP, ObsNeighborCache, ObsICMP, ObsTCP:
+	case ObsARP, ObsNeighborCache, ObsICMP, ObsTCP, ObsRouterTable:
 	default:
 		return invalid("observations[%d]: unknown method %q", i, o.Method)
 	}
 	if o.MAC != "" && !macRe.MatchString(o.MAC) {
 		return invalid("observations[%d]: mac %q must be lower-case aa:bb:cc:dd:ee:ff", i, o.MAC)
 	}
-	if o.Method == ObsARP && o.MAC == "" {
-		return invalid("observations[%d]: MAC is required when method is arp", i)
+	if (o.Method == ObsARP || o.Method == ObsRouterTable) && o.MAC == "" {
+		return invalid("observations[%d]: MAC is required when method is %s", i, o.Method)
+	}
+	if o.Via != "" && o.Method != ObsRouterTable {
+		return invalid("observations[%d]: via is only allowed when method is router_table", i)
+	}
+	if len(o.Via) > MaxViaLen {
+		return invalid("observations[%d]: via longer than %d characters", i, MaxViaLen)
 	}
 	if len(o.Hostname) > 253 {
 		return invalid("observations[%d]: hostname longer than 253 characters", i)
 	}
 	switch o.HostnameSource {
-	case "", HostnameSourceDNS, HostnameSourceMDNS:
+	case "", HostnameSourceDNS, HostnameSourceMDNS, HostnameSourceRouter:
 	default:
 		return invalid("observations[%d]: unknown hostname_source %q", i, o.HostnameSource)
 	}

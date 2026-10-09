@@ -62,7 +62,7 @@ that can be tested on its own.
   hostnames `host-01`…`host-23` or empty, IPs `192.168.0.3`–`192.168.0.31` plus one static
   `0.0.0.0`, ports `LAN1`/`LAN2`, DevType `vendor-class`/`--`/empty. It contains no real MAC,
   hostname or model string
-- [ ] T002 Set `VERSION` to `0.3` (research R8), and write `internal/collect/router/doc.go`: the
+- [X] T002 Set `VERSION` to `0.3` (research R8), and write `internal/collect/router/doc.go`: the
   package comment says router sources are opt-in, read-only, configured only in the remote
   collector's `hne-collector.json`, and that credentials never leave the collector machine
 
@@ -76,7 +76,7 @@ that can be tested on its own.
 
 ### Tests first
 
-- [ ] T003 [P] Add contract fixtures to `tests/contract/fixtures/` and register them in
+- [X] T003 [P] Add contract fixtures to `tests/contract/fixtures/` and register them in
   `tests/contract/schema_test.go`:
   - `valid_router.json`: subnets `192.168.1.0/24` (`arp`) and `192.168.0.0/24`
     (`router_table`, `complete: true`, `hosts_probed: 30`); `router_table` observations with
@@ -96,7 +96,7 @@ that can be tested on its own.
   - Extend `internal/contract/contracttest` with `TooManySources(t)` (9 sources), checked by
     both the schema test and `Validate`.
   - All existing `valid_*` fixtures must still pass unchanged (old collectors keep working).
-- [ ] T004 [P] Extend `internal/contract/validate_test.go` (`TestValidateFixtures` picks up the
+- [X] T004 [P] Extend `internal/contract/validate_test.go` (`TestValidateFixtures` picks up the
   new fixtures). Add table cases:
   - `router_table` observations need a MAC; `via` is allowed only on `router_table`, at most 32
     characters; `hostname_source` accepts `router`.
@@ -105,7 +105,7 @@ that can be tested on its own.
   - `sources`: at most 8; `type` only `router`; `address` must be private IPv4; `subnet` must
     parse with `ParseSubnet` (private, /16–/30); `outcome` from the list in Conventions;
     `online`/`offline` ≥ 0 and both 0 unless `outcome` is `ok`; `model` ≤ 64 characters.
-- [ ] T005 [P] Write `internal/store/testdata/seed_2.sql` (sample rows at schema v2, including
+- [X] T005 [P] Write `internal/store/testdata/seed_2.sql` (sample rows at schema v2, including
   `sightings` and `run_subnets` rows) so `TestMigrationHarness` in `internal/store/store_test.go`
   checks 2 → 3 with row counts preserved. Add a test in `store_test.go`: after migration,
   existing sightings have `via = ''`, and `run_sources` exists with primary key
@@ -113,7 +113,7 @@ that can be tested on its own.
 
 ### Implementation
 
-- [ ] T006 Edit the canonical contract
+- [X] T006 Edit the canonical contract
   `specs/001-lan-inventory-topology/contracts/collector-upload-api.yaml` exactly as in
   `contracts/upload-api-changes.md`: `SubnetScan.method` adds `router_table`;
   `Observation.method` adds `router_table`; `hostname_source` adds `router`; new
@@ -122,7 +122,7 @@ that can be tested on its own.
   outcome, online, offline]`). Keep `schema_version` 1. Add to the API description: "Additive
   change (feature 002): upgrade the server before collectors that send `router_table` or
   `sources`." The `contract-lint` CI job (redocly) must pass. Make T003 schema cases pass
-- [ ] T007 Extend `internal/contract/v1.go` and `internal/contract/validate.go`: constants
+- [X] T007 Extend `internal/contract/v1.go` and `internal/contract/validate.go`: constants
   `MethodRouterTable = "router_table"`, `ObsRouterTable = "router_table"`,
   `HostnameSourceRouter = "router"`, `SourceTypeRouter = "router"`, `MaxSources = 8`,
   `MaxViaLen = 32`, and the outcome constants (`OutcomeOK`, `OutcomeUnreachable`,
@@ -132,7 +132,7 @@ that can be tested on its own.
   `Model`, `Address`, `Subnet`, `Outcome`, `Online`, `Offline`). The struct has **no credential
   fields**. Add the T004 rules to `Validate`. Make T003 and T004 pass, including
   `TestGoTypesRoundTrip`
-- [ ] T008 Write `internal/store/migrations/0003_router_sources.sql` (data-model.md "Server"):
+- [X] T008 Write `internal/store/migrations/0003_router_sources.sql` (data-model.md "Server"):
   ```sql
   ALTER TABLE sightings ADD COLUMN via TEXT NOT NULL DEFAULT '';
   CREATE TABLE run_sources (
