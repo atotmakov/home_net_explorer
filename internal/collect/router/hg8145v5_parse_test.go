@@ -48,7 +48,7 @@ func devNew(ip, mac, realMAC, port, status, host string) string {
 
 // page mirrors the array selection of GetLanUserDevInfo.asp.
 func page(productType, isRealmac, realmacArray, plainArray, product2Array string) []byte {
-	return []byte(fmt.Sprintf("﻿function USERDevice(){}\r\nvar ProductType = '%s';\r\nvar isRealmac = '%s';\r\n"+
+	return []byte(fmt.Sprintf("\ufefffunction USERDevice(){}\r\nvar ProductType = '%s';\r\nvar isRealmac = '%s';\r\n"+
 		"if (ProductType != '2') {\r\n    if (isRealmac == 1) {\r\n        var UserDevinfo = new Array(%snull);\r\n"+
 		"    } else {\r\n        var UserDevinfo = new Array(%snull);\r\n    }\r\n} else {\r\n"+
 		"    var UserDevinfo = new Array(%snull);\r\n}\r\n",

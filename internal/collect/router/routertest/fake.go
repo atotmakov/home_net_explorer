@@ -146,7 +146,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.randToken = tok
 		f.mu.Unlock()
-		fmt.Fprint(w, "﻿"+tok)
+		fmt.Fprint(w, "\ufeff"+tok)
 	case "POST /login.cgi":
 		f.login(w, r, mode)
 	case "GET /html/bbsp/common/GetLanUserDevInfo.asp":
