@@ -3,3 +3,5 @@
 *.exe binary
 *.png binary
 *.gz binary
+# Router captures keep their original bytes (UTF-8 BOM, CRLF), as served by the router.
+internal/collect/router/testdata/*.asp -text

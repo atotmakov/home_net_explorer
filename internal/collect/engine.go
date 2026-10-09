@@ -10,8 +10,10 @@ import (
 	"net/netip"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
+	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
 
@@ -25,6 +27,9 @@ type ScanOptions struct {
 	Targets []netip.Prefix
 	// Ignored subnets are reported as skipped/ignored and never probed.
 	Ignored []netip.Prefix
+	// Extra subnets are scanned in addition to Targets or auto-discovery (feature 002,
+	// FR-015): ARP when on-link, otherwise ICMP/TCP.
+	Extra []netip.Prefix
 }
 
 // Engine runs one collection: it plans subnets from the vantage report, probes them in
@@ -41,12 +46,20 @@ type Engine struct {
 	Collector       contract.CollectorInfo
 	IntervalSeconds int
 	Concurrency     int
+	// Routers are the configured router sources (feature 002). Each is read once per scan,
+	// before probing, bounded by RouterTimeout (default router.DefaultTimeout).
+	Routers       []router.Source
+	RouterTimeout time.Duration
 }
 
 type target struct {
 	prefix netip.Prefix
-	iface  string // on-link interface; "" for a routed subnet
-	skip   string // contract.SkipTooLarge / SkipIgnored, or "" to scan
+	iface  string        // on-link interface; "" for a routed subnet
+	skip   string        // contract.SkipTooLarge / SkipIgnored, or "" to scan
+	router router.Source // the router whose device list covers this subnet, if any
+	// probe marks a routed subnet the collector probes itself (listed in Targets or Extra).
+	// With a router, that probe is the ICMP/TCP fallback for a failed read (research R4).
+	probe bool
 }
 
 // Scan performs one collection. A cancelled context ends probing early and the affected
@@ -87,22 +100,52 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 		mu.Unlock()
 	}
 
-	targets := planTargets(v, opts)
+	targets := planTargets(v, opts, e.Routers)
+	reads := e.readRouters(ctx, targets)
 	var arpScanned []netip.Prefix
-	for _, t := range targets {
+	var routerObs []contract.Observation // recorded last: one observation per IP, the router's wins
+	for i, t := range targets {
 		if t.skip != "" {
 			run.Subnets = append(run.Subnets, contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodSkipped, SkipReason: t.skip})
 			continue
 		}
-		scan := e.probeSubnet(ctx, clk, t, record)
-		run.Subnets = append(run.Subnets, scan)
-		if scan.Method == contract.MethodARP {
-			arpScanned = append(arpScanned, t.prefix)
+		res, read := reads[i]
+		if read {
+			run.Sources = append(run.Sources, contract.RunSource{Type: contract.SourceTypeRouter, Model: t.router.Model(),
+				Address: t.router.Address().String(), Subnet: t.prefix.String(), Outcome: res.Outcome, Online: res.Online, Offline: res.Offline})
+		}
+		ok := read && res.Outcome == contract.OutcomeOK
+		if ok {
+			routerObs = append(routerObs, res.Observations...)
+		}
+		switch {
+		case t.iface == "" && ok:
+			run.Subnets = append(run.Subnets, contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodRouterTable,
+				Complete: true, HostsProbed: res.Online + res.Offline})
+		case t.iface == "" && t.router != nil && t.probe:
+			// ICMP/TCP fallback: presence only, never a completed scan of the router's subnet
+			// (FR-010), so devices only the router can see are not marked offline.
+			scan := e.probeSubnet(ctx, clk, t, record)
+			scan.Complete = false
+			run.Subnets = append(run.Subnets, scan)
+		case t.iface == "" && t.router != nil:
+			run.Subnets = append(run.Subnets, contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodRouterTable})
+		default:
+			scan := e.probeSubnet(ctx, clk, t, record)
+			run.Subnets = append(run.Subnets, scan)
+			if scan.Method == contract.MethodARP {
+				arpScanned = append(arpScanned, t.prefix)
+			}
 		}
 	}
 
 	e.mergeNeighbors(ctx, clk, arpScanned, found, record)
 	e.addSelf(clk, v, arpScanned, found, record)
+	now := clk.Now()
+	for _, o := range routerObs {
+		o.ObservedAt = now
+		record(o)
+	}
 
 	obs := make([]contract.Observation, 0, len(found))
 	for _, o := range found {
@@ -117,6 +160,38 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 	run.FinishedAt = clk.Now()
 	run.SentAt = run.FinishedAt
 	return run, nil
+}
+
+// readRouters reads, concurrently, the router of every scanned target that has one, keyed by
+// target index. Failed reads carry no data.
+func (e *Engine) readRouters(ctx context.Context, targets []target) map[int]router.Result {
+	timeout := e.RouterTimeout
+	if timeout <= 0 {
+		timeout = router.DefaultTimeout
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	out := map[int]router.Result{}
+	for i, t := range targets {
+		if t.router == nil || t.skip != "" {
+			continue
+		}
+		wg.Add(1)
+		go func(i int, src router.Source) {
+			defer wg.Done()
+			rctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			res := src.Read(rctx)
+			if res.Outcome != contract.OutcomeOK {
+				res = router.Result{Outcome: res.Outcome}
+			}
+			mu.Lock()
+			out[i] = res
+			mu.Unlock()
+		}(i, t.router)
+	}
+	wg.Wait()
+	return out
 }
 
 func (e *Engine) probeSubnet(ctx context.Context, clk clock.Clock, t target, record func(contract.Observation)) contract.SubnetScan {
@@ -250,8 +325,9 @@ func (e *Engine) resolveNames(ctx context.Context, v contract.Vantage, obs []con
 	wg.Wait()
 }
 
-// planTargets decides what to scan (research R14).
-func planTargets(v contract.Vantage, opts ScanOptions) []target {
+// planTargets decides what to scan (research R14): the on-link (or listed) subnets, plus the
+// subnet of each router source (feature 002, research R4/R5).
+func planTargets(v contract.Vantage, opts ScanOptions, routers []router.Source) []target {
 	onlink := map[netip.Prefix]string{}
 	for _, ifc := range v.Interfaces {
 		a, err := netip.ParseAddr(ifc.IP)
@@ -304,13 +380,62 @@ func planTargets(v contract.Vantage, opts ScanOptions) []target {
 			if ignored[p] {
 				t.skip = contract.SkipIgnored
 			}
+			t.probe = t.iface == ""
 			out = append(out, t)
 		}
 	}
-	slices.SortFunc(out, func(a, b target) int { return a.prefix.Addr().Compare(b.prefix.Addr()) })
+	for _, p := range opts.Extra {
+		p = p.Masked()
+		if !contract.IsPrivate(p) || p.Bits() < contract.MinPrefixBits || p.Bits() > contract.MaxPrefixBits {
+			continue
+		}
+		if i := slices.IndexFunc(out, func(t target) bool { return t.prefix == p }); i >= 0 {
+			if out[i].skip == contract.SkipTooLarge {
+				out[i].skip = "" // listed explicitly by the owner
+			}
+			continue // already planned: scanned once, with the on-link method if attached (FR-016)
+		}
+		t := target{prefix: p}
+		for op, iface := range onlink {
+			if op.Bits() <= p.Bits() && op.Contains(p.Addr()) {
+				t.iface = iface
+				break
+			}
+		}
+		if ignored[p] {
+			t.skip = contract.SkipIgnored
+		}
+		t.probe = t.iface == ""
+		out = append(out, t)
+	}
+	for _, r := range routers {
+		p := r.Prefix().Masked()
+		i := slices.IndexFunc(out, func(t target) bool { return t.prefix == p })
+		switch {
+		case i >= 0 && out[i].router == nil:
+			out[i].router = r
+		case i < 0 && contract.IsPrivate(p) && p.Bits() >= contract.MinPrefixBits && p.Bits() <= contract.MaxPrefixBits:
+			t := target{prefix: p, router: r}
+			if ignored[p] {
+				t.skip = contract.SkipIgnored
+			}
+			out = append(out, t)
+		}
+	}
 	if len(out) > contract.MaxSubnets {
+		// Keep on-link subnets first, then routed ones, each by address.
+		slices.SortStableFunc(out, func(a, b target) int {
+			if (a.iface == "") != (b.iface == "") {
+				if a.iface != "" {
+					return -1
+				}
+				return 1
+			}
+			return a.prefix.Addr().Compare(b.prefix.Addr())
+		})
 		out = out[:contract.MaxSubnets]
 	}
+	slices.SortFunc(out, func(a, b target) int { return a.prefix.Addr().Compare(b.prefix.Addr()) })
 	return out
 }
 
@@ -374,18 +499,25 @@ func NewUUID() string {
 type PlannedSubnet struct {
 	Prefix     netip.Prefix
 	Interface  string // on-link interface; "" for a routed subnet
-	Method     string // contract.MethodARP, MethodICMPTCP or MethodSkipped
+	Method     string // contract.MethodARP, MethodICMPTCP, MethodRouterTable or MethodSkipped
 	SkipReason string
+	Router     string // "<model> at <address>" when a router's device list covers the subnet
+	Fallback   bool   // a routed router subnet that is ICMP/TCP-probed when the read fails
 }
 
-// Plan reports which subnets a scan with these options would cover, and how.
-func Plan(v contract.Vantage, opts ScanOptions) []PlannedSubnet {
+// Plan reports which subnets a scan with these options and routers would cover, and how.
+func Plan(v contract.Vantage, opts ScanOptions, routers []router.Source) []PlannedSubnet {
 	var out []PlannedSubnet
-	for _, t := range planTargets(v, opts) {
+	for _, t := range planTargets(v, opts, routers) {
 		p := PlannedSubnet{Prefix: t.prefix, Interface: t.iface, Method: contract.MethodARP}
+		if t.router != nil {
+			p.Router = t.router.Model() + " at " + t.router.Address().String()
+		}
 		switch {
 		case t.skip != "":
 			p.Method, p.SkipReason = contract.MethodSkipped, t.skip
+		case t.iface == "" && t.router != nil:
+			p.Method, p.Fallback = contract.MethodRouterTable, t.probe
 		case t.iface == "":
 			p.Method = contract.MethodICMPTCP
 		}

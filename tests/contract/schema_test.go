@@ -16,6 +16,9 @@ var schemaInvalid = []string{
 	"invalid_schema_version_2.json",
 	"invalid_unknown_field.json",
 	"invalid_skipped_without_reason.json",
+	"invalid_router_bad_outcome.json",
+	"invalid_source_with_password.json",
+	"invalid_via_too_long.json",
 }
 
 func TestValidFixturesMatchSchema(t *testing.T) {
@@ -39,6 +42,9 @@ func TestSchemaDetectableInvalidFixtures(t *testing.T) {
 	}
 	if err := contracttest.Validate(s, contracttest.TooManySubnets(t)); err == nil {
 		t.Error("schema accepted 17 subnets")
+	}
+	if err := contracttest.Validate(s, contracttest.TooManySources(t)); err == nil {
+		t.Error("schema accepted 9 sources")
 	}
 }
 

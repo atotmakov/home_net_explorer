@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/collect"
+	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
 
@@ -169,4 +170,53 @@ func (r *FakeRoutes) Vantage(ctx context.Context) (contract.Vantage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.V, nil
+}
+
+// FakeRouter implements router.Source with a scripted result. A positive Delay makes Read wait
+// (until the context ends, in which case it reports unreachable).
+type FakeRouter struct {
+	mu     sync.Mutex
+	addr   netip.Addr
+	prefix netip.Prefix
+	Result router.Result
+	Delay  time.Duration
+	calls  int
+}
+
+// NewFakeRouter returns a fake huawei-hg8145v5 at addr serving subnet.
+func NewFakeRouter(addr, subnet string, res router.Result) *FakeRouter {
+	return &FakeRouter{addr: netip.MustParseAddr(addr), prefix: netip.MustParsePrefix(subnet), Result: res}
+}
+
+// Model implements router.Source.
+func (r *FakeRouter) Model() string { return router.ModelHG8145V5 }
+
+// Address implements router.Source.
+func (r *FakeRouter) Address() netip.Addr { return r.addr }
+
+// Prefix implements router.Source.
+func (r *FakeRouter) Prefix() netip.Prefix { return r.prefix }
+
+// Calls is the number of reads.
+func (r *FakeRouter) Calls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls
+}
+
+// Read implements router.Source.
+func (r *FakeRouter) Read(ctx context.Context) router.Result {
+	r.mu.Lock()
+	r.calls++
+	res, delay := r.Result, r.Delay
+	res.Observations = append([]contract.Observation(nil), r.Result.Observations...)
+	r.mu.Unlock()
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return router.Result{Outcome: contract.OutcomeUnreachable}
+		}
+	}
+	return res
 }

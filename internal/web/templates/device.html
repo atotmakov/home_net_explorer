@@ -9,7 +9,7 @@
     <dt>MAC</dt><dd><code>{{.MAC}}</code>{{if .MACRandomized}} <span class="badge">randomized MAC</span>{{end}}{{if .Weak}} <span class="badge warn">weak ID</span>{{end}}</dd>
     <dt>Manufacturer</dt><dd>{{or .Manufacturer "—"}}</dd>
     <dt>Hostname</dt><dd>{{or .Hostname "—"}}</dd>
-    <dt>Addresses</dt><dd>{{range .Addresses}}{{.IP}} <span class="muted">({{.CIDR}})</span><br>{{else}}—{{end}}</dd>
+    <dt>Addresses</dt><dd>{{range .Addresses}}{{.IP}} <span class="muted">({{.CIDR}}{{with .Via}}, via {{.}}{{end}})</span><br>{{else}}—{{end}}</dd>
     <dt>First seen</dt><dd>{{fmtTime .FirstSeen}}</dd>
     <dt>Last seen</dt><dd>{{fmtTime .LastSeen}}</dd>
   </dl>

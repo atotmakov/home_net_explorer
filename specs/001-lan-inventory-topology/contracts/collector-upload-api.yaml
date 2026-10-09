@@ -7,6 +7,11 @@ info:
     the major version appears in both the path and `schema_version`. A breaking change means
     adding /api/v2 while /api/v1 stays supported during the transition.
     Uploads are idempotent on `collection_id` (FR-011).
+
+    Additive change (feature 002, router device lists): `router_table` scan and observation
+    methods, `hostname_source: router`, `Observation.via` and `CollectionRun.sources`.
+    `schema_version` stays 1. Upgrade the server before collectors that send these fields;
+    a new server accepts old collectors unchanged.
 servers:
   - url: http://{nas}:8080
     variables:
@@ -113,6 +118,11 @@ components:
           type: array
           maxItems: 4096
           items: { $ref: "#/components/schemas/Observation" }
+        sources:
+          type: array
+          maxItems: 8
+          description: One entry per router source configured on the collector (feature 002). Never carries credentials.
+          items: { $ref: "#/components/schemas/RunSource" }
     Vantage:
       type: object
       description: The collector's own network position. Used for topology inference (research R4).
@@ -154,7 +164,10 @@ components:
         cidr:
           type: string
           description: "Private (RFC 1918) IPv4 CIDR with a prefix from /16 to /30. The collector discovers it at runtime; no subnet is predefined."
-        method: { type: string, enum: [arp, icmp_tcp, skipped] }
+        method:
+          type: string
+          enum: [arp, icmp_tcp, skipped, router_table]
+          description: router_table = covered by a router's device list; complete only when the read succeeded.
         skip_reason:
           type: string
           enum: [too_large, ignored]
@@ -172,8 +185,26 @@ components:
         ip: { type: string, format: ipv4 }
         mac: { $ref: "#/components/schemas/Mac" }
         hostname: { type: string, maxLength: 253 }
-        hostname_source: { type: string, enum: [dns, mdns] }
-        method: { type: string, enum: [arp, neighbor_cache, icmp, tcp] }
+        hostname_source: { type: string, enum: [dns, mdns, router] }
+        method: { type: string, enum: [arp, neighbor_cache, icmp, tcp, router_table] }
+        via:
+          type: string
+          maxLength: 32
+          description: Router port or Wi-Fi interface (e.g. LAN1, SSID2). Only on router_table observations.
+    RunSource:
+      type: object
+      additionalProperties: false
+      required: [type, model, address, subnet, outcome, online, offline]
+      properties:
+        type: { type: string, enum: [router] }
+        model: { type: string, maxLength: 64, description: "e.g. huawei-hg8145v5" }
+        address: { type: string, format: ipv4, description: "The router's private IPv4 address" }
+        subnet: { type: string, description: "The subnet the router serves (private, /16 to /30)" }
+        outcome:
+          type: string
+          enum: [ok, unreachable, login_rejected, locked, session_busy, page_not_understood, skipped_after_rejection]
+        online: { type: integer, minimum: 0, description: "Online entries inside the subnet; 0 unless outcome = ok" }
+        offline: { type: integer, minimum: 0, description: "Offline entries inside the subnet; 0 unless outcome = ok" }
     Mac:
       type: string
       pattern: "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"

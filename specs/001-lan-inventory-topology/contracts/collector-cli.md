@@ -29,6 +29,11 @@ collector is created in the UI, and the user downloads it together with the bina
 - Subnets returned in `ignored_subnets` by `GET /api/v1/ping` are skipped (`skip_reason`
   `ignored`).
 - Environment variables `HNE_SERVER_URL`, `HNE_TOKEN`, and `HNE_SUBNETS` override the file.
+- Feature 002 adds `extra_subnets` (env `HNE_EXTRA_SUBNETS`): private subnets scanned **in
+  addition to** auto-discovery or `subnets`, and `routers`: opt-in router sources (model, URL,
+  username, password, optional subnet) whose device lists are read at every scan. The router
+  password is stored only in this file and is never logged, printed or uploaded. See
+  [002 collector-config-and-cli.md](../../002-router-device-lists/contracts/collector-config-and-cli.md).
 
 ## Commands
 
@@ -45,13 +50,20 @@ collector is created in the UI, and the user downloads it together with the bina
 - Human-readable progress goes to stderr. `--json` switches to one JSON object per line, for
   scripting.
 - Every summary line includes: subnets scanned, hosts found, run duration, and the upload result
-  (`stored`, `duplicate`, or `spooled`).
+  (`stored`, `duplicate`, or `spooled`). With routers configured it also has `router=<outcome>`
+  (comma-separated for several routers). A router failure never changes an exit code.
+- `check` lists router subnets (`router <model> at <address>`, with `(fallback: ICMP/TCP)` when
+  the subnet is also an extra subnet) and a `Routers:` section with each router's result
+  (feature 002).
 
 ## Files
 
 - `spool/<collection_id>.json`: runs that have not been uploaded yet. Each file is deleted after a
   201/200 response. If a 401 is received, the file is kept and the collector stops with exit code 4.
 - `hne-collector.log`: the rotating log for `run` mode (1 MiB × 3 files).
+- `hne-collector.router-rejected` (feature 002): SHA-256 hashes of router configs whose login was
+  rejected or locked. Those routers are skipped until their config changes or `check` runs (which
+  deletes the file and tries once).
 
 ## Scheduling (documentation only; no built-in installer, per Principle III)
 

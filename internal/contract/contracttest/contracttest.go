@@ -92,6 +92,19 @@ func TooManySubnets(t testing.TB) []byte {
 	return encode(t, m)
 }
 
+// TooManySources returns valid_router.json with 9 router sources (one over the limit).
+func TooManySources(t testing.TB) []byte {
+	t.Helper()
+	m := decode(t, Fixture(t, "valid_router.json"))
+	first := m["sources"].([]any)[0]
+	sources := make([]any, 0, 9)
+	for i := 0; i < 9; i++ {
+		sources = append(sources, first)
+	}
+	m["sources"] = sources
+	return encode(t, m)
+}
+
 // Modify decodes a fixture into a generic map, applies f, and re-encodes it.
 func Modify(t testing.TB, name string, f func(m map[string]any)) []byte {
 	t.Helper()

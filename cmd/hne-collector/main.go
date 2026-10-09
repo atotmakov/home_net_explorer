@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
+	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/upload"
 )
@@ -50,15 +52,19 @@ const (
 
 const configFile = "hne-collector.json"
 
-// config is hne-collector.json, overridable by HNE_SERVER_URL, HNE_TOKEN and HNE_SUBNETS.
+// config is hne-collector.json, overridable by HNE_SERVER_URL, HNE_TOKEN, HNE_SUBNETS and
+// HNE_EXTRA_SUBNETS.
 type config struct {
-	ServerURL       string   `json:"server_url"`
-	Name            string   `json:"name"`
-	Token           string   `json:"token"`
-	Subnets         []string `json:"subnets"`
-	IntervalSeconds int      `json:"interval_seconds"`
+	ServerURL       string          `json:"server_url"`
+	Name            string          `json:"name"`
+	Token           string          `json:"token"`
+	Subnets         []string        `json:"subnets"`
+	ExtraSubnets    []string        `json:"extra_subnets"` // scanned in addition to subnets/auto-discovery
+	IntervalSeconds int             `json:"interval_seconds"`
+	Routers         []router.Config `json:"routers"` // opt-in router sources (feature 002)
 
-	prefixes []netip.Prefix
+	prefixes      []netip.Prefix
+	extraPrefixes []netip.Prefix
 }
 
 // environment is everything run needs from the outside world (replaced in tests).
@@ -67,6 +73,10 @@ type environment struct {
 	getenv         func(string) string
 	stdout, stderr io.Writer
 	newEngine      func(cfg config) (*collect.Engine, func() error, error)
+	// routerTransport carries router traffic (nil: direct connections). Tests send it to a
+	// routertest.Fake while configs keep private router addresses.
+	routerTransport http.RoundTripper
+	ctx             context.Context // parent of the command's context (nil: background)
 }
 
 func main() {
@@ -95,6 +105,9 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 	if v := strings.TrimSpace(getenv("HNE_SUBNETS")); v != "" {
 		cfg.Subnets = strings.Split(v, ",")
 	}
+	if v := strings.TrimSpace(getenv("HNE_EXTRA_SUBNETS")); v != "" {
+		cfg.ExtraSubnets = strings.Split(v, ",")
+	}
 
 	u, err := url.Parse(cfg.ServerURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -118,6 +131,21 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 			return cfg, fmt.Errorf("subnets: %w", err)
 		}
 		cfg.prefixes = append(cfg.prefixes, p)
+	}
+	for _, s := range cfg.ExtraSubnets {
+		p, err := contract.ParseSubnet(strings.TrimSpace(s))
+		if err != nil {
+			return cfg, fmt.Errorf("extra_subnets: %w", err)
+		}
+		cfg.extraPrefixes = append(cfg.extraPrefixes, p)
+	}
+	if len(cfg.Routers) > contract.MaxSources {
+		return cfg, fmt.Errorf("routers: at most %d entries", contract.MaxSources)
+	}
+	for i, r := range cfg.Routers {
+		if err := r.Validate(); err != nil { // never contains credentials (FR-006)
+			return cfg, fmt.Errorf("routers[%d]: %w", i, err)
+		}
 	}
 	return cfg, nil
 }
@@ -184,16 +212,39 @@ func run(args []string, env environment) int {
 	}
 	defer closeEngine()
 	engine.IntervalSeconds = cfg.IntervalSeconds
+	// FR-011: a router whose login was rejected is skipped until its config changes; check
+	// clears the marker and tries once more.
+	rejected := loadRejected(env.dir)
+	if cmd == "check" {
+		os.Remove(filepath.Join(env.dir, rejectedFile))
+		rejected = nil
+	}
+	for _, rc := range cfg.Routers {
+		src, err := router.New(rc, env.routerTransport)
+		if err != nil {
+			log.Error("config error", "err", err)
+			return exitConfig
+		}
+		if rejected[routerHash(rc)] {
+			src = router.Skipped(src)
+		}
+		engine.Routers = append(engine.Routers, src)
+	}
 
 	c := &collector{
-		cfg:    cfg,
-		env:    env,
-		log:    log,
-		engine: engine,
-		client: &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
-		spool:  upload.Spool{Dir: filepath.Join(env.dir, "spool")},
+		cfg:     cfg,
+		env:     env,
+		log:     log,
+		jsonOut: jsonOut,
+		engine:  engine,
+		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
+		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	parent := env.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	switch cmd {
 	case "check":
@@ -206,12 +257,13 @@ func run(args []string, env environment) int {
 }
 
 type collector struct {
-	cfg    config
-	env    environment
-	log    *slog.Logger
-	engine *collect.Engine
-	client *upload.Client
-	spool  upload.Spool
+	cfg     config
+	env     environment
+	log     *slog.Logger
+	jsonOut bool
+	engine  *collect.Engine
+	client  *upload.Client
+	spool   upload.Spool
 }
 
 func (c *collector) check(ctx context.Context) int {
@@ -226,7 +278,7 @@ func (c *collector) check(ctx context.Context) int {
 		fmt.Fprintf(w, "  %-20s %s/%d %s\n", ifc.Name, ifc.IP, ifc.PrefixLen, ifc.MAC)
 	}
 	fmt.Fprintln(w, "Subnets to scan:")
-	plan := collect.Plan(v, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: c.lastIgnored()})
+	plan := collect.Plan(v, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: c.lastIgnored(), Extra: c.cfg.extraPrefixes}, c.engine.Routers)
 	if len(plan) == 0 {
 		fmt.Fprintln(w, "  (none: no private subnet of /22 or narrower is attached)")
 	}
@@ -236,10 +288,17 @@ func (c *collector) check(ctx context.Context) int {
 			fmt.Fprintf(w, "  %-18s skipped (%s)\n", p.Prefix, p.SkipReason)
 		case contract.MethodICMPTCP:
 			fmt.Fprintf(w, "  %-18s routed: ICMP/TCP presence only, no MACs\n", p.Prefix)
+		case contract.MethodRouterTable:
+			fallback := ""
+			if p.Fallback {
+				fallback = " (fallback: ICMP/TCP)"
+			}
+			fmt.Fprintf(w, "  %-18s router %s%s\n", p.Prefix, p.Router, fallback)
 		default:
 			fmt.Fprintf(w, "  %-18s on-link via %s: ARP\n", p.Prefix, p.Interface)
 		}
 	}
+	c.checkRouters(ctx, w)
 	ping, err := c.client.Ping(ctx)
 	if code := c.pingExit(err); code != exitOK {
 		return code
@@ -310,11 +369,12 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 	if err != nil && !dryRun {
 		c.log.Warn("server unreachable; using the last known ignored subnets", "err", err)
 	}
-	run, err := c.engine.Scan(ctx, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: ignored})
+	run, err := c.engine.Scan(ctx, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: ignored, Extra: c.cfg.extraPrefixes})
 	if err != nil {
 		c.log.Error("scan failed", "err", err)
 		return exitFailure
 	}
+	c.recordRejections(run.Sources)
 	run.SentAt = time.Now().UTC()
 	if dryRun {
 		enc := json.NewEncoder(c.env.stdout)
@@ -350,8 +410,16 @@ func (c *collector) summary(run *contract.CollectionRun, result string) {
 			scanned++
 		}
 	}
-	c.log.Info("scan finished", "subnets", scanned, "found", len(run.Observations),
-		"duration", run.FinishedAt.Sub(run.StartedAt).Round(time.Millisecond), "upload", result)
+	attrs := []any{"subnets", scanned, "found", len(run.Observations),
+		"duration", run.FinishedAt.Sub(run.StartedAt).Round(time.Millisecond), "upload", result}
+	if len(run.Sources) > 0 {
+		outcomes := make([]string, len(run.Sources))
+		for i, s := range run.Sources {
+			outcomes[i] = s.Outcome
+		}
+		attrs = append(attrs, "router", strings.Join(outcomes, ","))
+	}
+	c.log.Info("scan finished", attrs...)
 }
 
 // loop scans every interval and retries pending uploads with backoff (1 minute up to 1 hour).

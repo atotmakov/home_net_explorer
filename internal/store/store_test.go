@@ -13,7 +13,7 @@ import (
 var expectedTables = []string{
 	// facts
 	"collectors", "collection_runs", "run_subnets", "user_device_attrs", "user_identity_alias",
-	"user_links", "user_acks", "user_subnet_attrs", "settings", "sessions",
+	"user_links", "user_acks", "user_subnet_attrs", "settings", "sessions", "run_sources",
 	// projections
 	"subnets", "sightings", "devices", "device_addresses", "events", "links",
 }
@@ -124,4 +124,55 @@ func rowCounts(t *testing.T, s *store.Store) map[string]int {
 		counts[n] = c
 	}
 	return counts
+}
+
+// TestMigration0003 (feature 002): seeded v2 data survives, sightings gain via = ”, run_subnets
+// accepts router_table (and still rejects unknown methods), and run_sources is keyed by
+// (collection_id, idx).
+func TestMigration0003(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seed, err := os.ReadFile(filepath.Join("testdata", "seed_2.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateTo(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	db := s.DB()
+	var via string
+	if err := db.QueryRow(`SELECT via FROM sightings WHERE id = 1`).Scan(&via); err != nil || via != "" {
+		t.Errorf("sightings.via = %q, %v; want empty", via, err)
+	}
+	var reason string
+	if err := db.QueryRow(`SELECT skip_reason FROM run_subnets WHERE cidr = '10.0.0.0/16'`).Scan(&reason); err != nil || reason != "too_large" {
+		t.Errorf("run_subnets skipped row = %q, %v", reason, err)
+	}
+	const id = "3f2b8c1e-5d4a-4c3b-9a1f-0e2d4c6b8a01"
+	if _, err := db.Exec(`INSERT INTO run_subnets (collection_id, cidr, method, complete, hosts_probed)
+		VALUES (?, '192.168.0.0/24', 'router_table', 1, 30)`, id); err != nil {
+		t.Errorf("run_subnets rejects router_table: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO run_subnets (collection_id, cidr, method, complete, hosts_probed)
+		VALUES (?, '192.168.7.0/24', 'snmp', 1, 30)`, id); err == nil {
+		t.Error("run_subnets accepted an unknown method")
+	}
+	ins := `INSERT INTO run_sources (collection_id, idx, type, model, address, subnet, outcome, online, offline)
+		VALUES (?, ?, 'router', 'huawei-hg8145v5', '192.168.0.1', '192.168.0.0/24', ?, 14, 16)`
+	if _, err := db.Exec(ins, id, 0, "ok"); err != nil {
+		t.Fatalf("insert run_sources: %v", err)
+	}
+	if _, err := db.Exec(ins, id, 0, "ok"); err == nil {
+		t.Error("run_sources accepted a duplicate (collection_id, idx)")
+	}
+	if _, err := db.Exec(ins, id, 1, "rebooted"); err == nil {
+		t.Error("run_sources accepted an unknown outcome")
+	}
 }

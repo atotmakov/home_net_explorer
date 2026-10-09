@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "collection_id": "6b8d2f3e-4c5a-4b7f-8e9d-2a3f4e5d6c7b",
+  "collector": {
+    "name": "desktop",
+    "version": "dev",
+    "os": "windows"
+  },
+  "started_at": "2026-10-09T10:15:00.000Z",
+  "finished_at": "2026-10-09T10:16:30.000Z",
+  "sent_at": "2026-10-09T10:16:31.000Z",
+  "interval_seconds": 900,
+  "vantage": {
+    "hostname": "desktop",
+    "interfaces": [
+      {
+        "name": "home",
+        "ip": "192.168.1.10",
+        "prefix_len": 24,
+        "mac": "10:7b:44:01:02:03"
+      },
+      {
+        "name": "internet",
+        "ip": "192.168.8.176",
+        "prefix_len": 24,
+        "mac": "10:7b:44:01:02:04"
+      }
+    ],
+    "routes": [
+      {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.168.8.1",
+        "interface": "internet"
+      },
+      {
+        "destination": "192.168.1.0/24",
+        "interface": "home"
+      },
+      {
+        "destination": "192.168.8.0/24",
+        "interface": "internet"
+      }
+    ]
+  },
+  "subnets": [
+    {
+      "cidr": "192.168.1.0/24",
+      "method": "arp",
+      "complete": true,
+      "hosts_probed": 254
+    },
+    {
+      "cidr": "192.168.0.0/24",
+      "method": "router_table",
+      "complete": false,
+      "hosts_probed": 0
+    }
+  ],
+  "observations": [
+    {
+      "observed_at": "2026-10-09T10:15:05.000Z",
+      "ip": "192.168.1.20",
+      "mac": "00:11:32:aa:bb:cc",
+      "hostname": "nas.local",
+      "hostname_source": "mdns",
+      "method": "arp"
+    }
+  ],
+  "sources": [
+    {
+      "type": "router",
+      "model": "huawei-hg8145v5",
+      "address": "192.168.0.1",
+      "subnet": "192.168.0.0/24",
+      "outcome": "login_rejected",
+      "online": 0,
+      "offline": 0
+    }
+  ]
+}
