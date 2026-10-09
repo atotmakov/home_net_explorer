@@ -168,7 +168,7 @@ them, and offline detection on the router's subnet works.
 
 ### Tests for User Story 1 ⚠️ write first, see them fail
 
-- [ ] T009 [P] [US1] Write `internal/collect/router/hg8145v5_parse_test.go` for
+- [X] T009 [P] [US1] Write `internal/collect/router/hg8145v5_parse_test.go` for
   `parseHG8145V5(body []byte) ([]Device, error)`:
   - The T001 fixture gives 30 devices, 13 with `Online: true`. MACs are lower-case; `\xNN` escapes
     are decoded (`192\x2e168\x2e0\x2e4` → `192.168.0.4`); the BOM and CRLF are tolerated.
@@ -182,7 +182,7 @@ them, and offline detection on the router's subnet works.
   - Garbled input (HTML login page, truncated array, a record with the wrong argument count,
     missing `ProductType`) returns `ErrPageNotUnderstood`.
   - IPv6-only or empty `IpAddr` entries are skipped (IPv4 only, spec Assumptions).
-- [ ] T010 [P] [US1] Write `internal/collect/router/router_test.go`:
+- [X] T010 [P] [US1] Write `internal/collect/router/router_test.go`:
   - Registry: `New(Config{Model: "huawei-hg8145v5", …}, nil)` returns a `Source`; an unknown
     model returns an error naming the supported models (FR-002).
   - `Config.Validate()`: `url` must be `http`/`https` with a **private IPv4** host and optional
@@ -196,7 +196,7 @@ them, and offline detection on the router's subnet works.
     observations; offline entries are dropped (FR-007), and so are entries outside the subnet
     such as `0.0.0.0` or `192.168.8.20` (FR-008). `Result.Online`/`Result.Offline` count the
     router's entries **inside the subnet** (the fixture: 13 / 16).
-- [ ] T011 [P] [US1] Write the fake router `internal/collect/router/routertest/fake.go`, plus
+- [X] T011 [P] [US1] Write the fake router `internal/collect/router/routertest/fake.go`, plus
   `internal/collect/router/hg8145v5_test.go` that uses it.
   - The fake is an `httptest.Server` implementing `contracts/router-hg8145v5.md`:
     `POST /asp/GetRandCount.asp` (BOM + 48 hex), `POST /login.cgi` (checks the
@@ -222,7 +222,7 @@ them, and offline detection on the router's subnet works.
       read timeout (set to 200 ms in the test; production default 10 s, plan.md).
     - Exactly one login request per read, with the configured credentials only (FR-003).
     - Missing `onttoken` → no logout request, outcome still `ok`.
-- [ ] T012 [P] [US1] Write `internal/collect/engine_router_test.go` with a fake `router.Source`
+- [X] T012 [P] [US1] Write `internal/collect/engine_router_test.go` with a fake `router.Source`
   (add `FakeRouter` to `internal/collect/collecttest/fakes.go`: settable `Result`, records calls).
   The vantage has on-link `192.168.1.0/24` and `192.168.8.0/24`, and the router serves
   `192.168.0.0/24` (routed, research R4):
@@ -246,7 +246,7 @@ them, and offline detection on the router's subnet works.
     delay the scan by more than that timeout).
   - Every run produced here passes `contract.Validate`.
   - The router subnet counts toward `contract.MaxSubnets` (16).
-- [ ] T013 [P] [US1] Write `internal/inventory/apply_router_test.go` (use `inventorytest`
+- [X] T013 [P] [US1] Write `internal/inventory/apply_router_test.go` (use `inventorytest`
   helpers):
   - A `router_table` observation identifies the device by MAC exactly like `arp`. An earlier
     weak device `ip:192.168.0.0/24:192.168.0.4` (from an `icmp_tcp` run) with the same IP is
@@ -261,7 +261,7 @@ them, and offline detection on the router's subnet works.
   - Offline (feature 001 research R7): repeated complete `router_table` scans without a device
     mark it offline after the same number of scans as an `arp` subnet (US1 AS-5, SC-003);
     `complete: false` router scans never count (FR-010).
-- [ ] T014 [P] [US1] Write `tests/integration/us1_router_test.go`. Through HTTP with a collector
+- [X] T014 [P] [US1] Write `tests/integration/us1_router_test.go`. Through HTTP with a collector
   token:
   - Upload a `valid_routed.json`-style run for `192.168.0.0/24` (IP-only devices), then
     `valid_router.json`. `/devices` lists each online router device once with its MAC,
@@ -271,7 +271,7 @@ them, and offline detection on the router's subnet works.
   - The `router_table` subnet `192.168.0.0/24` is auto-created like any scanned subnet (it is in
     `new_subnets` of the first upload that carries it, FR-009).
   - Then upload `valid_router_failed.json`: devices are not marked offline by it.
-- [ ] T015 [P] [US1] Extend `cmd/hne-collector/main_test.go` (`TestConfigLoading` style) for
+- [X] T015 [P] [US1] Extend `cmd/hne-collector/main_test.go` (`TestConfigLoading` style) for
   `routers[]` (contracts/collector-config-and-cli.md):
   - A valid entry loads.
   - Unknown model, public or hostname URL, missing username or password, or a non-private or
@@ -284,7 +284,7 @@ them, and offline detection on the router's subnet works.
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Write `internal/collect/router/router.go`:
+- [X] T016 [US1] Write `internal/collect/router/router.go`:
   - `type Secret string` with `String()`/`GoString()` → `"***"`, `MarshalJSON` → `"\"***\""`,
     `LogValue()` → `"***"` and `Reveal() string`. Unmarshal from JSON as a normal string.
   - `type Config struct { Model, URL, Username string; Password Secret; Subnet string }` (JSON
@@ -300,7 +300,7 @@ them, and offline detection on the router's subnet works.
   - `ErrPageNotUnderstood`.
 
   Make T010 pass
-- [ ] T017 [US1] Write `internal/collect/router/hg8145v5.go`:
+- [X] T017 [US1] Write `internal/collect/router/hg8145v5.go`:
   - The parser `parseHG8145V5`: strip the BOM, decode `\xNN`, read `ProductType`/`isRealmac`,
     pick the array as the page does, and split the quoted arguments of `USERDevice`/
     `USERDeviceNew`. Wrong shape → `ErrPageNotUnderstood`.
@@ -314,7 +314,7 @@ them, and offline detection on the router's subnet works.
     returned `Result` (no bodies, cookies or tokens).
 
   Make T009 and T011 pass
-- [ ] T018 [US1] Extend `internal/collect/engine.go`:
+- [X] T018 [US1] Extend `internal/collect/engine.go`:
   - Add `Routers []router.Source` to `Engine`.
   - In `Scan`, read all routers first (concurrently, each bounded by its own timeout), then plan
     the targets. A routed router subnet with an `ok` result is emitted as a `router_table`
@@ -327,13 +327,13 @@ them, and offline detection on the router's subnet works.
   - Add `FakeRouter` to `internal/collect/collecttest/fakes.go`.
 
   Make T012 pass
-- [ ] T019 [US1] Extend `internal/inventory/apply.go` (`upsertSighting`): include `via` in the
+- [X] T019 [US1] Extend `internal/inventory/apply.go` (`upsertSighting`): include `via` in the
   SELECT, the tuple comparison and the INSERT. Check that `rebuild.go` needs no change, because
   it replays stored runs through `Apply`. Add `Via` to `store.Address` (the `via` of the
   latest sighting of that device on that subnet, in `currentAddresses` in
   `internal/store/devices_query.go`) and show it next to the address in
   `internal/web/templates/device.html` when it is not empty. Make T013 and T014 pass
-- [ ] T020 [US1] Extend `cmd/hne-collector/main.go`:
+- [X] T020 [US1] Extend `cmd/hne-collector/main.go`:
   - `config.Routers []router.Config` (`json:"routers"`), validated in `loadConfig` (each entry
     `Validate()`, max 8, error prefix `routers[i]:` without values).
   - `environment.routerTransport`; build `router.New(cfg, env.routerTransport)` sources and set
@@ -342,7 +342,7 @@ them, and offline detection on the router's subnet works.
     omit).
 
   Make T015 pass
-- [ ] T021 [P] [US1] Write `internal/collect/router/hg8145v5_hw_test.go` (`//go:build hwtest`).
+- [X] T021 [P] [US1] Write `internal/collect/router/hg8145v5_hw_test.go` (`//go:build hwtest`).
   It is skipped unless `HNE_HWTEST_ROUTER_URL`, `HNE_HWTEST_ROUTER_USER` and
   `HNE_HWTEST_ROUTER_PASS` are set. It reads the real router once, asserts `OutcomeOK`, at least
   one online device and lower-case MACs, logs only counts (never names, MACs or credentials),
@@ -390,8 +390,8 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
     `locked by the router`, `busy (someone is logged into the router)`,
     `page not understood (firmware?)`), and lists the router subnet as
     `router huawei-hg8145v5 at 192.168.0.1`.
-  - `check --json` has a `routers` array with `model`, `address`, `subnet`, `outcome`, `online`,
-    `offline` only.
+  - `check --json` logs one `router read` JSON record per router with `model`, `address`,
+    `subnet`, `outcome`, `online`, `offline` only (`--json` means one JSON object per line).
   - Exit codes: a router failure never changes the `check` or `scan` exit code.
 - [ ] T024 [P] [US2] Extend `internal/ingest/ingest_test.go`: ingesting `valid_router.json`
   stores one `run_sources` row per source (`idx` in order) inside the same transaction as
@@ -428,7 +428,7 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
 - [ ] T029 [US2] Extend `check` in `cmd/hne-collector/main.go`:
   - Delete the marker, read each router once, and print the `Routers:` section. Show router
     subnets in `Subnets to scan:` from `PlannedSubnet.Router`.
-  - Add a `routers` array to `--json` (outcomes and counts only).
+  - Log a `router read` record per router (shown as JSON with `--json`; outcomes and counts only).
   - Record a rejection again if the `check` read is rejected.
   - Make T022 and the remaining T023 cases pass
 

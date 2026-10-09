@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -25,6 +26,7 @@ type fakeServer struct {
 	uploadStatus int
 	uploads      int
 	bodies       [][]byte // every upload request body
+	onUpload     func()   // called after each upload is recorded
 }
 
 func newFakeServer(t *testing.T) *fakeServer {
@@ -45,6 +47,9 @@ func newFakeServer(t *testing.T) *fakeServer {
 			f.uploads++
 			b, _ := io.ReadAll(r.Body)
 			f.bodies = append(f.bodies, b)
+			if f.onUpload != nil {
+				f.onUpload()
+			}
 			w.WriteHeader(f.uploadStatus)
 			json.NewEncoder(w).Encode(contract.UploadResult{Status: contract.StatusStored})
 		default:
@@ -68,6 +73,7 @@ type harness struct {
 	env            map[string]string
 	stdout, stderr bytes.Buffer
 	routerRT       http.RoundTripper // sends router requests to a routertest.Fake
+	ctx            context.Context   // parent context of the command (nil: background)
 }
 
 func newHarness(t *testing.T, serverURL string) *harness {
@@ -86,6 +92,7 @@ func (h *harness) run(args ...string) int {
 		stdout:          &h.stdout,
 		stderr:          &h.stderr,
 		routerTransport: h.routerRT,
+		ctx:             h.ctx,
 		newEngine: func(cfg config) (*collect.Engine, func() error, error) {
 			return &collect.Engine{
 				Prober: fnet, Presence: fnet, Neighbors: fnet, Resolver: fnet,

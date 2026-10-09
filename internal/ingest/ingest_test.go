@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -191,5 +192,65 @@ func TestIngestNeverFilters(t *testing.T) {
 	var reason string
 	if err := s.DB().QueryRow(`SELECT skip_reason FROM run_subnets WHERE cidr = '10.0.0.0/16'`).Scan(&reason); err != nil || reason != "too_large" {
 		t.Errorf("skipped entry: reason=%q err=%v", reason, err)
+	}
+}
+
+// Feature 002 (FR-013): each run's router sources are stored in run_sources, in order, in the
+// same transaction as run_subnets. No credential ever reaches the server.
+func TestIngestStoresRunSources(t *testing.T) {
+	ctx := context.Background()
+	s := storetest.New(t)
+	cid, err := s.EnsureCollector(ctx, "desktop", store.KindRemote, 900)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := ingest.New(s, &fakeApplier{})
+
+	raw := contracttest.Modify(t, "valid_router.json", func(m map[string]any) {
+		second := map[string]any{"type": "router", "model": "huawei-hg8145v5", "address": "10.20.30.1",
+			"subnet": "10.20.30.0/24", "outcome": "session_busy", "online": 0, "offline": 0}
+		m["sources"] = append(m["sources"].([]any), second)
+	})
+	run := decode(t, raw)
+	received := time.Date(2026, 10, 9, 10, 1, 32, 0, time.UTC)
+	if _, err := in.Ingest(ctx, cid, raw, run, received); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.DB().Query(`SELECT idx, type, model, address, subnet, outcome, online, offline FROM run_sources
+		WHERE collection_id = ? ORDER BY idx`, run.CollectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var idx, online, offline int
+		var typ, model, addr, subnet, outcome string
+		if err := rows.Scan(&idx, &typ, &model, &addr, &subnet, &outcome, &online, &offline); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, fmt.Sprint(idx, typ, model, addr, subnet, outcome, online, offline))
+	}
+	rows.Close()
+	want := []string{
+		"0 router huawei-hg8145v5 192.168.0.1 192.168.0.0/24 ok 14 16",
+		"1 router huawei-hg8145v5 10.20.30.1 10.20.30.0/24 session_busy 0 0",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("run_sources = %q\nwant %q", got, want)
+	}
+
+	if _, err := in.Ingest(ctx, cid, raw, run, received.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, s.DB(), `SELECT count(*) FROM run_sources`); n != 2 {
+		t.Errorf("run_sources after a duplicate upload = %d, want 2", n)
+	}
+
+	plain := contracttest.Fixture(t, "valid_minimal.json")
+	if _, err := in.Ingest(ctx, cid, plain, decode(t, plain), received); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, s.DB(), `SELECT count(*) FROM run_sources`); n != 2 {
+		t.Errorf("a run without sources stored %d rows", n-2)
 	}
 }
