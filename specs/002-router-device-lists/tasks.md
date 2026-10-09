@@ -266,7 +266,8 @@ them, and offline detection on the router's subnet works.
   - Upload a `valid_routed.json`-style run for `192.168.0.0/24` (IP-only devices), then
     `valid_router.json`. `/devices` lists each online router device once with its MAC,
     manufacturer and hostname, and the earlier IP-only records are gone (merged).
-  - The device page shows `via` in its sightings, or nothing when it is empty.
+  - The device page shows `via` next to the device's current address on the router's subnet
+    (the device page has no sightings list yet; that is feature 001's history work).
   - The `router_table` subnet `192.168.0.0/24` is auto-created like any scanned subnet (it is in
     `new_subnets` of the first upload that carries it, FR-009).
   - Then upload `valid_router_failed.json`: devices are not marked offline by it.
@@ -328,9 +329,10 @@ them, and offline detection on the router's subnet works.
   Make T012 pass
 - [ ] T019 [US1] Extend `internal/inventory/apply.go` (`upsertSighting`): include `via` in the
   SELECT, the tuple comparison and the INSERT. Check that `rebuild.go` needs no change, because
-  it replays stored runs through `Apply`. Show `via` in the sightings list in
-  `internal/web/templates/device.html` (and its query in `internal/store/devices_query.go`) when
-  it is not empty. Make T013 and T014 pass
+  it replays stored runs through `Apply`. Add `Via` to `store.Address` (the `via` of the
+  latest sighting of that device on that subnet, in `currentAddresses` in
+  `internal/store/devices_query.go`) and show it next to the address in
+  `internal/web/templates/device.html` when it is not empty. Make T013 and T014 pass
 - [ ] T020 [US1] Extend `cmd/hne-collector/main.go`:
   - `config.Routers []router.Config` (`json:"routers"`), validated in `loadConfig` (each entry
     `Validate()`, max 8, error prefix `routers[i]:` without values).

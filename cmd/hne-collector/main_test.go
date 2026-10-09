@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,7 @@ type fakeServer struct {
 	pingStatus   int
 	uploadStatus int
 	uploads      int
+	bodies       [][]byte // every upload request body
 }
 
 func newFakeServer(t *testing.T) *fakeServer {
@@ -41,6 +43,8 @@ func newFakeServer(t *testing.T) *fakeServer {
 				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}})
 		case "/api/v1/collections":
 			f.uploads++
+			b, _ := io.ReadAll(r.Body)
+			f.bodies = append(f.bodies, b)
 			w.WriteHeader(f.uploadStatus)
 			json.NewEncoder(w).Encode(contract.UploadResult{Status: contract.StatusStored})
 		default:
@@ -63,6 +67,7 @@ type harness struct {
 	dir            string
 	env            map[string]string
 	stdout, stderr bytes.Buffer
+	routerRT       http.RoundTripper // sends router requests to a routertest.Fake
 }
 
 func newHarness(t *testing.T, serverURL string) *harness {
@@ -78,8 +83,9 @@ func (h *harness) run(args ...string) int {
 	return run(args, environment{
 		dir:    h.dir,
 		getenv: func(k string) string { return h.env[k] },
-		stdout: &h.stdout,
-		stderr: &h.stderr,
+		stdout:          &h.stdout,
+		stderr:          &h.stderr,
+		routerTransport: h.routerRT,
 		newEngine: func(cfg config) (*collect.Engine, func() error, error) {
 			return &collect.Engine{
 				Prober: fnet, Presence: fnet, Neighbors: fnet, Resolver: fnet,
