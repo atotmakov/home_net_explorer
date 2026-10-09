@@ -54,6 +54,7 @@ type Fake struct {
 	requests  []string
 	logins    int
 	logouts   int
+	failed    int      // rejected logins, shown on the login page as FailStat/LoginTimes
 	creds     []string // "user:password" of each login attempt
 }
 
@@ -192,8 +193,8 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case mode == Locked:
 			fmt.Fprint(w, loginPage(1, 3, 57))
-		case mode == WrongPassword && f.logins > 0:
-			fmt.Fprint(w, loginPage(1, f.logins, 0))
+		case f.failed > 0:
+			fmt.Fprint(w, loginPage(1, f.failed, 0))
 		default:
 			fmt.Fprint(w, loginPage(0, 0, 0))
 		}
@@ -224,7 +225,10 @@ func (f *Fake) login(w http.ResponseWriter, r *http.Request, mode Mode) {
 	switch {
 	case mode == SessionBusy || f.sid != "":
 		fmt.Fprint(w, `<html><script>alert("The user has already logged in.");top.location.replace('/');</script></html>`)
-	case mode == Locked, mode == WrongPassword, r.PostForm.Get("UserName") != f.user, string(pass) != f.pass:
+	case mode == Locked:
+		fmt.Fprint(w, redirectPage("/"))
+	case mode == WrongPassword, r.PostForm.Get("UserName") != f.user, string(pass) != f.pass:
+		f.failed++
 		fmt.Fprint(w, redirectPage("/"))
 	default:
 		f.sid = randomHex(32)

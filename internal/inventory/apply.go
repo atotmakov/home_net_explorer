@@ -256,25 +256,26 @@ func (a *Applier) createDevice(ctx context.Context, tx *sql.Tx, key, strength st
 	return device{id: id, status: StatusOnline, lastSeen: at, hostname: o.Hostname, hostnameAt: hostAt}, nil
 }
 
-// upsertSighting extends the latest sighting of (device, collector, subnet) when the tuple is
-// unchanged, otherwise inserts a new one (data-model.md "Sighting").
+// upsertSighting extends the latest sighting of (device, collector, subnet) when the tuple
+// (ip, mac, hostname, via) is unchanged, otherwise inserts a new one (data-model.md "Sighting";
+// via: feature 002).
 func upsertSighting(ctx context.Context, tx *sql.Tx, devID, collectorID, subnetID int64, o contract.Observation, at string) error {
 	var id int64
-	var ip, mac, host, first, last string
-	err := tx.QueryRowContext(ctx, `SELECT id, ip, mac, hostname, first_seen, last_seen FROM sightings
+	var ip, mac, host, via, first, last string
+	err := tx.QueryRowContext(ctx, `SELECT id, ip, mac, hostname, via, first_seen, last_seen FROM sightings
 		WHERE device_id = ? AND collector_id = ? AND subnet_id = ? ORDER BY last_seen DESC, id DESC LIMIT 1`,
-		devID, collectorID, subnetID).Scan(&id, &ip, &mac, &host, &first, &last)
+		devID, collectorID, subnetID).Scan(&id, &ip, &mac, &host, &via, &first, &last)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if err == nil && ip == o.IP && mac == o.MAC && host == o.Hostname {
+	if err == nil && ip == o.IP && mac == o.MAC && host == o.Hostname && via == o.Via {
 		_, err := tx.ExecContext(ctx, `UPDATE sightings SET seen_count = seen_count + 1,
 			first_seen = min(first_seen, ?), last_seen = max(last_seen, ?) WHERE id = ?`, at, at, id)
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO sightings (device_id, collector_id, subnet_id, ip, mac, hostname,
-		first_seen, last_seen, seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-		devID, collectorID, subnetID, o.IP, o.MAC, o.Hostname, at, at)
+		via, first_seen, last_seen, seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+		devID, collectorID, subnetID, o.IP, o.MAC, o.Hostname, o.Via, at, at)
 	return err
 }
 

@@ -20,6 +20,7 @@ type Address struct {
 	SubnetID int64
 	Current  bool
 	AsOf     time.Time
+	Via      string // router port or Wi-Fi interface of the latest sighting there (feature 002)
 }
 
 // DeviceRow is a device as listed in the inventory.
@@ -200,7 +201,9 @@ func sortDevices(ds []DeviceRow, key string, desc bool) {
 // currentAddresses returns current addresses per device on visible subnets, plus the set of
 // devices that have addresses only on ignored subnets.
 func (s *Store) currentAddresses(ctx context.Context) (map[int64][]Address, map[int64]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT a.device_id, a.ip, sn.cidr, a.subnet_id, a.as_of, sn.ignored
+	rows, err := s.db.QueryContext(ctx, `SELECT a.device_id, a.ip, sn.cidr, a.subnet_id, a.as_of, sn.ignored,
+		COALESCE((SELECT g.via FROM sightings g WHERE g.device_id = a.device_id AND g.subnet_id = a.subnet_id
+			ORDER BY g.last_seen DESC, g.id DESC LIMIT 1), '')
 		FROM device_addresses a JOIN subnets sn ON sn.id = a.subnet_id WHERE a.current = 1`)
 	if err != nil {
 		return nil, nil, err
@@ -213,7 +216,7 @@ func (s *Store) currentAddresses(ctx context.Context) (map[int64][]Address, map[
 		var a Address
 		var asOf string
 		var ignored bool
-		if err := rows.Scan(&devID, &a.IP, &a.CIDR, &a.SubnetID, &asOf, &ignored); err != nil {
+		if err := rows.Scan(&devID, &a.IP, &a.CIDR, &a.SubnetID, &asOf, &ignored, &a.Via); err != nil {
 			return nil, nil, err
 		}
 		if ignored {
