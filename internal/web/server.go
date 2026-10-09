@@ -128,7 +128,8 @@ func (s *Server) loadTemplates() error {
 }
 
 var funcs = template.FuncMap{
-	"statuses": func() []string { return []string{"online", "offline", "new", "new_offline"} },
+	"statuses":      func() []string { return []string{"online", "offline", "new", "new_offline"} },
+	"routerOutcome": routerOutcome,
 	"fmtTime": func(t time.Time) string {
 		if t.IsZero() {
 			return "—"
@@ -295,4 +296,25 @@ func (s *Server) renderPartialStatus(w http.ResponseWriter, r *http.Request, sta
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	buf.WriteTo(w)
+}
+
+// routerOutcome is the owner-facing text of a router read (Collectors page, FR-013).
+func routerOutcome(r store.RouterStatus) string {
+	switch r.Outcome {
+	case contract.OutcomeOK:
+		return fmt.Sprintf("OK, %d online / %d offline", r.Online, r.Offline)
+	case contract.OutcomeUnreachable:
+		return "unreachable"
+	case contract.OutcomeLoginRejected:
+		return "login rejected"
+	case contract.OutcomeLocked:
+		return "locked by the router"
+	case contract.OutcomeSessionBusy:
+		return "busy (someone is logged into the router)"
+	case contract.OutcomePageNotUnderstood:
+		return "page not understood (firmware?)"
+	case contract.OutcomeSkippedAfterRejection:
+		return "skipped: login was rejected, fix the password and run check"
+	}
+	return r.Outcome
 }

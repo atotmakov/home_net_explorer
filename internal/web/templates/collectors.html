@@ -14,7 +14,7 @@
 
 <section>
   <div class="table-wrap"><table>
-    <thead><tr><th>Name</th><th>Kind</th><th>Version</th><th>Subnets (latest run)</th><th>Last report</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Kind</th><th>Version</th><th>Subnets (latest run)</th><th>Router (latest run)</th><th>Last report</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {{range .Collectors}}
       <tr>
@@ -22,6 +22,7 @@
         <td>{{if eq .Kind "builtin"}}built-in (NAS){{else}}remote{{end}}</td>
         <td>{{or .LastVersion "—"}}</td>
         <td>{{range $i, $c := .Subnets}}{{if $i}}, {{end}}{{$c}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td>{{range $i, $r := .Routers}}{{if $i}}<br>{{end}}<span{{if ne $r.Outcome "ok"}} class="badge warn"{{end}}>{{$r.Model}} at {{$r.Address}}: {{routerOutcome $r}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
         <td>{{fmtTime .LastReportAt}}</td>
         <td>
           {{if not .RevokedAt.IsZero}}<span class="badge">revoked</span>

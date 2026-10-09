@@ -81,6 +81,13 @@ func (in *Ingester) Ingest(ctx context.Context, collectorID int64, raw []byte, r
 				return err
 			}
 		}
+		for i, s := range run.Sources { // router read outcomes (feature 002, FR-013)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO run_sources
+				(collection_id, idx, type, model, address, subnet, outcome, online, offline) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				run.CollectionID, i, s.Type, s.Model, s.Address, s.Subnet, s.Outcome, s.Online, s.Offline); err != nil {
+				return err
+			}
+		}
 
 		interval := run.IntervalSeconds
 		if _, err := tx.ExecContext(ctx, `UPDATE collectors SET last_report_at = ?, last_clock_skew_ms = ?, last_version = ?,

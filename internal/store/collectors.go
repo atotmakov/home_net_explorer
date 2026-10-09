@@ -127,8 +127,18 @@ func (s *Store) SetDefaultSetting(ctx context.Context, key, value string) error 
 // CollectorOverview is a collector as listed on the Collectors page.
 type CollectorOverview struct {
 	Collector
-	Subnets     []string // subnets scanned in its latest run
-	SkewFlagged bool     // last clock skew exceeds 5 minutes
+	Subnets     []string       // subnets scanned in its latest run
+	SkewFlagged bool           // last clock skew exceeds 5 minutes
+	Routers     []RouterStatus // router reads of its latest run (feature 002, FR-013)
+}
+
+// RouterStatus is the outcome of one router read.
+type RouterStatus struct {
+	Model   string
+	Address string
+	Outcome string
+	Online  int
+	Offline int
 }
 
 // CollectorOverviews lists collectors with the subnets of their latest run.
@@ -155,7 +165,29 @@ func (s *Store) CollectorOverviews(ctx context.Context) ([]CollectorOverview, er
 			o.Subnets = append(o.Subnets, cidr)
 		}
 		rows.Close()
+		if o.Routers, err = s.latestRouters(ctx, c.ID); err != nil {
+			return nil, err
+		}
 		out = append(out, o)
 	}
 	return out, nil
+}
+
+// latestRouters returns the router reads of the collector's latest run.
+func (s *Store) latestRouters(ctx context.Context, collectorID int64) ([]RouterStatus, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT model, address, outcome, online, offline FROM run_sources WHERE collection_id =
+		(SELECT collection_id FROM collection_runs WHERE collector_id = ? ORDER BY rowid DESC LIMIT 1) ORDER BY idx`, collectorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RouterStatus
+	for rows.Next() {
+		var r RouterStatus
+		if err := rows.Scan(&r.Model, &r.Address, &r.Outcome, &r.Online, &r.Offline); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

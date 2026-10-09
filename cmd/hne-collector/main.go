@@ -73,6 +73,7 @@ type environment struct {
 	// routerTransport carries router traffic (nil: direct connections). Tests send it to a
 	// routertest.Fake while configs keep private router addresses.
 	routerTransport http.RoundTripper
+	ctx             context.Context // parent of the command's context (nil: background)
 }
 
 func main() {
@@ -198,11 +199,21 @@ func run(args []string, env environment) int {
 	}
 	defer closeEngine()
 	engine.IntervalSeconds = cfg.IntervalSeconds
+	// FR-011: a router whose login was rejected is skipped until its config changes; check
+	// clears the marker and tries once more.
+	rejected := loadRejected(env.dir)
+	if cmd == "check" {
+		os.Remove(filepath.Join(env.dir, rejectedFile))
+		rejected = nil
+	}
 	for _, rc := range cfg.Routers {
 		src, err := router.New(rc, env.routerTransport)
 		if err != nil {
 			log.Error("config error", "err", err)
 			return exitConfig
+		}
+		if rejected[routerHash(rc)] {
+			src = router.Skipped(src)
 		}
 		engine.Routers = append(engine.Routers, src)
 	}
@@ -210,12 +221,17 @@ func run(args []string, env environment) int {
 	c := &collector{
 		cfg:    cfg,
 		env:    env,
-		log:    log,
-		engine: engine,
+		log:     log,
+		jsonOut: jsonOut,
+		engine:  engine,
 		client: &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
 		spool:  upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	parent := env.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	switch cmd {
 	case "check":
@@ -228,12 +244,13 @@ func run(args []string, env environment) int {
 }
 
 type collector struct {
-	cfg    config
-	env    environment
-	log    *slog.Logger
-	engine *collect.Engine
-	client *upload.Client
-	spool  upload.Spool
+	cfg     config
+	env     environment
+	log     *slog.Logger
+	jsonOut bool
+	engine  *collect.Engine
+	client  *upload.Client
+	spool   upload.Spool
 }
 
 func (c *collector) check(ctx context.Context) int {
@@ -268,6 +285,7 @@ func (c *collector) check(ctx context.Context) int {
 			fmt.Fprintf(w, "  %-18s on-link via %s: ARP\n", p.Prefix, p.Interface)
 		}
 	}
+	c.checkRouters(ctx, w)
 	ping, err := c.client.Ping(ctx)
 	if code := c.pingExit(err); code != exitOK {
 		return code
@@ -343,6 +361,7 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 		c.log.Error("scan failed", "err", err)
 		return exitFailure
 	}
+	c.recordRejections(run.Sources)
 	run.SentAt = time.Now().UTC()
 	if dryRun {
 		enc := json.NewEncoder(c.env.stdout)
