@@ -219,13 +219,13 @@ func run(args []string, env environment) int {
 	}
 
 	c := &collector{
-		cfg:    cfg,
-		env:    env,
+		cfg:     cfg,
+		env:     env,
 		log:     log,
 		jsonOut: jsonOut,
 		engine:  engine,
-		client: &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
-		spool:  upload.Spool{Dir: filepath.Join(env.dir, "spool")},
+		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
+		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
 	parent := env.ctx
 	if parent == nil {
