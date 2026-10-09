@@ -228,7 +228,7 @@ func TestIngestStoresRunSources(t *testing.T) {
 		if err := rows.Scan(&idx, &typ, &model, &addr, &subnet, &outcome, &online, &offline); err != nil {
 			t.Fatal(err)
 		}
-		got = append(got, fmt.Sprint(idx, typ, model, addr, subnet, outcome, online, offline))
+		got = append(got, fmt.Sprintf("%d %s %s %s %s %s %d %d", idx, typ, model, addr, subnet, outcome, online, offline))
 	}
 	rows.Close()
 	want := []string{

@@ -366,7 +366,7 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
 
 ### Tests for User Story 2 ⚠️ write first, see them fail
 
-- [ ] T022 [P] [US2] Write `cmd/hne-collector/secret_test.go` (SC-004). Configure a router with
+- [X] T022 [P] [US2] Write `cmd/hne-collector/secret_test.go` (SC-004). Configure a router with
   username `user-<random>` and password `pw-<random marker>` against the fake router (via
   `routerTransport`). Run `check`, `check --json`, `scan --once`, `scan --once --dry-run`, a
   failing scan (fake `WrongPassword`) and one `run` iteration (cancel after the first scan).
@@ -374,7 +374,7 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
   `spool/` (including `rejected/`), the `hne-collector.router-rejected` marker file (it holds a
   hash only), or any request body received by the fake upload server. Also load a config with a
   bad router entry and assert the config error doesn't echo the password
-- [ ] T023 [P] [US2] Add rejection-marker and `check` tests to `cmd/hne-collector/main_test.go`
+- [X] T023 [P] [US2] Add rejection-marker and `check` tests to `cmd/hne-collector/main_test.go`
   (research R6, FR-011, FR-012, contracts/collector-config-and-cli.md):
   - `scan --once` with fake `WrongPassword` → outcome `login_rejected`, and
     `hne-collector.router-rejected` is written next to the config with the SHA-256 of
@@ -393,10 +393,10 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
   - `check --json` logs one `router read` JSON record per router with `model`, `address`,
     `subnet`, `outcome`, `online`, `offline` only (`--json` means one JSON object per line).
   - Exit codes: a router failure never changes the `check` or `scan` exit code.
-- [ ] T024 [P] [US2] Extend `internal/ingest/ingest_test.go`: ingesting `valid_router.json`
+- [X] T024 [P] [US2] Extend `internal/ingest/ingest_test.go`: ingesting `valid_router.json`
   stores one `run_sources` row per source (`idx` in order) inside the same transaction as
   `run_subnets`. A run without `sources` stores none, and a duplicate upload stores nothing new
-- [ ] T025 [P] [US2] Write `tests/integration/us2_router_status_test.go`:
+- [X] T025 [P] [US2] Write `tests/integration/us2_router_status_test.go`:
   - Collector `desktop` uploads `valid_router.json`: `/collectors` shows `huawei-hg8145v5 at
     192.168.0.1: OK, 14 online / 16 offline`.
   - It then uploads `valid_router_failed.json`: the page shows `login rejected` for the latest
@@ -407,9 +407,9 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Extend `internal/ingest/ingest.go`: insert `run.Sources` into `run_sources` next
+- [X] T026 [US2] Extend `internal/ingest/ingest.go`: insert `run.Sources` into `run_sources` next
   to the `run_subnets` insert. Make T024 pass
-- [ ] T027 [US2] Extend `internal/store/collectors.go`: add `Routers []RouterStatus` to
+- [X] T027 [US2] Extend `internal/store/collectors.go`: add `Routers []RouterStatus` to
   `CollectorOverview` (`Model`, `Address`, `Outcome`, `Online`, `Offline`) from the
   `run_sources` rows of the collector's latest run (same "latest run" subquery as `Subnets`).
   Add a **Router (latest run)** column to `internal/web/templates/collectors.html`, using the
@@ -417,7 +417,7 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
   `login rejected`, `locked by the router`, `busy (someone is logged into the router)`,
   `page not understood (firmware?)`, `skipped: login was rejected, fix the password and run
   check`; `—` when there are none. Failure outcomes are styled as warnings like the skew flag. Make T025 pass
-- [ ] T028 [US2] Extend `cmd/hne-collector/main.go` with the rejection marker:
+- [X] T028 [US2] Extend `cmd/hne-collector/main.go` with the rejection marker:
   - `hne-collector.router-rejected` next to the config holds one hex SHA-256 per line.
   - `routerHash(cfg router.Config)` hashes model, url, username, `Password.Reveal()` and subnet,
     joined with `\x00`.
@@ -425,7 +425,7 @@ the Collectors page shows the failure (quickstart.md §2 step 7, SC-004, SC-005)
     to `router.go`: returns `OutcomeSkippedAfterRejection` without any I/O).
   - After a scan, add the hashes of `login_rejected`/`locked` routers (write-temp + rename).
   - Make T023's marker cases pass
-- [ ] T029 [US2] Extend `check` in `cmd/hne-collector/main.go`:
+- [X] T029 [US2] Extend `check` in `cmd/hne-collector/main.go`:
   - Delete the marker, read each router once, and print the `Routers:` section. Show router
     subnets in `Subnets to scan:` from `PlannedSubnet.Router`.
   - Log a `router read` record per router (shown as JSON with `--json`; outcomes and counts only).
