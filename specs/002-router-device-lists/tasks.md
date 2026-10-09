@@ -47,6 +47,28 @@ that can be tested on its own.
 - Router outcomes (data-model.md `RunSource.outcome`): `ok`, `unreachable`, `login_rejected`,
   `locked`, `session_busy`, `page_not_understood`, `skipped_after_rejection`.
 
+## Implementation notes (recorded during /speckit-implement)
+
+- Before coding, the /speckit-analyze findings I1–I4 were applied: an ICMP/TCP fallback on a
+  router's subnet is reported `complete: false`; a run carries one observation per IP (the
+  `router_table` one wins over ARP); the capture's in-subnet counts are 13 online / 16 offline;
+  `hosts_probed` counts in-subnet entries only.
+- Migration 0003 also rebuilds `run_subnets`: its CHECK constraint did not allow `router_table`.
+- The device page has no sightings list yet (feature 001 history work), so `via` is shown next
+  to the device's current address instead (T014, T019).
+- `check --json` logs one `router read` JSON record per router (the CLI's `--json` means one
+  JSON object per line), not a `routers` array.
+- `run.Sources` follows the plan's subnet order. The rejection marker matches sources to config
+  entries by router address and subnet.
+- A router subnet the owner ignored is reported `skipped`/`ignored` and the router is not
+  contacted (no source entry). A router's subnet needs no listing: it is planned automatically.
+- An unrecognized login reply is reported as `session_busy` (the router's "already logged in"
+  message was not captured; research R1).
+- The CLI tests live in `cmd/hne-collector/router_test.go`, `rejection_test.go`,
+  `secret_test.go` and `extra_test.go` rather than in `main_test.go`.
+- The `image` CI job failed on several runs with Docker Hub `429 Too Many Requests` while
+  pulling `golang`; that is runner rate limiting, not a build error.
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)

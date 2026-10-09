@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft
+**Status**: Implemented (real-network validation pending: tasks.md T037)
 
 **Input**: User description: "Router device lists (Huawei HG8145V5 first). The desktop collector can't learn MAC addresses on subnets it reaches only through a router (e.g. 192.168.0.0/24 behind 192.168.8.1). The ISP router at 192.168.0.1 (Huawei HG8145V5 GPON ONT) knows every device on its LAN: hostname, IP, MAC, LAN port / Wi-Fi, online status, connection duration (its "User Device Information" page, behind a login). Let a collector read that list with owner-supplied router credentials and report the online devices as observations with real MACs, so routed-subnet devices get proper identities (MAC, manufacturer, randomized flag), weak devices fold into MAC devices, and offline detection is accurate. Router credentials stay on the collector machine and are never uploaded. Support for more router models can be added later. Also add an extra_subnets option so routed subnets can be scanned in addition to auto-discovered ones."
 
