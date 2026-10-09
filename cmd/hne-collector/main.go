@@ -54,9 +54,9 @@ const configFile = "hne-collector.json"
 
 // config is hne-collector.json, overridable by HNE_SERVER_URL, HNE_TOKEN and HNE_SUBNETS.
 type config struct {
-	ServerURL       string   `json:"server_url"`
-	Name            string   `json:"name"`
-	Token           string   `json:"token"`
+	ServerURL       string          `json:"server_url"`
+	Name            string          `json:"name"`
+	Token           string          `json:"token"`
 	Subnets         []string        `json:"subnets"`
 	IntervalSeconds int             `json:"interval_seconds"`
 	Routers         []router.Config `json:"routers"` // opt-in router sources (feature 002)
