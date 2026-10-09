@@ -75,10 +75,10 @@ func TestConfigValidate(t *testing.T) {
 		f      func(c *Config)
 		prefix string
 	}{
-		"default /24":      {func(c *Config) {}, "192.168.0.0/24"},
+		"default /24":       {func(c *Config) {}, "192.168.0.0/24"},
 		"other private /24": {func(c *Config) { c.URL = "http://10.20.30.254" }, "10.20.30.0/24"},
-		"https and port":   {func(c *Config) { c.URL = "https://172.16.5.1:8443/" }, "172.16.5.0/24"},
-		"explicit subnet":  {func(c *Config) { c.Subnet = "192.168.0.0/23" }, "192.168.0.0/23"},
+		"https and port":    {func(c *Config) { c.URL = "https://172.16.5.1:8443/" }, "172.16.5.0/24"},
+		"explicit subnet":   {func(c *Config) { c.Subnet = "192.168.0.0/23" }, "192.168.0.0/23"},
 	}
 	for label, tc := range good {
 		c := validConfig()
@@ -133,9 +133,9 @@ func TestFilter(t *testing.T) {
 	devs := []Device{
 		{IP: netip.MustParseAddr("192.168.0.9"), MAC: "00:00:5e:10:00:09", Online: true},
 		{IP: netip.MustParseAddr("192.168.0.4"), MAC: "00:00:5e:10:00:04", Hostname: "host-01", Via: "LAN1", Online: true},
-		{IP: netip.MustParseAddr("192.168.0.5"), MAC: "00:00:5e:10:00:05", Hostname: "gone"},          // offline: FR-007
-		{IP: netip.MustParseAddr("0.0.0.0"), MAC: "00:00:5e:10:00:01"},                                // outside: FR-008
-		{IP: netip.MustParseAddr("192.168.8.20"), MAC: "00:00:5e:10:00:20", Online: true},             // outside: FR-008
+		{IP: netip.MustParseAddr("192.168.0.5"), MAC: "00:00:5e:10:00:05", Hostname: "gone"}, // offline: FR-007
+		{IP: netip.MustParseAddr("0.0.0.0"), MAC: "00:00:5e:10:00:01"},                       // outside: FR-008
+		{IP: netip.MustParseAddr("192.168.8.20"), MAC: "00:00:5e:10:00:20", Online: true},    // outside: FR-008
 	}
 	res := Filter(devs, p, at)
 	if res.Outcome != contract.OutcomeOK || res.Online != 2 || res.Offline != 1 {

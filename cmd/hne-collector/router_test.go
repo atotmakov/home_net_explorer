@@ -36,13 +36,13 @@ func lastUpload(t *testing.T, srv *fakeServer) *contract.CollectionRun {
 
 func TestRouterConfigErrors(t *testing.T) {
 	bad := map[string]func(r map[string]any){
-		"unknown model":     func(r map[string]any) { r["model"] = "netgear-r7000" },
-		"public address":    func(r map[string]any) { r["url"] = "http://8.8.8.8" },
-		"hostname":          func(r map[string]any) { r["url"] = "http://router.lan" },
-		"missing username":  func(r map[string]any) { delete(r, "username") },
-		"missing password":  func(r map[string]any) { delete(r, "password") },
+		"unknown model":      func(r map[string]any) { r["model"] = "netgear-r7000" },
+		"public address":     func(r map[string]any) { r["url"] = "http://8.8.8.8" },
+		"hostname":           func(r map[string]any) { r["url"] = "http://router.lan" },
+		"missing username":   func(r map[string]any) { delete(r, "username") },
+		"missing password":   func(r map[string]any) { delete(r, "password") },
 		"non-private subnet": func(r map[string]any) { r["subnet"] = "8.8.8.0/24" },
-		"/31 subnet":        func(r map[string]any) { r["subnet"] = "192.168.0.0/31" },
+		"/31 subnet":         func(r map[string]any) { r["subnet"] = "192.168.0.0/31" },
 	}
 	for label, f := range bad {
 		h := newHarness(t, "http://unused")

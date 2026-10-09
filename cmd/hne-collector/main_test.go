@@ -81,8 +81,8 @@ func (h *harness) run(args ...string) int {
 	h.stderr.Reset()
 	fnet := collecttest.NewFakeNetwork().Add("192.168.1.100", collecttest.Host{MAC: "a0:b1:c2:d3:e4:f5", Hostname: "router.lan"})
 	return run(args, environment{
-		dir:    h.dir,
-		getenv: func(k string) string { return h.env[k] },
+		dir:             h.dir,
+		getenv:          func(k string) string { return h.env[k] },
 		stdout:          &h.stdout,
 		stderr:          &h.stderr,
 		routerTransport: h.routerRT,
