@@ -112,23 +112,58 @@ func (s *Store) MigrateTo(ctx context.Context, version int) error {
 		if m.version <= cur || m.version > version {
 			continue
 		}
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("store: migration %s: %w", m.name, err)
-		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
-			tx.Rollback()
-			return err
-		}
-		if err := tx.Commit(); err != nil {
+		if err := s.apply(ctx, m); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// foreignKeysOff marks a migration that must run with foreign keys off, e.g. to rebuild a table
+// other tables reference (SQLite's 12-step table rebuild). It must be the first line.
+const foreignKeysOff = "-- hne:foreign-keys-off"
+
+// apply runs one migration in its own transaction and sets user_version.
+func (s *Store) apply(ctx context.Context, m migration) error {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	fkOff := strings.HasPrefix(m.sql, foreignKeysOff)
+	if fkOff {
+		// PRAGMA foreign_keys is a no-op inside a transaction, so switch it on this connection.
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return err
+		}
+		defer conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON")
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("store: migration %s: %w", m.name, err)
+	}
+	if fkOff {
+		rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		dangling := rows.Next()
+		rows.Close()
+		if dangling {
+			tx.Rollback()
+			return fmt.Errorf("store: migration %s leaves dangling foreign keys", m.name)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // Tx runs f in a transaction, committing on success.

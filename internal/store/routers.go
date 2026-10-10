@@ -236,7 +236,7 @@ func (s *Store) ListRouters(ctx context.Context) ([]contract.RouterRef, error) {
 
 // RouterStatus returns, per collector (by name), the latest read of the router at address.
 func (s *Store) RouterStatus(ctx context.Context, address string) ([]RouterRead, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT c.name, rs.outcome, rs.online, rs.offline, r.finished_at
+	rows, err := s.db.QueryContext(ctx, `SELECT `+collectorName+`, rs.outcome, rs.online, rs.offline, r.finished_at
 		FROM run_sources rs
 		JOIN collection_runs r ON r.collection_id = rs.collection_id
 		JOIN collectors c ON c.id = r.collector_id

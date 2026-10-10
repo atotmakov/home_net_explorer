@@ -43,6 +43,7 @@ const (
 	SourceTypeRouter      = "router"
 	StatusStored          = "stored"
 	StatusDuplicate       = "duplicate"
+	StatusDiscarded       = "discarded" // started before the owner's data reset; not stored (feature 004)
 	CodeValidation        = "validation_failed"
 	CodeUnsupportedSchema = "unsupported_schema"
 	CodeInvalidToken      = "invalid_token"

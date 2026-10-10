@@ -47,7 +47,10 @@
 {{define "scan-status"}}
 <div id="scan-status" {{if .Status.Running}}hx-get="/ui/scan-status" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
 {{if .Enabled}}
-  {{if .Status.Running}}
+  {{if .Paused}}
+    <p><span class="badge warn">Paused</span> since {{fmtTime .PausedAt}}. Remote collectors keep working.</p>
+    <form method="post" action="/maintenance/resume"><button type="submit">Resume</button></form>
+  {{else if .Status.Running}}
     <p>Scanning…</p>
   {{else}}
     <p>

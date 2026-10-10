@@ -26,6 +26,7 @@ type collectorsData struct {
 	Created    *createdCollector
 	Downloads  []string
 	Schtasks   string
+	Paused     bool // the built-in scanner is paused (feature 004)
 }
 
 type createdCollector struct {
@@ -60,7 +61,8 @@ func (s *Server) renderCollectors(w http.ResponseWriter, r *http.Request, status
 		s.serverError(w, r, err)
 		return
 	}
-	data := collectorsData{Collectors: cs, Created: created, Downloads: s.availableDownloads(), Schtasks: schtasks}
+	data := collectorsData{Collectors: cs, Created: created, Downloads: s.availableDownloads(), Schtasks: schtasks,
+		Paused: s.scanView(r.Context()).Paused}
 	s.render(w, r, status, "collectors.html", page{Title: "Collectors", Nav: true, Active: "collectors", Error: errMsg, Data: data})
 }
 

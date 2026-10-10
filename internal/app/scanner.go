@@ -34,6 +34,7 @@ type Scanner struct {
 	routerRT        http.RoundTripper
 
 	trigger chan struct{}
+	wake    chan struct{} // pause state changed (feature 004)
 	done    chan struct{}
 	started bool
 
@@ -43,38 +44,94 @@ type Scanner struct {
 	lastStart time.Time
 }
 
-// Run scans immediately, then on every interval or trigger, until ctx is cancelled.
+// Run scans immediately, then on every interval or trigger, until ctx is cancelled. While the
+// owner has paused it (feature 004), it waits without a deadline until resumed; after resuming,
+// the next scan is due one interval after the last one, or at once if that time has passed.
 func (s *Scanner) Run(ctx context.Context) {
 	defer close(s.done)
-	s.scanOnce(ctx)
+	if !s.paused(ctx) {
+		s.scanOnce(ctx)
+	}
 	for {
+		if s.paused(ctx) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.wake:
+			case <-s.trigger: // refused by Trigger while paused; drop a stale request
+			}
+			continue
+		}
 		next := s.lastStarted().Add(s.interval(ctx))
 		select {
 		case <-ctx.Done():
 			return
+		case <-s.wake:
+			continue // pause state changed: re-evaluate
 		case <-s.trigger:
 		case <-s.clock.After(next.Sub(s.clock.Now())):
 		}
 		if ctx.Err() != nil {
 			return
 		}
+		if s.paused(ctx) {
+			continue
+		}
 		s.scanOnce(ctx)
 	}
 }
 
-// Trigger requests an on-demand scan. It returns false if a scan is already running.
-func (s *Scanner) Trigger() bool {
+// Trigger requests an on-demand scan, refused while a scan is running or the scanner is paused.
+func (s *Scanner) Trigger() web.TriggerResult {
+	if s.paused(context.Background()) {
+		return web.TriggerPaused
+	}
 	s.mu.Lock()
 	running := s.status.Running
 	s.mu.Unlock()
 	if running {
-		return false
+		return web.TriggerRunning
 	}
 	select {
 	case s.trigger <- struct{}{}:
 	default: // one is already pending
 	}
-	return true
+	return web.TriggerStarted
+}
+
+// Paused reports whether the owner paused the built-in scanner, and since when. The state is a
+// stored setting, so it survives restarts (FR-022).
+func (s *Scanner) Paused(ctx context.Context) (bool, time.Time) {
+	v, ok, err := s.store.Setting(ctx, store.SettingBuiltinPaused)
+	if err != nil || !ok {
+		return false, time.Time{}
+	}
+	at, _ := store.ParseTime(v)
+	return true, at
+}
+
+func (s *Scanner) paused(ctx context.Context) bool {
+	p, _ := s.Paused(ctx)
+	return p
+}
+
+// SetPaused pauses or resumes the built-in scanner. A scan in progress finishes (FR-021).
+func (s *Scanner) SetPaused(ctx context.Context, pause bool) error {
+	var err error
+	switch {
+	case pause && !s.paused(ctx):
+		err = s.store.SetSetting(ctx, store.SettingBuiltinPaused, store.FormatTime(s.clock.Now()))
+	case !pause:
+		err = s.store.DeleteSetting(ctx, store.SettingBuiltinPaused)
+	}
+	if err != nil {
+		return err
+	}
+	select {
+	case s.wake <- struct{}{}:
+	default: // a wake-up is already pending
+	}
+	return nil
 }
 
 // Status reports the current scan state.

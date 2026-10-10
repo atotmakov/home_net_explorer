@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"errors"
 	"sync"
 	"time"
 
@@ -56,6 +57,14 @@ func (in *Ingester) Ingest(ctx context.Context, collectorID int64, raw []byte, r
 	}
 
 	err = in.store.Tx(ctx, func(tx *sql.Tx) error {
+		discard, err := beforeReset(ctx, tx, run)
+		if err != nil {
+			return err
+		}
+		if discard {
+			res.Status = contract.StatusDiscarded
+			return touchCollector(ctx, tx, collectorID, run, receivedAt, res.ClockSkewMs)
+		}
 		r, err := tx.ExecContext(ctx, `INSERT INTO collection_runs
 			(collection_id, collector_id, schema_version, started_at, finished_at, sent_at, received_at, interval_seconds, payload_gz)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (collection_id) DO NOTHING`,
@@ -89,10 +98,7 @@ func (in *Ingester) Ingest(ctx context.Context, collectorID int64, raw []byte, r
 			}
 		}
 
-		interval := run.IntervalSeconds
-		if _, err := tx.ExecContext(ctx, `UPDATE collectors SET last_report_at = ?, last_clock_skew_ms = ?, last_version = ?,
-			interval_seconds = CASE WHEN ? > 0 THEN ? ELSE interval_seconds END WHERE id = ?`,
-			store.FormatTime(receivedAt), res.ClockSkewMs, run.Collector.Version, interval, interval, collectorID); err != nil {
+		if err := touchCollector(ctx, tx, collectorID, run, receivedAt, res.ClockSkewMs); err != nil {
 			return err
 		}
 
@@ -104,6 +110,36 @@ func (in *Ingester) Ingest(ctx context.Context, collectorID int64, raw []byte, r
 		return nil
 	})
 	return res, err
+}
+
+// touchCollector records that the collector reported (time, clock skew, build, interval).
+func touchCollector(ctx context.Context, tx *sql.Tx, collectorID int64, run *contract.CollectionRun, receivedAt time.Time, skewMs int64) error {
+	interval := run.IntervalSeconds
+	_, err := tx.ExecContext(ctx, `UPDATE collectors SET last_report_at = ?, last_clock_skew_ms = ?, last_version = ?,
+		interval_seconds = CASE WHEN ? > 0 THEN ? ELSE interval_seconds END WHERE id = ?`,
+		store.FormatTime(receivedAt), skewMs, run.Collector.Version, interval, interval, collectorID)
+	return err
+}
+
+// beforeReset reports whether the run started before the owner's latest data reset ("remove all
+// devices" or "drop all data", feature 004). Such a run, e.g. spooled by a collector while the
+// server was unreachable, must not bring removed devices back. The run's own started_at is used
+// without skew correction: sent_at is set before spooling, so sent_at - received_at measures
+// the spool delay, not the clock error (research R2).
+func beforeReset(ctx context.Context, tx *sql.Tx, run *contract.CollectionRun) (bool, error) {
+	var v string
+	err := tx.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, store.SettingDataResetAt).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	reset, err := store.ParseTime(v)
+	if err != nil {
+		return false, err
+	}
+	return run.StartedAt.Before(reset), nil
 }
 
 func gzipBytes(b []byte) ([]byte, error) {
