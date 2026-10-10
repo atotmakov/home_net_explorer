@@ -100,8 +100,8 @@ the removal and uploaded afterwards is `discarded`.
   with `data_reset_at` = T, a run with `started_at` T−1 min, `sent_at` = `received_at` = T+1 min
   → status `discarded`, no `collection_runs` row, the Applier not called, the collector's
   `last_report_at` updated; a run started at T+1 s → `stored`; skew correction: a collector
-  whose clock is 10 min fast (`sent_at` = received + 10 min) with `started_at` = T+5 min (server
-  time T−5 min) → `discarded`; with no `data_reset_at` every run is stored
+  whose run was spooled (`started_at` = `sent_at` = T−3 h, `received_at` = T+1 min) →
+  `discarded` (no skew correction, research R2); with no `data_reset_at` every run is stored
 - [ ] T006 [P] [US1] Write `internal/inventory/apply_test.go` `TestSubnetFactsApplyOnRediscovery`:
   a `user_subnet_attrs` name `"lab"` and `ignored=true` written before any run; a run that first
   sees that subnet creates it with name `lab` and `ignored=1` and folds no observation of it; a
@@ -136,7 +136,7 @@ the removal and uploaded afterwards is `discarded`.
   added by T023, once the column exists). Count devices with
   `status != 'merged_away'` and runs before deleting. Make T004 pass
 - [ ] T011 [US1] In `internal/ingest/ingest.go`, before inserting: read `data_reset_at` in the
-  transaction; if set and `run.StartedAt − (run.SentAt − receivedAt) < reset`, update the
+  transaction; if set and `run.StartedAt < reset` (no skew correction), update the
   collector's `last_report_at`, `last_clock_skew_ms`, `last_version` and return status
   `discarded` without storing or applying. In `internal/web/api.go` answer `discarded` with 200.
   Make T005 pass
@@ -176,6 +176,7 @@ within one interval.
   `POST /maintenance/pause` → 303 `?done=paused`; home page shows `Paused` and a Resume form and no
   "Scan now"; `POST /scan` returns the fragment with `Paused` and starts nothing; Collectors page
   shows `nas` with status `paused`; a remote collector's upload is still `stored`;
+  Settings shows `paused since` and a Resume button;
   `POST /maintenance/resume` → `?done=resumed` and "Scan now" back; pause/resume without a
   session or cross-site change nothing; with the built-in collector disabled both routes answer
   404 and the card has no scanner line
@@ -195,7 +196,8 @@ within one interval.
   `s.opts.Scanner == nil`, logged); home `scan-status` template in
   `internal/web/templates/home.html` shows "Paused since …" and a Resume form; Settings card
   shows running/paused; `internal/web/templates/collectors.html` shows `paused` for the builtin
-  collector while paused. Make T015 pass
+  collector while paused. Update every existing `web.Scanner` fake and caller of `Trigger`
+  (web and integration tests) to the new interface. Make T015 pass
 
 **Checkpoint**: the NAS scanner can be paused and resumed; US1 still passes.
 

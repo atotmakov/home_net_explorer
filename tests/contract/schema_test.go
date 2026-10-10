@@ -93,3 +93,19 @@ func TestPingAndLoginSchemas(t *testing.T) {
 		t.Error("router login schema accepted an empty username")
 	}
 }
+
+// Feature 004: a run that started before the owner's data reset is answered "discarded".
+func TestUploadResultDiscarded(t *testing.T) {
+	res := contracttest.Schema(t, "UploadResult")
+	ok := []byte(`{"collection_id":"5a7c1e2d-3b4f-4a6e-9d8c-1f2e3d4c5b6a","status":"discarded","clock_skew_ms":0}`)
+	if err := contracttest.Validate(res, ok); err != nil {
+		t.Errorf("discarded: %v", err)
+	}
+	bad := []byte(`{"collection_id":"5a7c1e2d-3b4f-4a6e-9d8c-1f2e3d4c5b6a","status":"ignored","clock_skew_ms":0}`)
+	if err := contracttest.Validate(res, bad); err == nil {
+		t.Error("UploadResult schema accepted an unknown status")
+	}
+	if contract.StatusDiscarded != "discarded" {
+		t.Errorf("StatusDiscarded = %q", contract.StatusDiscarded)
+	}
+}

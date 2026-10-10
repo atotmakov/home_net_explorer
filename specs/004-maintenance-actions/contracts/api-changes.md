@@ -10,7 +10,7 @@ Canonical file: `specs/001-lan-inventory-topology/contracts/collector-upload-api
 |--------|------|---------|
 | `stored` | 201 | unchanged |
 | `duplicate` | 200 | unchanged |
-| `discarded` | 200 | **new**. The run started before the owner's latest data reset ("remove all devices" or "drop all data"), judged on server time (`started_at − clock_skew`). It is not stored; the collector should treat it as accepted and drop it from its spool |
+| `discarded` | 200 | **new**. The run started before the owner's latest data reset ("remove all devices" or "drop all data"), judged by the run's own `started_at`. It is not stored; the collector should treat it as accepted and drop it from its spool |
 
 Existing collectors already treat every `200`/`201` as accepted, so no collector change is
 required; the collector prints the status it receives (`result=discarded`).

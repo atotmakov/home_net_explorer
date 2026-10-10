@@ -25,7 +25,8 @@ would keep growing during repeated tests); deleting the database file (also dele
 
 **Decision**: store a **reset point** (setting `data_reset_at`, server time) when devices are
 removed or all data is dropped. `Ingest` discards a run whose start, converted to server time,
-is before the reset point: `started_at − (sent_at − received_at) < data_reset_at`. A discarded
+is before the reset point: `started_at < data_reset_at`, using the run's own `started_at`
+(collector clock) without skew correction. A discarded
 run is not stored (no `collection_runs` row), its collector's `last_report_at` is still updated,
 and the server answers `200` with the new upload status `discarded`. The setting survives every
 later action, including "drop all data", so a late spooled upload is still discarded.
@@ -33,9 +34,12 @@ later action, including "drop all data", so a late spooled upload is still disca
 **Rationale**: collectors spool runs while the server is unreachable (feature 001) and the
 built-in scan may be running during the reset; both would otherwise bring old devices back
 (SC-002). Collectors already treat any `200`/`201` as accepted and drop the run from the spool
-(`internal/upload/client.go`), so the new status needs no collector change. The clock-skew
-correction uses the same `sent_at − received_at` the server already reports, so a collector with
-a wrong clock is judged on server time.
+(`internal/upload/client.go`), so the new status needs no collector change. No skew correction is applied: collectors set `sent_at` once,
+before spooling (`cmd/hne-collector/main.go`), so for a run resent hours later
+`sent_at − received_at` measures the delay, not the clock error, and a "corrected" start would
+land after the reset, letting exactly the spooled runs through (found by /speckit-analyze, U1).
+Collectors run on LAN machines with synchronized clocks; a collector clock wrong by more than the
+time between the reset and its next scan can misjudge one run, which is accepted.
 
 **Alternatives**: reject with an error (the collector would keep resending or log it as
 rejected); answer `duplicate` (wrong: the run was never stored, and the log would mislead).

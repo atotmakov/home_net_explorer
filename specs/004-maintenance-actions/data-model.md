@@ -71,8 +71,7 @@ projections (FR-007), which the tests check.
 ## Ingest rule (research R2)
 
 ```text
-start_on_server = run.started_at − (run.sent_at − received_at)
-if data_reset_at is set and start_on_server < data_reset_at:
+if data_reset_at is set and run.started_at < data_reset_at:   # collector clock, no skew correction (research R2)
     do not store the run; update collectors.last_report_at / last_clock_skew_ms / last_version;
     answer status "discarded"
 ```
