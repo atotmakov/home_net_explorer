@@ -192,3 +192,26 @@ func TestRouterStatusLatestPerCollector(t *testing.T) {
 		t.Errorf("status of an unknown address = %+v", none)
 	}
 }
+
+// Saving or removing router settings clears the built-in collector's rejected logins, so the
+// owner can make the NAS retry a router (e.g. after a lockout with the right password).
+func TestSaveRouterClearsBuiltinRejections(t *testing.T) {
+	ctx := context.Background()
+	h := it.New(t)
+	for _, op := range []func(tx *sql.Tx) error{
+		func(tx *sql.Tx) error {
+			return store.SaveRouter(ctx, tx, routerKey, store.RouterSettings{Model: "huawei-hg8145v5", Username: "root", Password: "pw"}, it.T0)
+		},
+		func(tx *sql.Tx) error { return store.DeleteRouter(ctx, tx, routerKey) },
+	} {
+		if err := h.Store.SetSetting(ctx, store.SettingRouterRejectedBuiltin, `["abc"]`); err != nil {
+			t.Fatal(err)
+		}
+		if err := h.Store.Tx(ctx, op); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := h.Store.Setting(ctx, store.SettingRouterRejectedBuiltin); ok {
+			t.Error("the built-in collector's rejected logins survived a router save/remove")
+		}
+	}
+}

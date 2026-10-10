@@ -14,7 +14,8 @@ yet.
 | `GET /` | Home: counts (online/offline/new), "joined in last 7 days", newly discovered subnets, stale subnets, collectors with clock skew | SC-009, SC-010 |
 | `GET /devices` | Inventory table. Query params: `q`, `subnet`, `status`, `manufacturer`, `sort`, `dir`, `seen_after`, `seen_before` | FR-017, US1 |
 | `GET /devices/{id}` | Device detail: addresses, user fields, full history (sightings + events), the collectors that saw it | FR-022, US3-4 |
-| `POST /devices/{id}/attrs` | Set name, notes, or type | FR-014 |
+| `POST /devices/{id}/attrs` | Set name, notes, or type. Saving a type other than `router` removes the device's router settings (feature 003) | FR-014 |
+| `POST /devices/{id}/router`, `POST /devices/{id}/router/remove` | Router card of a device of type `router`: model, username, password (never shown again; empty keeps it), subnet. See `specs/003-router-ui-setup/contracts/web-ui-changes.md` | 003 FR-001 – FR-006 |
 | `POST /devices/{id}/ack` | Acknowledge a new device | FR-023 |
 | `POST /devices/{id}/merge` (`into={id}`) / `POST /devices/{id}/split` | Manual identity merge and split | FR-015 |
 | `POST /devices/{id}/link` (`via={id}`) / `DELETE /devices/{id}/link` | Manual "connected via" link | FR-026 |
@@ -22,7 +23,7 @@ yet.
 | `GET /map` | Topology page | FR-025, US4 |
 | `GET /ui/map.json?scope=online\|all` | Graph data for the map: compound subnet nodes, device nodes, and edges labeled by link kind and source | FR-025, US4-4 |
 | `GET /collectors` | Collector list with subnets, last report, skew, and status. Shows a create form and download links | FR-012 |
-| `POST /collectors` | Create a remote collector. Responds **once** with the token and a downloadable `hne-collector.json` | FR-008 |
+| `POST /collectors` | Create a remote collector. Responds **once** with the token and a downloadable `hne-collector.json`, which also lists the routers set up in the UI without credentials (feature 003) | FR-008 |
 | `POST /collectors/{id}/revoke` | Revoke a token | FR-008 |
 | `POST /scan` | Start an on-demand scan by the built-in `nas` collector. Returns 202, and the page polls for status | FR-004, US1-1 |
 | `GET /settings`, `POST /settings` | Subnets: the list discovered automatically (with "new" notices), rename, ignore/unignore, and skipped too-large subnets. Also the built-in scan interval and offline multiplier | FR-005, FR-006, FR-018 |

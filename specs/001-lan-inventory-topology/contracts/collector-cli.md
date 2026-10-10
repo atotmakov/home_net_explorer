@@ -61,6 +61,9 @@ collector is created in the UI, and the user downloads it together with the bina
 - `spool/<collection_id>.json`: runs that have not been uploaded yet. Each file is deleted after a
   201/200 response. If a 401 is received, the file is kept and the collector stops with exit code 4.
 - `hne-collector.log`: the rotating log for `run` mode (1 MiB × 3 files).
+- `hne-collector.routers` (feature 003): the last list of routers set up in the web UI, as sent
+  by the server's ping (model, address, subnet; never credentials), used while the server is
+  unreachable.
 - `hne-collector.router-rejected` (feature 002): SHA-256 hashes of router configs whose login was
   rejected or locked. Those routers are skipped until their config changes or `check` runs (which
   deletes the file and tries once).
