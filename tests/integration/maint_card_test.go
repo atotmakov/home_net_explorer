@@ -77,11 +77,11 @@ func TestMaintenanceCard(t *testing.T) {
 		t.Fatal("no Maintenance card on the Settings page")
 	}
 	for q, want := range map[string]string{
-		"done=devices&devices=4&runs=7":                    "Removed 4 devices and 7 scan records.",
-		"done=collectors&collectors=2":                     "Removed 2 collectors.",
-		"done=everything&devices=1&runs=2&collectors=3":    "Dropped all data: 1 devices, 2 scan records, 3 collectors.",
-		"done=paused":                                      "Built-in scanner paused.",
-		"done=resumed":                                     "Built-in scanner resumed.",
+		"done=devices&devices=4&runs=7":                 "Removed 4 devices and 7 scan records.",
+		"done=collectors&collectors=2":                  "Removed 2 collectors.",
+		"done=everything&devices=1&runs=2&collectors=3": "Dropped all data: 1 devices, 2 scan records, 3 collectors.",
+		"done=paused":  "Built-in scanner paused.",
+		"done=resumed": "Built-in scanner resumed.",
 		"done=devices&devices=4&runs=7&extra=%3Cscript%3E": "Removed 4 devices and 7 scan records.",
 	} {
 		if body := e.get("/settings?" + q); !strings.Contains(body, want) {
