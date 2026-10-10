@@ -48,8 +48,8 @@ type Options struct {
 type Scanner interface {
 	Trigger() TriggerResult
 	Status() ScanStatus
-	Paused(ctx context.Context) (bool, time.Time)       // paused by the owner, and since when
-	SetPaused(ctx context.Context, pause bool) error    // stored; survives restarts (feature 004)
+	Paused(ctx context.Context) (bool, time.Time)    // paused by the owner, and since when
+	SetPaused(ctx context.Context, pause bool) error // stored; survives restarts (feature 004)
 }
 
 // TriggerResult is the answer to "Scan now".

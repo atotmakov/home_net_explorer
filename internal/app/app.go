@@ -119,8 +119,8 @@ func New(ctx context.Context, o Options) (*App, error) {
 			SettingOfflineMultiplier: strconv.Itoa(inventory.DefaultOfflineMultiplier),
 			SettingBuiltinInterval:   strconv.Itoa(int(o.ScanInterval.Seconds())),
 		},
-		Version:      version(o.Version),
-		Commit:       o.Commit,
+		Version: version(o.Version),
+		Commit:  o.Commit,
 	})
 	if err != nil {
 		a.Close()
