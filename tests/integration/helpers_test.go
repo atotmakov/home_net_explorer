@@ -2,8 +2,8 @@ package integration_test
 
 import (
 	"context"
-	"log/slog"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
