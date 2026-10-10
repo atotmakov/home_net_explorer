@@ -173,6 +173,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /downloads/{file}", s.handleDownload)
 	s.mux.HandleFunc("POST /api/v1/collections", s.handleUpload)
 	s.mux.HandleFunc("GET /api/v1/ping", s.handlePing)
+	s.mux.HandleFunc("GET /api/v1/routers/{id}/login", s.handleRouterLogin)
 }
 
 // Handler returns the full middleware chain.
@@ -320,6 +321,8 @@ func routerOutcome(r store.RouterStatus) string {
 		return "page not understood (firmware?)"
 	case contract.OutcomeSkippedAfterRejection:
 		return "skipped: login was rejected, fix the password and run check"
+	case contract.OutcomeLoginUnavailable:
+		return "login unavailable from the server"
 	}
 	return r.Outcome
 }

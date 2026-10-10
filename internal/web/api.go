@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/atotmakov/home_net_explorer/internal/auth"
@@ -117,5 +118,34 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	for _, p := range ignored {
 		resp.IgnoredSubnets = append(resp.IgnoredSubnets, p.String())
 	}
+	if resp.Routers, err = s.opts.Store.ListRouters(r.Context()); err != nil { // feature 003, no credentials
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "")
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleRouterLogin gives an active collector the login of a router configured in the web UI
+// (feature 003). Only bearer collector tokens reach /api/v1 (no browser sessions); the answer
+// is never cached or logged.
+func (s *Server) handleRouterLogin(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.bearerCollector(w, r); !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeAPIError(w, http.StatusNotFound, "router_not_found", "")
+		return
+	}
+	login, err := s.opts.Store.RouterLogin(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeAPIError(w, http.StatusNotFound, "router_not_found", "")
+		return
+	}
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, login)
 }

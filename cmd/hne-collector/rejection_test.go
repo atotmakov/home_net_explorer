@@ -117,7 +117,7 @@ func TestCheckClearsRejectionAndTriesOnce(t *testing.T) {
 	for _, want := range []string{
 		"192.168.0.0/24     router huawei-hg8145v5 at 192.168.0.1",
 		"Routers:",
-		"huawei-hg8145v5 at 192.168.0.1: OK, 13 online / 16 offline devices listed",
+		"huawei-hg8145v5 at 192.168.0.1 (login from config): OK, 13 online / 16 offline devices listed",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("check output lacks %q:\n%s", want, out)
@@ -140,7 +140,7 @@ func TestCheckRouterResults(t *testing.T) {
 		if code := h.run("check"); code != 0 {
 			t.Errorf("mode %d: check = %d (a router failure never changes the exit code)", tc.mode, code)
 		}
-		if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1: "+tc.want) {
+		if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1 (login from config): "+tc.want) {
 			t.Errorf("mode %d: check output lacks %q:\n%s", tc.mode, tc.want, h.stderr.String())
 		}
 	}
@@ -152,7 +152,7 @@ func TestCheckRouterResults(t *testing.T) {
 	h, _, _ = routerHarness(t, routertest.OK)
 	h.routerRT = routertest.Redirect(closedURL(t))
 	h.run("check")
-	if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1: unreachable") {
+	if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1 (login from config): unreachable") {
 		t.Errorf("unreachable router:\n%s", h.stderr.String())
 	}
 }

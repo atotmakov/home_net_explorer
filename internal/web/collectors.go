@@ -41,6 +41,14 @@ type collectorConfig struct {
 	Token           string   `json:"token"`
 	Subnets         []string `json:"subnets"`
 	IntervalSeconds int      `json:"interval_seconds"`
+	// Routers lists the routers configured in the web UI, without credentials (feature 003):
+	// the collector fetches their logins from the server before each read.
+	Routers []configRouter `json:"routers"`
+}
+
+type configRouter struct {
+	Model string `json:"model"`
+	URL   string `json:"url"`
 }
 
 // schtasks registers the collector to run at log-on (contracts/collector-cli.md "Scheduling").
@@ -80,7 +88,16 @@ func (s *Server) handleCollectorCreate(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	cfg := collectorConfig{ServerURL: scheme + "://" + r.Host, Name: name, Token: token, Subnets: []string{}, IntervalSeconds: 900}
+	cfg := collectorConfig{ServerURL: scheme + "://" + r.Host, Name: name, Token: token, Subnets: []string{}, IntervalSeconds: 900,
+		Routers: []configRouter{}}
+	routers, err := s.opts.Store.ListRouters(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	for _, rt := range routers {
+		cfg.Routers = append(cfg.Routers, configRouter{Model: rt.Model, URL: "http://" + rt.Address})
+	}
 	b, _ := json.MarshalIndent(cfg, "", "  ")
 	created := &createdCollector{
 		Name:       name,
