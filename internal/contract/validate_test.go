@@ -42,6 +42,7 @@ var fixtureCodes = map[string]string{
 	"invalid_ip_in_skipped_subnet.json":    contract.CodeValidation,
 	"valid_router.json":                    "",
 	"valid_router_failed.json":             "",
+	"valid_router_login_unavailable.json":  "",
 	"invalid_router_bad_outcome.json":      contract.CodeValidation,
 	"invalid_source_with_password.json":    contract.CodeValidation,
 	"invalid_via_too_long.json":            contract.CodeValidation,
@@ -106,16 +107,17 @@ func TestValidateRouterRules(t *testing.T) {
 			o["method"] = "icmp"
 			o["via"] = "LAN1"
 		},
-		"unknown hostname_source": func(m map[string]any) { obs(m, 1)["hostname_source"] = "dhcp" },
-		"unknown source type":     func(m map[string]any) { src(m)["type"] = "switch" },
-		"public source address":   func(m map[string]any) { src(m)["address"] = "8.8.8.8" },
-		"source address not IPv4": func(m map[string]any) { src(m)["address"] = "router.lan" },
-		"public source subnet":    func(m map[string]any) { src(m)["subnet"] = "8.8.8.0/24" },
-		"source subnet too wide":  func(m map[string]any) { src(m)["subnet"] = "10.0.0.0/8" },
-		"unknown outcome":         func(m map[string]any) { src(m)["outcome"] = "rebooted" },
-		"negative online count":   func(m map[string]any) { src(m)["online"] = -1 },
-		"counts on a failed read": func(m map[string]any) { src(m)["outcome"] = "unreachable" },
-		"model too long":          func(m map[string]any) { src(m)["model"] = strings.Repeat("m", 65) },
+		"unknown hostname_source":       func(m map[string]any) { obs(m, 1)["hostname_source"] = "dhcp" },
+		"unknown source type":           func(m map[string]any) { src(m)["type"] = "switch" },
+		"public source address":         func(m map[string]any) { src(m)["address"] = "8.8.8.8" },
+		"source address not IPv4":       func(m map[string]any) { src(m)["address"] = "router.lan" },
+		"public source subnet":          func(m map[string]any) { src(m)["subnet"] = "8.8.8.0/24" },
+		"source subnet too wide":        func(m map[string]any) { src(m)["subnet"] = "10.0.0.0/8" },
+		"unknown outcome":               func(m map[string]any) { src(m)["outcome"] = "rebooted" },
+		"negative online count":         func(m map[string]any) { src(m)["online"] = -1 },
+		"counts on a failed read":       func(m map[string]any) { src(m)["outcome"] = "unreachable" },
+		"model too long":                func(m map[string]any) { src(m)["model"] = strings.Repeat("m", 65) },
+		"counts with login_unavailable": func(m map[string]any) { src(m)["outcome"] = "login_unavailable" },
 	}
 	for label, f := range bad {
 		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), contract.CodeValidation)

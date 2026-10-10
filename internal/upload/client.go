@@ -90,6 +90,26 @@ func (c *Client) Ping(ctx context.Context) (contract.PingResponse, error) {
 	return p, nil
 }
 
+// RouterLogin fetches the login of router id configured in the web UI (feature 003). The caller
+// keeps it in memory for one read; it is never logged.
+func (c *Client) RouterLogin(ctx context.Context, id int64) (contract.RouterLogin, error) {
+	var l contract.RouterLogin
+	res, body, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/routers/%d/login", id), nil)
+	if err != nil {
+		return l, err
+	}
+	switch {
+	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
+		return l, ErrTokenRejected
+	case res.StatusCode != http.StatusOK:
+		return l, fmt.Errorf("upload: router login: unexpected status %s", res.Status)
+	}
+	if err := json.Unmarshal(body, &l); err != nil {
+		return l, errors.New("upload: router login: malformed answer") // never echo the body
+	}
+	return l, nil
+}
+
 // Upload sends one run body. Errors are ErrTokenRejected, *RejectedError, or a transient
 // (network/5xx) error worth retrying.
 func (c *Client) Upload(ctx context.Context, body []byte) (contract.UploadResult, error) {

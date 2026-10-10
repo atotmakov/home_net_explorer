@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -27,10 +28,15 @@ type fakeServer struct {
 	uploads      int
 	bodies       [][]byte // every upload request body
 	onUpload     func()   // called after each upload is recorded
+
+	// Feature 003: routers configured in the web UI and their logins.
+	routers       []contract.RouterRef
+	logins        map[int64]contract.RouterLogin
+	loginRequests int
 }
 
 func newFakeServer(t *testing.T) *fakeServer {
-	f := &fakeServer{pingStatus: 200, uploadStatus: 201}
+	f := &fakeServer{pingStatus: 200, uploadStatus: 201, logins: map[int64]contract.RouterLogin{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Header.Get("Authorization") != "Bearer tok" {
@@ -42,7 +48,7 @@ func newFakeServer(t *testing.T) *fakeServer {
 		case "/api/v1/ping":
 			w.WriteHeader(f.pingStatus)
 			json.NewEncoder(w).Encode(contract.PingResponse{Collector: "desktop", ServerTime: time.Now(),
-				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}})
+				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}, Routers: f.routers})
 		case "/api/v1/collections":
 			f.uploads++
 			b, _ := io.ReadAll(r.Body)
@@ -53,6 +59,17 @@ func newFakeServer(t *testing.T) *fakeServer {
 			w.WriteHeader(f.uploadStatus)
 			json.NewEncoder(w).Encode(contract.UploadResult{Status: contract.StatusStored})
 		default:
+			var id int64
+			if _, err := fmt.Sscanf(r.URL.Path, "/api/v1/routers/%d/login", &id); err == nil {
+				f.loginRequests++
+				if l, ok := f.logins[id]; ok {
+					json.NewEncoder(w).Encode(l)
+					return
+				}
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(contract.ErrorResponse{Error: "router_not_found"})
+				return
+			}
 			http.NotFound(w, r)
 		}
 	}))

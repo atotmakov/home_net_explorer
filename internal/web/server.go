@@ -130,6 +130,9 @@ func (s *Server) loadTemplates() error {
 var funcs = template.FuncMap{
 	"statuses":      func() []string { return []string{"online", "offline", "new", "new_offline"} },
 	"routerOutcome": routerOutcome,
+	"readOutcome": func(r store.RouterRead) string {
+		return routerOutcome(store.RouterStatus{Outcome: r.Outcome, Online: r.Online, Offline: r.Offline})
+	},
 	"fmtTime": func(t time.Time) string {
 		if t.IsZero() {
 			return "—"
@@ -157,6 +160,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /devices", s.handleDevices)
 	s.mux.HandleFunc("GET /devices/{id}", s.handleDevice)
 	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
+	s.mux.HandleFunc("POST /devices/{id}/router", s.handleRouterSave)
+	s.mux.HandleFunc("POST /devices/{id}/router/remove", s.handleRouterRemove)
 	s.mux.HandleFunc("POST /scan", s.handleScan)
 	s.mux.HandleFunc("GET /ui/scan-status", s.handleScanStatus)
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
@@ -168,6 +173,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /downloads/{file}", s.handleDownload)
 	s.mux.HandleFunc("POST /api/v1/collections", s.handleUpload)
 	s.mux.HandleFunc("GET /api/v1/ping", s.handlePing)
+	s.mux.HandleFunc("GET /api/v1/routers/{id}/login", s.handleRouterLogin)
 }
 
 // Handler returns the full middleware chain.
@@ -315,6 +321,8 @@ func routerOutcome(r store.RouterStatus) string {
 		return "page not understood (firmware?)"
 	case contract.OutcomeSkippedAfterRejection:
 		return "skipped: login was rejected, fix the password and run check"
+	case contract.OutcomeLoginUnavailable:
+		return "login unavailable from the server"
 	}
 	return r.Outcome
 }

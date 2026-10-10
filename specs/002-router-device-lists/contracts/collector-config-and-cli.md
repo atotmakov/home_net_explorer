@@ -39,8 +39,13 @@ Subnets to scan:
   192.168.1.0/24     on-link via home: ARP
   192.168.8.0/24     on-link via internet: ARP
 Routers:
-  huawei-hg8145v5 at 192.168.0.1: OK, 14 online / 16 offline devices listed
+  huawei-hg8145v5 at 192.168.0.1 (login from config): OK, 14 online / 16 offline devices listed
 ```
+
+Feature 003 adds the `(login from config)` / `(login from server)` label, routers set up in the
+web UI (listed by the server at each scan, login fetched before each read), entries without
+credentials in `routers[]`, the cache file `hne-collector.routers` and the phrase
+`login unavailable from the server`. See `specs/003-router-ui-setup/contracts/collector-changes.md`.
 
 Possible router results: `OK, N online / M offline devices listed`, `unreachable`,
 `login rejected (router skipped until its config changes or you run check)`, `locked by the

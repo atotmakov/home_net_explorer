@@ -66,3 +66,30 @@ func TestGoTypesRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Feature 003: the ping lists UI-configured routers without credentials, and the login endpoint
+// answers RouterLogin.
+func TestPingAndLoginSchemas(t *testing.T) {
+	ping := contracttest.Schema(t, "PingResponse")
+	ok := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],
+		"ignored_subnets":[],"routers":[{"id":1,"model":"huawei-hg8145v5","address":"192.168.0.1","subnet":"192.168.0.0/24"}]}`)
+	if err := contracttest.Validate(ping, ok); err != nil {
+		t.Errorf("ping with routers: %v", err)
+	}
+	leak := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],
+		"ignored_subnets":[],"routers":[{"id":1,"model":"huawei-hg8145v5","address":"192.168.0.1","subnet":"192.168.0.0/24","password":"x"}]}`)
+	if err := contracttest.Validate(ping, leak); err == nil {
+		t.Error("ping schema accepted a router entry with a password")
+	}
+	old := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],"ignored_subnets":[]}`)
+	if err := contracttest.Validate(ping, old); err != nil {
+		t.Errorf("ping without routers (old server): %v", err)
+	}
+	login := contracttest.Schema(t, "RouterLogin")
+	if err := contracttest.Validate(login, []byte(`{"username":"root","password":"x"}`)); err != nil {
+		t.Errorf("router login: %v", err)
+	}
+	if err := contracttest.Validate(login, []byte(`{"username":"","password":"x"}`)); err == nil {
+		t.Error("router login schema accepted an empty username")
+	}
+}

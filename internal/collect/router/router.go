@@ -63,8 +63,8 @@ func (c Config) Validate() error {
 	if _, err := c.address(); err != nil {
 		return err
 	}
-	if c.Username == "" || c.Password == "" {
-		return errors.New("username and password are required")
+	if (c.Username == "") != (c.Password == "") {
+		return errors.New("username and password go together (leave both out for a router set up in the web UI)")
 	}
 	if c.Subnet != "" {
 		if _, err := contract.ParseSubnet(c.Subnet); err != nil {
@@ -93,6 +93,10 @@ func (c Config) address() (netip.Addr, error) {
 	}
 	return a, nil
 }
+
+// ServerManaged reports an entry without username and password: a router configured in the web
+// UI, listed for information; its login comes from the server (feature 003).
+func (c Config) ServerManaged() bool { return c.Username == "" && c.Password == "" }
 
 // Address is the router's IPv4 address (the zero Addr if the config is invalid).
 func (c Config) Address() netip.Addr {
@@ -145,6 +149,9 @@ func Models() []string { return []string{ModelHG8145V5} }
 func New(cfg Config, rt http.RoundTripper) (Source, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+	if cfg.ServerManaged() {
+		return nil, errors.New("no username and password: this router's login comes from the server")
 	}
 	if rt == nil {
 		rt = &http.Transport{Proxy: nil, MaxIdleConns: 2, IdleConnTimeout: 30 * time.Second}

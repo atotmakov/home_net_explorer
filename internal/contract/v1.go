@@ -58,13 +58,14 @@ const (
 	OutcomeSessionBusy           = "session_busy"
 	OutcomePageNotUnderstood     = "page_not_understood"
 	OutcomeSkippedAfterRejection = "skipped_after_rejection"
+	OutcomeLoginUnavailable      = "login_unavailable" // the login could not be fetched from the server (feature 003)
 )
 
 // ValidOutcome reports whether s is a known router read outcome.
 func ValidOutcome(s string) bool {
 	switch s {
 	case OutcomeOK, OutcomeUnreachable, OutcomeLoginRejected, OutcomeLocked, OutcomeSessionBusy,
-		OutcomePageNotUnderstood, OutcomeSkippedAfterRejection:
+		OutcomePageNotUnderstood, OutcomeSkippedAfterRejection, OutcomeLoginUnavailable:
 		return true
 	}
 	return false
@@ -162,10 +163,27 @@ type ErrorResponse struct {
 
 // PingResponse is the body of GET /api/v1/ping.
 type PingResponse struct {
-	Collector               string    `json:"collector"`
-	ServerTime              time.Time `json:"server_time"`
-	SupportedSchemaVersions []int     `json:"supported_schema_versions"`
-	IgnoredSubnets          []string  `json:"ignored_subnets"`
+	Collector               string      `json:"collector"`
+	ServerTime              time.Time   `json:"server_time"`
+	SupportedSchemaVersions []int       `json:"supported_schema_versions"`
+	IgnoredSubnets          []string    `json:"ignored_subnets"`
+	Routers                 []RouterRef `json:"routers,omitempty"` // routers configured in the web UI (feature 003)
+}
+
+// RouterRef is a router configured in the web UI, as listed to collectors. It never carries
+// credentials; collectors fetch those with GET /api/v1/routers/{id}/login before each read.
+type RouterRef struct {
+	ID      int64  `json:"id"`
+	Model   string `json:"model"`
+	Address string `json:"address"`
+	Subnet  string `json:"subnet"`
+}
+
+// RouterLogin is the answer of GET /api/v1/routers/{id}/login. Collectors keep it in memory
+// for one read only.
+type RouterLogin struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // SkewFlagged reports whether a collector clock skew "exceeds 5 minutes" (either direction).

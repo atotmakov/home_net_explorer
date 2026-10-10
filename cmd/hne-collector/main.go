@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -219,7 +220,13 @@ func run(args []string, env environment) int {
 		os.Remove(filepath.Join(env.dir, rejectedFile))
 		rejected = nil
 	}
+	// Routers with credentials in the config file (feature 002). Routers set up in the web UI
+	// are added at each scan from the server's list (feature 003, buildRouters).
+	var fileRouters []router.Source
 	for _, rc := range cfg.Routers {
+		if rc.ServerManaged() {
+			continue
+		}
 		src, err := router.New(rc, env.routerTransport)
 		if err != nil {
 			log.Error("config error", "err", err)
@@ -228,17 +235,18 @@ func run(args []string, env environment) int {
 		if rejected[routerHash(rc)] {
 			src = router.Skipped(src)
 		}
-		engine.Routers = append(engine.Routers, src)
+		fileRouters = append(fileRouters, src)
 	}
 
 	c := &collector{
-		cfg:     cfg,
-		env:     env,
-		log:     log,
-		jsonOut: jsonOut,
-		engine:  engine,
-		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
-		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
+		cfg:         cfg,
+		env:         env,
+		log:         log,
+		jsonOut:     jsonOut,
+		engine:      engine,
+		fileRouters: fileRouters,
+		client:      &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
+		spool:       upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
 	parent := env.ctx
 	if parent == nil {
@@ -264,6 +272,11 @@ type collector struct {
 	engine  *collect.Engine
 	client  *upload.Client
 	spool   upload.Spool
+
+	fileRouters    []router.Source      // routers with credentials in hne-collector.json
+	serverRouters  []contract.RouterRef // routers set up in the web UI (ping, else the cache)
+	haveRouterList bool                 // serverRouters came from a ping or the cache
+	markerMu       sync.Mutex           // guards the rejection marker file
 }
 
 func (c *collector) check(ctx context.Context) int {
@@ -277,6 +290,7 @@ func (c *collector) check(ctx context.Context) int {
 	for _, ifc := range v.Interfaces {
 		fmt.Fprintf(w, "  %-20s %s/%d %s\n", ifc.Name, ifc.IP, ifc.PrefixLen, ifc.MAC)
 	}
+	c.ignored(ctx) // refreshes the router list; the server check below reports errors
 	fmt.Fprintln(w, "Subnets to scan:")
 	plan := collect.Plan(v, collect.ScanOptions{Targets: c.cfg.prefixes, Ignored: c.lastIgnored(), Extra: c.cfg.extraPrefixes}, c.engine.Routers)
 	if len(plan) == 0 {
@@ -324,8 +338,13 @@ func (c *collector) pingExit(err error) int {
 func (c *collector) ignored(ctx context.Context) ([]netip.Prefix, error) {
 	ping, err := c.client.Ping(ctx)
 	if err != nil {
+		c.serverRouters, c.haveRouterList = c.cachedRouters()
+		c.buildRouters()
 		return c.lastIgnored(), err
 	}
+	c.serverRouters, c.haveRouterList = ping.Routers, true
+	c.saveRouterCache(ping.Routers)
+	c.buildRouters()
 	var out []netip.Prefix
 	for _, s := range ping.IgnoredSubnets {
 		if p, err := netip.ParsePrefix(s); err == nil {

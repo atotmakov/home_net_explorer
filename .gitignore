@@ -37,3 +37,4 @@ Thumbs.db
 *.partial
 hne-collector.ignored
 hne-collector.router-rejected
+hne-collector.routers
