@@ -22,6 +22,7 @@ type collectorConfig struct {
 	Token           string   `json:"token"`
 	Subnets         []string `json:"subnets"`
 	IntervalSeconds int      `json:"interval_seconds"`
+	Routers         []map[string]any `json:"routers"` // feature 003: UI routers, no credentials
 }
 
 var configRe = regexp.MustCompile(`(?s)<pre id="collector-config">(.*?)</pre>`)

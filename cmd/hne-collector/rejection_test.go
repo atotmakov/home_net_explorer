@@ -187,3 +187,48 @@ func TestCheckJSONRouterRecord(t *testing.T) {
 		t.Errorf("check --json printed no router read record:\n%s", h.stdout.String())
 	}
 }
+
+// Feature 003 (FR-014): a UI router's rejected login is recorded with the login fetched from the
+// server; the next scan fetches the login again but doesn't contact the router until the login
+// changes on the server (no check needed).
+func TestServerRouterRejectionMarker(t *testing.T) {
+	h, srv, f := serverRouterHarness(t)
+	f.SetMode(routertest.WrongPassword)
+	h.run("scan", "--once")
+	if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeLoginRejected {
+		t.Fatalf("first scan = %+v", run.Sources)
+	}
+	lines := markerLines(t, h)
+	if len(lines) != 1 || !sha256Line.MatchString(lines[0]) {
+		t.Fatalf("marker = %q", lines)
+	}
+	requests := len(f.Requests())
+
+	h.run("scan", "--once")
+	if srv.loginRequests != 2 {
+		t.Errorf("login fetches = %d, want 2 (one per scan)", srv.loginRequests)
+	}
+	if len(f.Requests()) != requests {
+		t.Error("the router was contacted again with the rejected login")
+	}
+	if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeSkippedAfterRejection {
+		t.Errorf("second scan = %+v", run.Sources)
+	}
+
+	srv.logins[1] = contract.RouterLogin{Username: "root", Password: "pw-fixed-in-ui"}
+	h.run("scan", "--once")
+	if len(f.Requests()) == requests {
+		t.Error("a new password in the UI must re-enable the router without check")
+	}
+
+	srv.logins[1] = contract.RouterLogin{Username: "root", Password: routerPassword}
+	f.SetMode(routertest.OK)
+	h.run("scan", "--once") // rejected again above with pw-fixed-in-ui; now right
+	if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeOK {
+		t.Errorf("after the right password = %+v", run.Sources)
+	}
+	h.run("check")
+	if markerLines(t, h) != nil {
+		t.Error("check must clear the marker")
+	}
+}
