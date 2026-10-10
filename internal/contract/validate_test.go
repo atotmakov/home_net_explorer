@@ -42,6 +42,7 @@ var fixtureCodes = map[string]string{
 	"invalid_ip_in_skipped_subnet.json":    contract.CodeValidation,
 	"valid_router.json":                    "",
 	"valid_router_failed.json":             "",
+	"valid_router_login_unavailable.json":  "",
 	"invalid_router_bad_outcome.json":      contract.CodeValidation,
 	"invalid_source_with_password.json":    contract.CodeValidation,
 	"invalid_via_too_long.json":            contract.CodeValidation,
@@ -116,6 +117,7 @@ func TestValidateRouterRules(t *testing.T) {
 		"negative online count":   func(m map[string]any) { src(m)["online"] = -1 },
 		"counts on a failed read": func(m map[string]any) { src(m)["outcome"] = "unreachable" },
 		"model too long":          func(m map[string]any) { src(m)["model"] = strings.Repeat("m", 65) },
+		"counts with login_unavailable": func(m map[string]any) { src(m)["outcome"] = "login_unavailable" },
 	}
 	for label, f := range bad {
 		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), contract.CodeValidation)

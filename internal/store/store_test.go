@@ -14,6 +14,7 @@ var expectedTables = []string{
 	// facts
 	"collectors", "collection_runs", "run_subnets", "user_device_attrs", "user_identity_alias",
 	"user_links", "user_acks", "user_subnet_attrs", "settings", "sessions", "run_sources",
+	"router_settings",
 	// projections
 	"subnets", "sightings", "devices", "device_addresses", "events", "links",
 }
@@ -174,5 +175,52 @@ func TestMigration0003(t *testing.T) {
 	}
 	if _, err := db.Exec(ins, id, 1, "rebooted"); err == nil {
 		t.Error("run_sources accepted an unknown outcome")
+	}
+}
+
+// TestMigration0004 (feature 003): seeded v3 data survives, run_sources accepts the outcome
+// login_unavailable, and router_settings exists with one row per device identity.
+func TestMigration0004(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seed, err := os.ReadFile(filepath.Join("testdata", "seed_3.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateTo(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	db := s.DB()
+	var outcome string
+	if err := db.QueryRow(`SELECT outcome FROM run_sources WHERE idx = 0`).Scan(&outcome); err != nil || outcome != "ok" {
+		t.Errorf("seeded run_sources row = %q, %v", outcome, err)
+	}
+	const id = "3f2b8c1e-5d4a-4c3b-9a1f-0e2d4c6b8a01"
+	ins := `INSERT INTO run_sources (collection_id, idx, type, model, address, subnet, outcome, online, offline)
+		VALUES (?, ?, 'router', 'huawei-hg8145v5', '192.168.0.1', '192.168.0.0/24', ?, 0, 0)`
+	if _, err := db.Exec(ins, id, 1, "login_unavailable"); err != nil {
+		t.Errorf("run_sources rejects login_unavailable: %v", err)
+	}
+	if _, err := db.Exec(ins, id, 2, "rebooted"); err == nil {
+		t.Error("run_sources accepted an unknown outcome")
+	}
+	rs := `INSERT INTO router_settings (identity_key, model, subnet, username, password, updated_at)
+		VALUES ('mac:00:00:5e:10:00:01', 'huawei-hg8145v5', '', 'root', 'pw', '2026-10-10T10:00:00.000Z')`
+	if _, err := db.Exec(rs); err != nil {
+		t.Fatalf("insert router_settings: %v", err)
+	}
+	if _, err := db.Exec(rs); err == nil {
+		t.Error("router_settings accepted a second row for the same device")
+	}
+	if _, err := db.Exec(`INSERT INTO router_settings (identity_key, model, username, password, updated_at)
+		VALUES ('mac:00:00:5e:10:00:09', 'huawei-hg8145v5', 'root', '', '2026-10-10T10:00:00.000Z')`); err == nil {
+		t.Error("router_settings accepted an empty password")
 	}
 }
