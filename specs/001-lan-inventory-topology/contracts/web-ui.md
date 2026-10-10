@@ -26,7 +26,9 @@ yet.
 | `POST /collectors` | Create a remote collector. Responds **once** with the token and a downloadable `hne-collector.json`, which also lists the routers set up in the UI without credentials (feature 003) | FR-008 |
 | `POST /collectors/{id}/revoke` | Revoke a token | FR-008 |
 | `POST /scan` | Start an on-demand scan by the built-in `nas` collector. Returns 202, and the page polls for status | FR-004, US1-1 |
-| `GET /settings`, `POST /settings` | Subnets: the list discovered automatically (with "new" notices), rename, ignore/unignore, and skipped too-large subnets. Also the built-in scan interval and offline multiplier | FR-005, FR-006, FR-018 |
+| `GET /settings`, `POST /settings` | Subnets: the list discovered automatically (with "new" notices), rename, ignore/unignore, and skipped too-large subnets. Also the built-in scan interval and offline multiplier, and the Maintenance card (feature 004) | FR-005, FR-006, FR-018 |
+| `POST /maintenance/devices`, `/maintenance/collectors`, `/maintenance/everything` | Remove all devices (with all history and edits), remove all remote collectors (history kept), drop all data (owner login kept). Each needs the typed word `devices`, `collectors` or `everything`; 303 to `/settings?done=…` with counts. See `specs/004-maintenance-actions/contracts/web-ui-changes.md` | 004 FR-001 – FR-042 |
+| `POST /maintenance/pause`, `POST /maintenance/resume` | Pause or resume the built-in scanner (stored, survives restarts). While paused, `POST /scan` is refused and the home page shows "Paused" with Resume. 404 when the built-in collector is disabled | 004 FR-020 – FR-026 |
 | `GET /export` | Downloads `hne-export-<date>.json.gz`: devices, user facts, events, sightings, and raw runs | FR-032 |
 | `GET /downloads/hne-collector-{os}-{arch}[.exe]` | The collector binary built with this server | US2 |
 | `GET /healthz` | No auth. Returns `200 ok` once the database is open (used by the container healthcheck) | Deployment |

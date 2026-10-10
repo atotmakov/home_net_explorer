@@ -16,6 +16,7 @@
   <div class="table-wrap"><table>
     <thead><tr><th>Name</th><th>Kind</th><th>Version</th><th>Subnets (latest run)</th><th>Router (latest run)</th><th>Last report</th><th>Status</th><th></th></tr></thead>
     <tbody>
+    {{$paused := .Paused}}
     {{range .Collectors}}
       <tr>
         <td>{{.Name}}</td>
@@ -25,7 +26,8 @@
         <td>{{range $i, $r := .Routers}}{{if $i}}<br>{{end}}<span{{if ne $r.Outcome "ok"}} class="badge warn"{{end}}>{{$r.Model}} at {{$r.Address}}: {{routerOutcome $r}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
         <td>{{fmtTime .LastReportAt}}</td>
         <td>
-          {{if not .RevokedAt.IsZero}}<span class="badge">revoked</span>
+          {{if and (eq .Kind "builtin") $paused}}<span class="badge warn">paused</span>
+          {{else if not .RevokedAt.IsZero}}<span class="badge">revoked</span>
           {{else if .SkewFlagged}}<span class="badge warn" title="Its clock differs from the server's by more than 5 minutes">clock skew</span>
           {{else}}<span class="badge s-online">active</span>{{end}}
         </td>

@@ -90,7 +90,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := http.StatusCreated
-	if res.Status == contract.StatusDuplicate {
+	if res.Status == contract.StatusDuplicate || res.Status == contract.StatusDiscarded {
 		status = http.StatusOK
 	}
 	s.opts.Log.Info("upload", "collector", c.Name, "collection_id", run.CollectionID, "status", res.Status,

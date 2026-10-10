@@ -25,6 +25,7 @@ type Collector struct {
 	LastReportAt    time.Time // zero when never reported
 	LastClockSkewMs int64
 	LastVersion     string // collector build of the latest run
+	Removed         bool   // removed by "remove all collectors" (feature 004); history kept
 }
 
 // ErrNotFound is returned when a row does not exist.
@@ -33,7 +34,7 @@ var ErrNotFound = errors.New("store: not found")
 // EnsureCollector returns the id of the collector with this name, creating it if needed.
 func (s *Store) EnsureCollector(ctx context.Context, name, kind string, interval int) (int64, error) {
 	var id int64
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM collectors WHERE name = ?`, name).Scan(&id)
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM collectors WHERE name = ? AND deleted_at IS NULL`, name).Scan(&id)
 	if err == nil {
 		return id, nil
 	}
@@ -50,13 +51,14 @@ func (s *Store) EnsureCollector(ctx context.Context, name, kind string, interval
 }
 
 const collectorCols = `id, name, kind, token_hash, created_at, COALESCE(revoked_at, ''),
-	interval_seconds, COALESCE(last_report_at, ''), COALESCE(last_clock_skew_ms, 0), last_version`
+	interval_seconds, COALESCE(last_report_at, ''), COALESCE(last_clock_skew_ms, 0), last_version,
+	deleted_at IS NOT NULL`
 
 func scanCollector(row interface{ Scan(...any) error }) (Collector, error) {
 	var c Collector
 	var created, revoked, last string
 	if err := row.Scan(&c.ID, &c.Name, &c.Kind, &c.TokenHash, &created, &revoked,
-		&c.IntervalSeconds, &last, &c.LastClockSkewMs, &c.LastVersion); err != nil {
+		&c.IntervalSeconds, &last, &c.LastClockSkewMs, &c.LastVersion, &c.Removed); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c, ErrNotFound
 		}
@@ -78,14 +80,14 @@ func CollectorByID(ctx context.Context, db *sql.DB, id int64) (Collector, error)
 	return scanCollector(db.QueryRowContext(ctx, `SELECT `+collectorCols+` FROM collectors WHERE id = ?`, id))
 }
 
-// CollectorByName loads a collector by name.
+// CollectorByName loads the collector (not removed) with this name.
 func (s *Store) CollectorByName(ctx context.Context, name string) (Collector, error) {
-	return scanCollector(s.db.QueryRowContext(ctx, `SELECT `+collectorCols+` FROM collectors WHERE name = ?`, name))
+	return scanCollector(s.db.QueryRowContext(ctx, `SELECT `+collectorCols+` FROM collectors WHERE name = ? AND deleted_at IS NULL`, name))
 }
 
-// ListCollectors returns all collectors ordered by name.
+// ListCollectors returns the collectors that are not removed, ordered by name.
 func (s *Store) ListCollectors(ctx context.Context) ([]Collector, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+collectorCols+` FROM collectors ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+collectorCols+` FROM collectors WHERE deleted_at IS NULL ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +117,12 @@ func (s *Store) SetSetting(ctx context.Context, key, value string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
 		key, value)
+	return err
+}
+
+// DeleteSetting removes a settings value.
+func (s *Store) DeleteSetting(ctx context.Context, key string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, key)
 	return err
 }
 

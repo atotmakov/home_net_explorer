@@ -226,3 +226,46 @@ func TestRebuildReproducesProjections(t *testing.T) {
 		t.Errorf("rebuild changed projections:\nbefore %v\nafter  %v", before, after)
 	}
 }
+
+// Feature 004 (research R4): subnet names and ignore choices kept by "remove all devices" apply
+// again when the subnet is rediscovered, live and after a rebuild.
+func TestSubnetFactsApplyOnRediscovery(t *testing.T) {
+	h := it.New(t)
+	ctx := context.Background()
+	h.Fact(func(tx *sql.Tx) error {
+		return inventory.SetSubnetAttr(ctx, tx, "10.20.30.0/24", "name", "lab", it.T0.Add(-time.Hour))
+	})
+	h.Fact(func(tx *sql.Tx) error {
+		return inventory.SetSubnetAttr(ctx, tx, "10.20.30.0/24", "ignored", "true", it.T0.Add(-time.Hour))
+	})
+	h.Fact(func(tx *sql.Tx) error {
+		return inventory.SetSubnetAttr(ctx, tx, "10.20.31.0/24", "name", "office", it.T0.Add(-time.Hour))
+	})
+	h.Ingest(it.Run{Subnets: []contract.SubnetScan{it.Scan("10.20.30.0/24"), it.Scan("10.20.31.0/24")},
+		Obs: []contract.Observation{it.ARP("10.20.30.44", "52:54:00:12:34:56", ""), it.ARP("10.20.31.44", "52:54:00:12:34:57", "")}})
+
+	var name string
+	var ignored bool
+	h.Store.DB().QueryRow(`SELECT name, ignored FROM subnets WHERE cidr = '10.20.30.0/24'`).Scan(&name, &ignored)
+	if name != "lab" || !ignored {
+		t.Errorf("rediscovered subnet name=%q ignored=%v, want lab/true", name, ignored)
+	}
+	if n := scalar(t, h, `SELECT count(*) FROM devices WHERE mac = '52:54:00:12:34:56'`); n != 0 {
+		t.Error("an observation of a subnet ignored before it was rediscovered was folded")
+	}
+	h.Store.DB().QueryRow(`SELECT name, ignored FROM subnets WHERE cidr = '10.20.31.0/24'`).Scan(&name, &ignored)
+	if name != "office" || ignored {
+		t.Errorf("second subnet name=%q ignored=%v, want office/false", name, ignored)
+	}
+	if n := scalar(t, h, `SELECT count(*) FROM devices WHERE mac = '52:54:00:12:34:57'`); n != 1 {
+		t.Error("the observation of a named (not ignored) subnet was not folded")
+	}
+
+	before := h.Snapshot()
+	if err := inventory.Rebuild(ctx, h.Store, h.Applier); err != nil {
+		t.Fatal(err)
+	}
+	if after := h.Snapshot(); !reflect.DeepEqual(before, after) {
+		t.Errorf("rebuild changed projections:\nbefore %v\nafter  %v", before, after)
+	}
+}

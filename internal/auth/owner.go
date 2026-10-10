@@ -21,7 +21,7 @@ const (
 	MinPasswordLen = 10
 	BcryptCost     = 12
 	SessionTTL     = 30 * 24 * time.Hour
-	passwordKey    = "owner_password_hash"
+	passwordKey    = store.SettingOwnerPassword
 )
 
 var (

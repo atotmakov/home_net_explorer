@@ -40,13 +40,26 @@ type Options struct {
 	Commit   string   // short commit hash (footer tooltip)
 	// DownloadsDir holds the collector binaries served at /downloads/ (built into the image).
 	DownloadsDir string
+	// SettingDefaults are the settings written again by "drop all data" (feature 004).
+	SettingDefaults map[string]string
 }
 
 // Scanner is the built-in collector as seen by the UI.
 type Scanner interface {
-	Trigger() bool
+	Trigger() TriggerResult
 	Status() ScanStatus
+	Paused(ctx context.Context) (bool, time.Time)    // paused by the owner, and since when
+	SetPaused(ctx context.Context, pause bool) error // stored; survives restarts (feature 004)
 }
+
+// TriggerResult is the answer to "Scan now".
+type TriggerResult int
+
+const (
+	TriggerStarted TriggerResult = iota
+	TriggerRunning               // a scan is already running
+	TriggerPaused                // the owner paused the built-in scanner
+)
 
 // ScanStatus describes the built-in collector's current/last scan.
 type ScanStatus struct {
@@ -167,6 +180,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSettingsSave)
 	s.mux.HandleFunc("POST /subnets", s.handleSubnetAttrs)
+	s.mux.HandleFunc("POST /maintenance/devices", s.handleRemoveDevices)
+	s.mux.HandleFunc("POST /maintenance/collectors", s.handleRemoveCollectors)
+	s.mux.HandleFunc("POST /maintenance/everything", s.handleDropAll)
+	s.mux.HandleFunc("POST /maintenance/pause", s.handlePause)
+	s.mux.HandleFunc("POST /maintenance/resume", s.handleResume)
 	s.mux.HandleFunc("GET /collectors", s.handleCollectors)
 	s.mux.HandleFunc("POST /collectors", s.handleCollectorCreate)
 	s.mux.HandleFunc("POST /collectors/{id}/revoke", s.handleCollectorRevoke)

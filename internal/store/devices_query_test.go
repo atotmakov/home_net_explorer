@@ -2,10 +2,12 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
+	"github.com/atotmakov/home_net_explorer/internal/inventory"
 	it "github.com/atotmakov/home_net_explorer/internal/inventory/inventorytest"
 	"github.com/atotmakov/home_net_explorer/internal/store"
 )
@@ -118,5 +120,25 @@ func TestGetDeviceAndCounts(t *testing.T) {
 	}
 	if len(subs) != 2 || subs[0].LastScannedBy == "" {
 		t.Errorf("subnet status = %+v", subs)
+	}
+}
+
+// Feature 004 (research R4): ping lists the owner's ignore choices even for subnets not
+// (re)discovered yet, e.g. right after "remove all devices".
+func TestIgnoredSubnetsFromFacts(t *testing.T) {
+	h := it.New(t)
+	ctx := context.Background()
+	fact := func(cidr, v string, at time.Time) {
+		h.Fact(func(tx *sql.Tx) error { return inventory.SetSubnetAttr(ctx, tx, cidr, "ignored", v, at) })
+	}
+	fact("10.20.30.0/24", "true", it.T0)
+	fact("10.20.31.0/24", "true", it.T0)
+	fact("10.20.31.0/24", "false", it.T0.Add(time.Minute))
+	got, err := h.Store.IgnoredSubnets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].String() != "10.20.30.0/24" {
+		t.Errorf("IgnoredSubnets = %v, want [10.20.30.0/24]", got)
 	}
 }

@@ -50,7 +50,8 @@ collector is created in the UI, and the user downloads it together with the bina
 - Human-readable progress goes to stderr. `--json` switches to one JSON object per line, for
   scripting.
 - Every summary line includes: subnets scanned, hosts found, run duration, and the upload result
-  (`stored`, `duplicate`, or `spooled`). With routers configured it also has `router=<outcome>`
+  (`stored`, `duplicate`, `discarded`, or `spooled`). `discarded` (feature 004) means the run
+  started before the owner's latest data reset on the server; it is dropped from the spool. With routers configured it also has `router=<outcome>`
   (comma-separated for several routers). A router failure never changes an exit code.
 - `check` lists router subnets (`router <model> at <address>`, with `(fallback: ICMP/TCP)` when
   the subnet is also an extra subnet) and a `Routers:` section with each router's result

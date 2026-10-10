@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
@@ -252,5 +253,75 @@ func TestIngestStoresRunSources(t *testing.T) {
 	}
 	if n := count(t, s.DB(), `SELECT count(*) FROM run_sources`); n != 2 {
 		t.Errorf("a run without sources stored %d rows", n-2)
+	}
+}
+
+// Feature 004 (research R2): after a data reset, runs that started before it are acknowledged
+// as "discarded" and not stored, judged by the run's own started_at (no skew correction).
+func TestIngestDiscardsRunsBeforeReset(t *testing.T) {
+	ctx := context.Background()
+	s := storetest.New(t)
+	cid, err := s.EnsureCollector(ctx, "desktop", store.KindRemote, 900)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fa := &fakeApplier{}
+	in := ingest.New(s, fa)
+	reset := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+
+	runAt := func(id string, started, sent time.Time) (*contract.CollectionRun, []byte) {
+		run := decode(t, contracttest.Fixture(t, "valid_minimal.json"))
+		run.CollectionID = id
+		run.StartedAt, run.FinishedAt, run.SentAt = started, started.Add(time.Minute), sent
+		raw, err := json.Marshal(run)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return run, raw
+	}
+	ingestAt := func(id string, started, sent, received time.Time) contract.UploadResult {
+		t.Helper()
+		run, raw := runAt(id, started, sent)
+		res, err := in.Ingest(ctx, cid, raw, run, received)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	// No reset yet: an old run is stored.
+	if res := ingestAt("00000000-0000-4000-8000-000000000001", reset.Add(-2*time.Hour), reset.Add(-2*time.Hour), reset.Add(-2*time.Hour)); res.Status != contract.StatusStored {
+		t.Fatalf("before any reset: status %s", res.Status)
+	}
+	if err := s.SetSetting(ctx, store.SettingDataResetAt, store.FormatTime(reset)); err != nil {
+		t.Fatal(err)
+	}
+	calls := fa.calls
+	runs := count(t, s.DB(), `SELECT count(*) FROM collection_runs`)
+
+	res := ingestAt("00000000-0000-4000-8000-000000000002", reset.Add(-time.Minute), reset.Add(time.Minute), reset.Add(time.Minute))
+	if res.Status != contract.StatusDiscarded {
+		t.Errorf("run started before the reset: status %s, want discarded", res.Status)
+	}
+	// Spooled for hours: sent_at was set before spooling, long before it was received.
+	res = ingestAt("00000000-0000-4000-8000-000000000003", reset.Add(-3*time.Hour), reset.Add(-3*time.Hour), reset.Add(time.Minute))
+	if res.Status != contract.StatusDiscarded {
+		t.Errorf("spooled run started before the reset: status %s, want discarded", res.Status)
+	}
+	if n := count(t, s.DB(), `SELECT count(*) FROM collection_runs`); n != runs {
+		t.Errorf("discarded runs were stored: %d runs, want %d", n, runs)
+	}
+	if fa.calls != calls {
+		t.Error("the Applier was called for a discarded run")
+	}
+	var last string
+	s.DB().QueryRow(`SELECT last_report_at FROM collectors WHERE id = ?`, cid).Scan(&last)
+	if last != store.FormatTime(reset.Add(time.Minute)) {
+		t.Errorf("last_report_at = %s: a discarded upload still shows the collector is alive", last)
+	}
+
+	res = ingestAt("00000000-0000-4000-8000-000000000004", reset.Add(time.Second), reset.Add(2*time.Minute), reset.Add(2*time.Minute))
+	if res.Status != contract.StatusStored {
+		t.Errorf("run started after the reset: status %s, want stored", res.Status)
 	}
 }

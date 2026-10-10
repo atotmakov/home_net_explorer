@@ -286,7 +286,7 @@ type SubnetInfo struct {
 
 // SubnetStatus lists subnets with their last completed scan and staleness at time now.
 func (s *Store) SubnetStatus(ctx context.Context, now time.Time) ([]SubnetInfo, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT sn.id, sn.cidr, sn.name, sn.ignored, sn.first_seen_at, c.name,
+	rows, err := s.db.QueryContext(ctx, `SELECT sn.id, sn.cidr, sn.name, sn.ignored, sn.first_seen_at, `+collectorName+`,
 		(SELECT count(*) FROM device_addresses a JOIN devices d ON d.id = a.device_id
 		 WHERE a.subnet_id = sn.id AND a.current = 1 AND d.status != 'merged_away')
 		FROM subnets sn JOIN collectors c ON c.id = sn.discovered_by`)
@@ -318,7 +318,7 @@ func (s *Store) SubnetStatus(ctx context.Context, now time.Time) ([]SubnetInfo, 
 	for i := range out {
 		si := &out[i]
 		si.Stale = true
-		crows, err := s.db.QueryContext(ctx, `SELECT c.name, MAX(r.finished_at), r.interval_seconds
+		crows, err := s.db.QueryContext(ctx, `SELECT `+collectorName+`, MAX(r.finished_at), r.interval_seconds
 			FROM collection_runs r JOIN run_subnets rs ON rs.collection_id = r.collection_id
 			JOIN collectors c ON c.id = r.collector_id
 			WHERE rs.cidr = ? AND rs.complete = 1 GROUP BY r.collector_id`, si.CIDR)
@@ -350,9 +350,17 @@ func (s *Store) SubnetStatus(ctx context.Context, now time.Time) ([]SubnetInfo, 
 	return out, nil
 }
 
+// collectorName is a collector's name as shown in history (alias c), marked when removed.
+const collectorName = `(c.name || CASE WHEN c.deleted_at IS NOT NULL THEN ' (removed)' ELSE '' END)`
+
 // IgnoredSubnets lists the subnets the owner ignored (returned to collectors by /api/v1/ping).
+// It reads the owner's latest ignore choice per subnet, so it also covers subnets not
+// rediscovered yet after "remove all devices" (feature 004, research R4).
 func (s *Store) IgnoredSubnets(ctx context.Context) ([]netip.Prefix, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT cidr FROM subnets WHERE ignored = 1 ORDER BY cidr`)
+	rows, err := s.db.QueryContext(ctx, `SELECT f.cidr FROM user_subnet_attrs f
+		WHERE f.field = 'ignored' AND f.value = 'true' AND f.id = (SELECT f2.id FROM user_subnet_attrs f2
+			WHERE f2.cidr = f.cidr AND f2.field = 'ignored' ORDER BY f2.at DESC, f2.id DESC LIMIT 1)
+		ORDER BY f.cidr`)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +388,7 @@ type SkippedSubnet struct {
 
 // SkippedSubnets lists too-large subnets from each collector's latest run (data-model.md).
 func (s *Store) SkippedSubnets(ctx context.Context) ([]SkippedSubnet, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT c.name, rs.cidr FROM run_subnets rs
+	rows, err := s.db.QueryContext(ctx, `SELECT `+collectorName+`, rs.cidr FROM run_subnets rs
 		JOIN collection_runs r ON r.collection_id = rs.collection_id
 		JOIN collectors c ON c.id = r.collector_id
 		WHERE rs.method = 'skipped' AND rs.skip_reason = 'too_large'

@@ -39,7 +39,7 @@ func (a *Applier) Apply(ctx context.Context, tx *sql.Tx, collectorID int64, run 
 	if err := tx.QueryRowContext(ctx, `SELECT rowid FROM collection_runs WHERE collection_id = ?`, run.CollectionID).Scan(&runRow); err != nil {
 		return nil, fmt.Errorf("inventory: run %s not stored: %w", run.CollectionID, err)
 	}
-	subnets, newSubnets, err := applySubnets(ctx, tx, collectorID, run)
+	subnets, newSubnets, err := applySubnets(ctx, tx, collectorID, run, receivedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (a *Applier) Apply(ctx context.Context, tx *sql.Tx, collectorID int64, run 
 }
 
 // applySubnets creates subnet records for the non-skipped scans of a run (research R14).
-func applySubnets(ctx context.Context, tx *sql.Tx, collectorID int64, run *contract.CollectionRun) ([]*scannedSubnet, []string, error) {
+func applySubnets(ctx context.Context, tx *sql.Tx, collectorID int64, run *contract.CollectionRun, receivedAt time.Time) ([]*scannedSubnet, []string, error) {
 	var out []*scannedSubnet
 	var created []string
 	for _, s := range run.Subnets {
@@ -96,6 +96,9 @@ func applySubnets(ctx context.Context, tx *sql.Tx, collectorID int64, run *contr
 			}
 			sn.id, _ = res.LastInsertId()
 			created = append(created, s.CIDR)
+			if sn.ignored, err = applyPriorSubnetFacts(ctx, tx, s.CIDR, receivedAt); err != nil {
+				return nil, nil, err
+			}
 		} else if err != nil {
 			return nil, nil, err
 		}
@@ -328,4 +331,29 @@ func addEvent(ctx context.Context, tx *sql.Tx, at string, devID int64, typ strin
 		VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (device_id, type, at, new_value) DO NOTHING`,
 		at, devID, typ, sid, oldV, newV, cid)
 	return err
+}
+
+// applyPriorSubnetFacts gives a newly created subnet row the owner's latest name and ignore
+// choice made before the run was received. They exist when the subnet was known before "remove
+// all devices" (feature 004, research R4). Rebuild replays a run before facts with the same
+// time, hence the strict "<".
+func applyPriorSubnetFacts(ctx context.Context, tx *sql.Tx, cidr string, receivedAt time.Time) (ignored bool, err error) {
+	for _, field := range []string{"name", "ignored"} {
+		var v string
+		err := tx.QueryRowContext(ctx, `SELECT value FROM user_subnet_attrs WHERE cidr = ? AND field = ? AND at < ?
+			ORDER BY at DESC, id DESC LIMIT 1`, cidr, field, store.FormatTime(receivedAt)).Scan(&v)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if err := applySubnetAttr(ctx, tx, cidr, field, v); err != nil {
+			return false, err
+		}
+		if field == "ignored" {
+			ignored = v == "true"
+		}
+	}
+	return ignored, nil
 }

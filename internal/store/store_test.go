@@ -224,3 +224,59 @@ func TestMigration0004(t *testing.T) {
 		t.Error("router_settings accepted an empty password")
 	}
 }
+
+// TestMigration0005 (feature 004): collectors is rebuilt with deleted_at and names unique among
+// active collectors only; every row, id and reference survives.
+func TestMigration0005(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seed, err := os.ReadFile(filepath.Join("testdata", "seed_4.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateTo(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	db := s.DB()
+	if got := pragma(t, s, "foreign_keys"); got != "1" {
+		t.Errorf("foreign_keys = %q after the migration, want 1", got)
+	}
+	if r, err := db.Query(`PRAGMA foreign_key_check`); err != nil {
+		t.Fatal(err)
+	} else {
+		if r.Next() {
+			t.Error("foreign_key_check reports dangling references after migration 0005")
+		}
+		r.Close()
+	}
+	var name, revoked, version string
+	var token []byte
+	var skew int
+	if err := db.QueryRow(`SELECT name, revoked_at, token_hash, last_clock_skew_ms, last_version FROM collectors WHERE id = 3 AND deleted_at IS NULL`).
+		Scan(&name, &revoked, &token, &skew, &version); err != nil {
+		t.Fatal(err)
+	}
+	if name != "laptop" || revoked != "2026-10-06T10:00:00.000Z" || len(token) != 2 || skew != 1500 || version != "0.4.63" {
+		t.Errorf("collector 3 = %s %s %x %d %s", name, revoked, token, skew, version)
+	}
+	ins := `INSERT INTO collectors (name, kind, created_at) VALUES (?, 'remote', '2026-10-10T10:00:00.000Z')`
+	if _, err := db.Exec(ins, "desktop"); err == nil {
+		t.Error("a second active collector named desktop was accepted")
+	}
+	if _, err := db.Exec(`UPDATE collectors SET deleted_at = '2026-10-10T10:00:00.000Z' WHERE name = 'desktop'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ins, "desktop"); err != nil {
+		t.Errorf("the name of a removed collector cannot be reused: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO collectors (name, kind, created_at) VALUES ('Bad Name', 'remote', '2026-10-10T10:00:00.000Z')`); err == nil {
+		t.Error("the name CHECK was lost")
+	}
+}

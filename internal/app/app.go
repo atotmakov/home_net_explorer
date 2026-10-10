@@ -102,7 +102,7 @@ func New(ctx context.Context, o Options) (*App, error) {
 			engine: engine, ingester: a.Ingester, store: st, collectorID: cid,
 			clock: o.Clock, log: o.Log, subnets: o.Subnets, defaultInterval: o.ScanInterval,
 			routerRT: o.RouterTransport,
-			trigger:  make(chan struct{}, 1), done: make(chan struct{}),
+			trigger:  make(chan struct{}, 1), wake: make(chan struct{}, 1), done: make(chan struct{}),
 		}
 		scanner = a.Scanner
 	}
@@ -115,8 +115,12 @@ func New(ctx context.Context, o Options) (*App, error) {
 		Scanner:      scanner,
 		Ingester:     a.Ingester,
 		DownloadsDir: o.DownloadsDir,
-		Version:      version(o.Version),
-		Commit:       o.Commit,
+		SettingDefaults: map[string]string{ // what "drop all data" restores (feature 004)
+			SettingOfflineMultiplier: strconv.Itoa(inventory.DefaultOfflineMultiplier),
+			SettingBuiltinInterval:   strconv.Itoa(int(o.ScanInterval.Seconds())),
+		},
+		Version: version(o.Version),
+		Commit:  o.Commit,
 	})
 	if err != nil {
 		a.Close()

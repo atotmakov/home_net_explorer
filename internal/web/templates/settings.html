@@ -1,6 +1,7 @@
 {{define "content"}}
 {{with .Data}}
 <h1>Settings</h1>
+{{if .Notice}}<section class="card notice" role="status"><p>{{.Notice}}</p></section>{{end}}
 <section class="card">
   <h2>Subnets</h2>
   <p class="muted">Subnets are discovered automatically from each collector's network adapters. Only private ranges are ever scanned.</p>
@@ -39,6 +40,42 @@
     <label>Built-in scan interval (minutes) <input type="number" name="interval_minutes" min="1" max="1440" value="{{.IntervalMinutes}}" {{if not .BuiltinEnabled}}disabled{{end}}></label>
     <label>Mark a device offline after this many missed scans <input type="number" name="offline_multiplier" min="1" max="10" value="{{.OfflineMultiplier}}"></label>
     <button type="submit">Save</button>
+  </form>
+</section>
+<section class="card" id="maintenance">
+  <h2>Maintenance</h2>
+  <p class="muted">For testing and upkeep. These actions can't be undone; back up the data volume first if you want to keep anything.</p>
+  {{if .BuiltinEnabled}}
+  <h3>Built-in scanner</h3>
+  {{if .Scan.Paused}}
+  <form method="post" action="/maintenance/resume" class="inline-form">
+    <span>Built-in scanner: <span class="badge warn">paused since {{fmtTime .Scan.PausedAt}}</span></span>
+    <button type="submit">Resume</button>
+  </form>
+  {{else}}
+  <form method="post" action="/maintenance/pause" class="inline-form">
+    <span>Built-in scanner: <span class="badge s-online">running</span></span>
+    <button type="submit" title="Stops the NAS's scans until you resume; remote collectors keep working">Pause</button>
+  </form>
+  {{end}}
+  {{end}}
+  <h3>Remove all devices</h3>
+  <p class="muted">Deletes every device, all scan history from every collector and all your edits (names, types, notes, connections, merges, router settings). Collectors, settings and subnet names stay. Devices come back at the next scan.</p>
+  <form method="post" action="/maintenance/devices" class="inline-form">
+    <label>Type <code>devices</code> to confirm <input type="text" name="confirm" autocomplete="off" required></label>
+    <button type="submit">Remove all devices</button>
+  </form>
+  <h3>Remove all collectors</h3>
+  <p class="muted">Deletes every remote collector; their tokens stop working at once. What they found stays. The NAS built-in collector stays.</p>
+  <form method="post" action="/maintenance/collectors" class="inline-form">
+    <label>Type <code>collectors</code> to confirm <input type="text" name="confirm" autocomplete="off" required></label>
+    <button type="submit">Remove all collectors</button>
+  </form>
+  <h3>Drop all data</h3>
+  <p class="muted">Deletes everything except your login: devices, history, edits, collectors, subnets and router settings; settings return to their defaults.</p>
+  <form method="post" action="/maintenance/everything" class="inline-form">
+    <label>Type <code>everything</code> to confirm <input type="text" name="confirm" autocomplete="off" required></label>
+    <button type="submit">Drop all data</button>
   </form>
 </section>
 {{end}}

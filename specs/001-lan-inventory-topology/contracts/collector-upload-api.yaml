@@ -40,7 +40,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/UploadResult" }
         "200":
-          description: Duplicate `collection_id`, so nothing was changed
+          description: Duplicate `collection_id` (status duplicate), or a run started before the owner's data reset (status discarded); nothing was changed
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UploadResult" }
@@ -266,7 +266,14 @@ components:
       required: [collection_id, status]
       properties:
         collection_id: { type: string, format: uuid }
-        status: { type: string, enum: [stored, duplicate] }
+        status:
+          type: string
+          enum: [stored, duplicate, discarded]
+          description: >-
+            stored (201) or duplicate (200) as before. discarded (200, feature 004): the run
+            started before the owner's latest data reset ("remove all devices" or "drop all
+            data"), judged by its own started_at; it is not stored, and the collector treats it
+            as accepted and drops it from its spool.
         clock_skew_ms:
           type: integer
           description: Server-measured skew. Above 300000 (5 min), the collector is flagged in the UI.

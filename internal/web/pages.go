@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -23,19 +24,23 @@ type homeData struct {
 }
 
 type scanView struct {
-	Enabled bool
-	Status  ScanStatus
+	Enabled  bool
+	Status   ScanStatus
+	Paused   bool // paused by the owner (feature 004)
+	PausedAt time.Time
 }
 
-func (s *Server) scanView() *scanView {
+func (s *Server) scanView(ctx context.Context) *scanView {
 	if s.opts.Scanner == nil {
 		return &scanView{}
 	}
-	return &scanView{Enabled: true, Status: s.opts.Scanner.Status()}
+	v := &scanView{Enabled: true, Status: s.opts.Scanner.Status()}
+	v.Paused, v.PausedAt = s.opts.Scanner.Paused(ctx)
+	return v
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	data := homeData{Scan: s.scanView()}
+	data := homeData{Scan: s.scanView(r.Context())}
 	if st := s.opts.Store; st != nil {
 		var err error
 		if data.Counts, err = st.HomeCounts(r.Context()); err != nil {
@@ -58,17 +63,17 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the built-in collector is disabled", http.StatusServiceUnavailable)
 		return
 	}
-	if !s.opts.Scanner.Trigger() {
-		s.renderPartialStatus(w, r, http.StatusConflict, "home.html", "scan-status", s.scanView())
+	if s.opts.Scanner.Trigger() != TriggerStarted {
+		s.renderPartialStatus(w, r, http.StatusConflict, "home.html", "scan-status", s.scanView(r.Context()))
 		return
 	}
-	view := s.scanView()
+	view := s.scanView(r.Context())
 	view.Status.Running = true // the loop picks the trigger up momentarily
 	s.renderPartialStatus(w, r, http.StatusAccepted, "home.html", "scan-status", view)
 }
 
 func (s *Server) handleScanStatus(w http.ResponseWriter, r *http.Request) {
-	s.renderPartial(w, r, "home.html", "scan-status", s.scanView())
+	s.renderPartial(w, r, "home.html", "scan-status", s.scanView(r.Context()))
 }
 
 // ---------------------------------------------------------------- devices
@@ -231,6 +236,8 @@ type settingsData struct {
 	IntervalMinutes   int
 	OfflineMultiplier int
 	BuiltinEnabled    bool
+	Scan              *scanView // built-in scanner, for the Maintenance card (feature 004)
+	Notice            string    // result of a maintenance action
 }
 
 func (s *Server) settingInt(r *http.Request, key string, def int) int {
@@ -251,6 +258,8 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 		IntervalMinutes:   s.settingInt(r, "builtin_interval_seconds", 900) / 60,
 		OfflineMultiplier: s.settingInt(r, "offline_multiplier", inventory.DefaultOfflineMultiplier),
 		BuiltinEnabled:    s.opts.Scanner != nil,
+		Scan:              s.scanView(r.Context()),
+		Notice:            maintenanceNotice(r.URL.Query()),
 	}
 	var err error
 	if data.Subnets, err = s.opts.Store.SubnetStatus(r.Context(), s.opts.Clock.Now()); err != nil {

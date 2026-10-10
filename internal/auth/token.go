@@ -70,7 +70,7 @@ func Authenticate(ctx context.Context, db *sql.DB, token string) (store.Collecto
 		return store.Collector{}, ErrInvalidToken
 	}
 	want := HashToken(token)
-	rows, err := db.QueryContext(ctx, `SELECT id, token_hash FROM collectors WHERE kind = ? AND token_hash IS NOT NULL AND revoked_at IS NULL`, store.KindRemote)
+	rows, err := db.QueryContext(ctx, `SELECT id, token_hash FROM collectors WHERE kind = ? AND token_hash IS NOT NULL AND revoked_at IS NULL AND deleted_at IS NULL`, store.KindRemote)
 	if err != nil {
 		return store.Collector{}, err
 	}
