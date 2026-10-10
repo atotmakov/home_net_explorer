@@ -84,8 +84,8 @@ a scan happens at the next interval and "Scan now" works again.
 4. **Given** the scanner is paused, **When** the owner resumes it, **Then** scans start again
    on the usual schedule and "Scan now" works.
 5. **Given** the scanner is paused, **Then** remote collectors keep uploading and the server
-   keeps accepting their results; the built-in collector is not reported as missing or offline
-   because of the pause.
+   keeps accepting their results, and the Collectors page shows the built-in collector as
+   paused rather than as failing.
 
 ---
 
@@ -209,9 +209,10 @@ scanner runs again; old collector tokens are refused.
 - **FR-021**: Pausing MUST let a scan in progress finish; its results are stored normally.
 - **FR-022**: The paused state MUST be stored and MUST survive server restarts and redeploys.
 - **FR-023**: The home page and the Settings page MUST show when the built-in scanner is paused.
-- **FR-024**: While paused, the built-in collector MUST NOT be reported as late, missing or
-  failing on account of the pause, and devices last seen only by it follow the normal offline
-  rules (feature 001).
+- **FR-024**: While paused, the Collectors page MUST show the built-in collector as paused (not
+  as failing). Devices seen only by it keep their last status, because the offline rule counts
+  completed scans only (feature 001); subnets covered only by it MAY show as stale, which is
+  accurate.
 - **FR-025**: Resuming MUST restore scheduled scans at the configured interval; the first scan
   after resuming starts within one interval.
 - **FR-026**: Pausing MUST NOT affect remote collectors or the acceptance of their results.
