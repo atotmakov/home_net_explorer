@@ -87,8 +87,8 @@ password): the next scan succeeds without touching the collector.
 
 **Acceptance Scenarios**:
 
-1. **Given** one or more routers configured in the UI, **When** the owner creates a collector or
-   downloads its configuration, **Then** the configuration lists every configured router with its
+1. **Given** one or more routers configured in the UI, **When** the owner creates a collector,
+   **Then** the configuration lists every configured router with its
    model and address, and contains no router username or password.
 2. **Given** a router configured in the UI, **When** any collector starts its next scan, **Then**
    it learns about the router from the server, whether or not its configuration file lists it.
@@ -178,8 +178,8 @@ router is tried once, then skipped until the password is changed in the UI or `c
 
 **Collector configuration and logins**
 
-- **FR-007**: Every collector configuration created or downloaded on the Collectors page MUST
-  list every router configured in the UI, with its model and address, and MUST NOT contain a
+- **FR-007**: The configuration shown when a collector is created on the Collectors page (the
+  only time it is offered, because it contains the token) MUST list every router configured in the UI, with its model and address, and MUST NOT contain a
   router username or password. This list is informational: collectors use the server's current
   list (FR-007a).
 - **FR-007a**: At the start of each scan, a collector MUST obtain from the server the current list

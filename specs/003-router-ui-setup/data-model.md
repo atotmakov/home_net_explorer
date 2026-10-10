@@ -27,9 +27,14 @@ Rules:
 ### Resolved router (computed, not stored)
 
 `ListRouters` returns, for each row whose device has a qualifying address (research R3):
-`id`, `model`, `address` (current private IPv4 on the preferred subnet, else the most recent
-current one), `subnet` (that address's subnet CIDR). Rows without one are excluded from the list
-and reported on the device page ("no current private address").
+`id`, `model`, `address` (current private IPv4 on the preferred subnet, else the current
+address on the subnet where the device was last seen, by latest sighting `last_seen`), `subnet`
+(that address's subnet CIDR). Rows without one are excluded from the list and reported on the device page ("no current private address").
+
+### settings: `router_rejected_builtin` (new key)
+
+JSON list of rejected login hashes of the NAS's built-in collector (research R8). Holds hashes
+only, never credentials.
 
 ### run_sources (rebuilt)
 

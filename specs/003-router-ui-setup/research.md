@@ -28,14 +28,18 @@ router list from the server at each scan.
   would keep every old router password forever; a single row that is replaced or deleted keeps
   only the current one. Keying by `identity_key` matches the owner's other device facts.
 - **Merges/splits**: the router row follows the identity key; when a device is merged away, the
-  row is resolved to the surviving device through `devices.merged_into`.
+  row is resolved to the surviving device through `devices.merged_into`. After a split, the router
+  stays with the identity key that holds the row; the owner re-saves it on the other device if
+  needed.
 - **Alternatives considered**: storing it in `user_device_attrs` (history of passwords, rejected);
   storing it in `settings` as JSON (no per-device integrity).
 
 ## R3. Router address (FR-002)
 
 - **Decision**: computed when the list is built, not stored: the device's current address on the
-  preferred subnet, or, when `subnet` is empty, its current address with the latest `as_of`. Only
+  preferred subnet, or, when `subnet` is empty, its current address on the subnet with the latest
+  sighting `last_seen` for that device (any collector; ties go to the lower subnet address).
+  `as_of` is not used: it records when an address changed, not when the device was last seen. Only
   private addresses qualify (`contract.IsPrivateAddr`). A router with no qualifying address is
   left out of the list and the device page says why. The router's served subnet is that address's
   subnet (`device_addresses` → `subnets.cidr`), not a /24 guess.
@@ -94,6 +98,12 @@ router list from the server at each scan.
 - **Decision**: the NAS's built-in scan loop (`internal/app/scanner.go`) builds the same
   `router.Remote` sources from `store.ListRouters`, with the login read from the store. It reports
   `unreachable` when the NAS can't reach the router, like any collector.
+- **Rejection protection (FR-014)**: the built-in scanner keeps its own set of rejected login
+  hashes (same hash as R6: model, address, subnet, fetched username and password) in the server
+  setting `router_rejected_builtin` (a JSON list of hashes), so it survives a restart. It checks the
+  set before contacting a router and adds a hash after `login_rejected`/`locked`. Changing the
+  router's login in the UI changes the hash and re-enables it; "Scan now" doesn't clear the set.
+  The hash function is shared with the remote collector as `router.LoginHash`.
 
 ## R9. Device page and type changes (FR-001, FR-004 – FR-006)
 

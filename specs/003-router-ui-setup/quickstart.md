@@ -29,6 +29,9 @@ All run in GitHub Actions; nothing is built locally.
 4. `hne-collector.exe check`. **Expected**:
    `huawei-hg8145v5 at 192.168.0.1 (login from server): OK, N online / M offline devices listed`.
 5. `hne-collector.exe scan --once`. **Expected**: `router=ok`; devices as in feature 002.
+   On **Collectors**, the NAS's built-in collector shows the router as `unreachable` when the NAS
+   can't reach 192.168.0.1: expected, every collector reads every router (spec decision;
+   per-collector assignment is TODO-SEC-3).
 6. Change the password in the UI to a wrong one, scan twice. **Expected**: the first scan says
    `login rejected`, the second `skipped` without contacting the router. Put the right password
    back in the UI and scan: `router=ok` (no `check` needed, research R6).
