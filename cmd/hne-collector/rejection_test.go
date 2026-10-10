@@ -221,14 +221,19 @@ func TestServerRouterRejectionMarker(t *testing.T) {
 		t.Error("a new password in the UI must re-enable the router without check")
 	}
 
+	// Back to the first password, which was rejected: still skipped until check clears the marker.
 	srv.logins[1] = contract.RouterLogin{Username: "root", Password: routerPassword}
 	f.SetMode(routertest.OK)
-	h.run("scan", "--once") // rejected again above with pw-fixed-in-ui; now right
-	if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeOK {
-		t.Errorf("after the right password = %+v", run.Sources)
+	h.run("scan", "--once")
+	if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeSkippedAfterRejection {
+		t.Errorf("a login rejected before = %+v, want skipped", run.Sources)
 	}
 	h.run("check")
 	if markerLines(t, h) != nil {
 		t.Error("check must clear the marker")
+	}
+	h.run("scan", "--once")
+	if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeOK {
+		t.Errorf("after check = %+v", run.Sources)
 	}
 }

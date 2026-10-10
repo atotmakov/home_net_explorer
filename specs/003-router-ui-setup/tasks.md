@@ -274,7 +274,7 @@ uploads finds nothing; requests without a valid collector token get 401.
 
 ### Tests for User Story 3 ⚠️ write first, see them fail
 
-- [ ] T025 [P] [US3] Write `tests/contract/router_login_auth_test.go` (SC-005): the login
+- [ ] T025 [P] [US3] Write `tests/integration/us3_router_security_test.go` (it needs a real owner session; was `tests/contract/router_login_auth_test.go`) (SC-005): the login
   endpoint returns 401 `invalid_token` for no token, an unknown token, a revoked collector's
   token, and a request carrying only the owner's browser session cookie; the body never contains
   the password

@@ -25,11 +25,12 @@ func routerApp(t *testing.T, f *routertest.Fake) *App {
 	t.Helper()
 	t0 := time.Date(2026, 10, 10, 10, 0, 0, 0, time.UTC)
 	fnet := collecttest.NewFakeNetwork()
+	clk := clock.NewFake(t0.Add(time.Hour))
 	engine := &collect.Engine{Prober: fnet, Presence: fnet, Neighbors: fnet, Resolver: fnet,
 		Routes:    collecttest.NewFakeRoutes("192.168.1.100", "eth0=192.168.1.20/24"),
-		Clock:     clock.Real{},
+		Clock:     clk,
 		Collector: contract.CollectorInfo{Name: "nas", Version: "test", OS: "linux"}}
-	a, err := New(context.Background(), Options{DataDir: filepath.Join(t.TempDir(), "data"), Clock: clock.NewFake(t0),
+	a, err := New(context.Background(), Options{DataDir: filepath.Join(t.TempDir(), "data"), Clock: clk,
 		Engine: engine, RouterTransport: f.Transport(), ScanInterval: 15 * time.Minute})
 	if err != nil {
 		t.Fatal(err)

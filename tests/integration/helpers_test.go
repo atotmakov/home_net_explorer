@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"log/slog"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -36,6 +37,7 @@ type env struct {
 type envOpts struct {
 	builtinScan bool              // run the built-in scan loop
 	downloads   map[string]string // files served under /downloads/
+	log         io.Writer         // server log output (default: slog's default logger)
 }
 
 // newEnv starts the full server over a temp data dir with a fake network behind the
@@ -67,6 +69,7 @@ func newEnv(t *testing.T, o envOpts) *env {
 		NoBuiltinScan: !o.builtinScan,
 		Engine:        engine,
 		Version:       "test",
+		Log:           serverLog(o.log),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -144,4 +147,11 @@ func (e *env) runCount() int {
 		e.t.Fatal(err)
 	}
 	return n
+}
+
+func serverLog(w io.Writer) *slog.Logger {
+	if w == nil {
+		return nil
+	}
+	return slog.New(slog.NewTextHandler(w, nil))
 }
