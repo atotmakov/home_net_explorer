@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-10
 
-**Status**: Draft
+**Status**: Implemented (real-network validation pending: tasks.md T031)
 
 **Input**: User description: "Router setup from the web UI (builds on feature 002 router device lists). On a device's page, when the owner sets the device type to "router", they can also choose the router model from the list of supported models (currently huawei-hg8145v5), and enter the router's username and password; the router address is the device's current IP. The server stores these router settings, with the password in plain text in its database (owner decision: plain text, no encryption at rest; never shown again in the UI after saving, only replaced or cleared). Every collector receives every configured router (no per-collector assignment); collectors that cannot reach a router report it as unreachable. The next time a collector config (hne-collector.json) is created or downloaded on the Collectors page, its "routers" list is already filled with each configured router's model and URL but WITHOUT username/password. Before each router read, the collector fetches the username and password from the server over its authenticated collector API and keeps them only in memory (never written to disk or logs); changing the password in the UI takes effect at the next scan. This reverses feature 002 FR-006 (credentials only on the collector machine) for routers configured in the UI; routers with credentials in hne-collector.json keep working as before. The rejection/lockout protection of feature 002 (FR-011) must still hold: after a rejected login, the router is not retried until its credentials or settings change (in the UI or the config) or the owner runs check."
 

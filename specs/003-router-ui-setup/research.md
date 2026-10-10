@@ -102,7 +102,10 @@ router list from the server at each scan.
   hashes (same hash as R6: model, address, subnet, fetched username and password) in the server
   setting `router_rejected_builtin` (a JSON list of hashes), so it survives a restart. It checks the
   set before contacting a router and adds a hash after `login_rejected`/`locked`. Changing the
-  router's login in the UI changes the hash and re-enables it; "Scan now" doesn't clear the set.
+  router's login in the UI changes the hash and re-enables it. Saving or removing the Router card
+  clears the whole set (the NAS has no `check` command): re-saving the card unchanged is how the
+  owner makes the NAS retry, e.g. after a lockout with the right password. "Scan now" doesn't
+  clear it.
   The hash function is shared with the remote collector as `router.LoginHash`.
 
 ## R9. Device page and type changes (FR-001, FR-004 – FR-006)

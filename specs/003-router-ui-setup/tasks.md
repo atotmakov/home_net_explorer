@@ -37,6 +37,25 @@ it covers and must be seen failing in CI before that implementation is pushed.
   escapes in Go source (use `[]byte{0}` for separators).
 - Owner edits use the existing session + Origin protections of `internal/web` (feature 001).
 
+## Implementation notes (recorded during /speckit-implement)
+
+- T025 lives in `tests/integration/us3_router_security_test.go`: refusing a browser session
+  needs a real owner session, which only the integration environment has.
+- The US3 tests (T025–T027) passed on their first run: they verify US2's code, so T028 found
+  nothing to fix.
+- `check` now always labels the login source, `(login from config)` or `(login from server)`;
+  feature 002's CLI tests and contract were updated.
+- A login that was rejected stays skipped even when the UI goes back to it later, until the
+  login changes to a new value or the owner runs `check` (remote collectors).
+- The NAS's built-in collector has no `check`: saving or removing the Router card clears its
+  rejected logins (`store.SettingRouterRejectedBuiltin`), so re-saving the card makes it retry,
+  e.g. after a lockout with the right password. Found while writing these notes; test in
+  `internal/store/routers_test.go`.
+- The collector's router list comes from the ping it already made for ignored subnets, and
+  `check` pings once more first to refresh it.
+- Deferred security work stays open: TODO-SEC-1..5 in spec.md (plain-text storage, plain-HTTP
+  transport, every collector gets every login, no fetch audit, full router account).
+
 ---
 
 ## Phase 1: Setup
@@ -172,21 +191,21 @@ scan uses it.
 
 ### Tests for User Story 2 ⚠️ write first, see them fail
 
-- [ ] T011 [P] [US2] Extend `tests/contract/server_upload_test.go` (or a new
+- [X] T011 [P] [US2] Extend `tests/contract/server_upload_test.go` (or a new
   `tests/contract/router_api_test.go`): with one router in `router_settings` whose device has a
   current address, `GET /api/v1/ping` returns it in `routers` (schema-valid, no credential keys);
   `GET /api/v1/routers/{id}/login` with the collector token returns `RouterLogin` with the stored
   values and `Cache-Control: no-store`; unknown id → 404 `router_not_found` (schema `Error`)
-- [ ] T012 [P] [US2] Extend `tests/integration/us2_collector_test.go`: creating a collector after
+- [X] T012 [P] [US2] Extend `tests/integration/us2_collector_test.go`: creating a collector after
   a router is configured shows a config whose `routers` is
   `[{"model":"huawei-hg8145v5","url":"http://192.168.0.4"}]` with no `username`/`password` keys,
   and the page HTML does not contain the stored password
-- [ ] T013 [P] [US2] Write `internal/collect/router/remote_test.go`: `NewRemote(model, address,
+- [X] T013 [P] [US2] Write `internal/collect/router/remote_test.go`: `NewRemote(model, address,
   prefix, login LoginFunc, rt)`; `Read` calls `login` once, then reads the `routertest` fake with
   those credentials (outcome `ok`, 13/16); a `login` error gives `login_unavailable` and no
   request to the router; the `Remote` value printed with `%v`/`%+v`/`%#v` and logged never shows
   the password; `Model/Address/Prefix` as given
-- [ ] T014 [P] [US2] Write `cmd/hne-collector/server_routers_test.go` (fake server answers
+- [X] T014 [P] [US2] Write `cmd/hne-collector/server_routers_test.go` (fake server answers
   `routers` in ping and serves `/api/v1/routers/{id}/login`; fake router via `routerTransport`):
   - A config with **no** `routers` reads the server's router: upload has a `sources` entry `ok`
     and `router_table` observations; the fake server saw one login request per scan.
@@ -201,19 +220,19 @@ scan uses it.
   - `check` prints `huawei-hg8145v5 at 192.168.0.1 (login from server): OK, 13 online / 16
     offline devices listed` and `(login from config)` for file credentials; `login unavailable
     from the server` when the login can't be fetched.
-- [ ] T015 [P] [US2] Extend `internal/app` tests (new `internal/app/scanner_router_test.go`): the
+- [X] T015 [P] [US2] Extend `internal/app` tests (new `internal/app/scanner_router_test.go`): the
   built-in scanner with a router in `router_settings` and a `routertest` fake (transport injected
   through `app.Options`) reads it and stores a `run_sources` row `ok`. With the fake router in
   `WrongPassword` mode, two built-in scans make **one** login attempt and the second reports
   `skipped_after_rejection`; after `store.SaveRouter` with a new password the next scan tries
   again (FR-014 for the built-in collector, research R8)
-- [ ] T016 [P] [US2] Write `tests/integration/us2_router_ui_flow_test.go` (SC-001, SC-003, server
+- [X] T016 [P] [US2] Write `tests/integration/us2_router_ui_flow_test.go` (SC-001, SC-003, server
   half; the collector half is T014, so SC-001 end to end is T014 + T016). `cmd/hne-collector` is a
   `main` package and can't be imported from `tests/`, so drive the flow over HTTP: ping returns
   the router, the login endpoint returns the credentials, an upload of a run with that router's `router_table` data
   makes its devices appear; after changing the password in the UI the login endpoint returns the
   new one
-- [ ] T017 [P] [US2] Extend `cmd/hne-collector/rejection_test.go`: a server-managed router with a
+- [X] T017 [P] [US2] Extend `cmd/hne-collector/rejection_test.go`: a server-managed router with a
   wrong password (fake router `WrongPassword`) → `login_rejected`, marker written; next scan: one
   login **fetch** from the server but **no** request to the router (`skipped_after_rejection`);
   the server then serves a different password → the next scan contacts the router again (no
@@ -221,19 +240,19 @@ scan uses it.
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Add to `internal/web/api.go`: `routers` in `handlePing` from
+- [X] T018 [US2] Add to `internal/web/api.go`: `routers` in `handlePing` from
   `store.ListRouters`; `GET /api/v1/routers/{id}/login` (bearer collector auth like ping, revoked
   refused, `Cache-Control: no-store`, 404 `router_not_found`), registered in
   `internal/web/server.go`. Never log the response. Make T011 pass
-- [ ] T019 [US2] Extend `internal/web/collectors.go`: `collectorConfig` gets `Routers
+- [X] T019 [US2] Extend `internal/web/collectors.go`: `collectorConfig` gets `Routers
   []configRouter \`json:"routers"\`` (`model`, `url` = `http://<address>`), filled from
   `store.ListRouters` when a collector is created. Make T012 pass
-- [ ] T020 [US2] Write `internal/collect/router/remote.go` (`LoginFunc func(ctx) (username
+- [X] T020 [US2] Write `internal/collect/router/remote.go` (`LoginFunc func(ctx) (username
   string, password Secret, err error)`, `NewRemote`, `Remote` implementing `Source`; the login is
   a local variable of `Read` only). Relax `Config.Validate` in `router.go`: username and password
   are required **as a pair**; both empty marks a server-managed entry (`Config.ServerManaged()`).
   Make T013 pass
-- [ ] T021 [US2] Extend `cmd/hne-collector/main.go` and `routers.go`:
+- [X] T021 [US2] Extend `cmd/hne-collector/main.go` and `routers.go`:
   - `upload.Client` gets `RouterLogin(ctx, id) (contract.RouterLogin, error)`; the ping result's
     `Routers` is kept for the scan and cached in `hne-collector.routers` (write-temp + rename,
     0600); on ping failure the cache is used.
@@ -243,7 +262,7 @@ scan uses it.
   - `checkPhrase` adds `login unavailable from the server`; `check` prints `(login from server)` /
     `(login from config)` after the router name.
   - Make T014 pass
-- [ ] T022 [US2] Add `router.LoginHash(model, address, subnet, username, password string) string`
+- [X] T022 [US2] Add `router.LoginHash(model, address, subnet, username, password string) string`
   to `internal/collect/router/router.go` (SHA-256 over the fields separated by `[]byte{0}`), shared
   by the remote and built-in collectors. In `cmd/hne-collector/routers.go`, compute the marker hash
   of a server-managed router from model, address, subnet and the **fetched** username and password
@@ -251,12 +270,12 @@ scan uses it.
   the `Remote` source gets a `skip func(hash string) bool` hook (or the `LoginFunc` wrapper does
   the check) so a rejected login is never retried with the same credentials, and
   `recordRejections` records that hash. Make T017 pass
-- [ ] T023 [US2] Extend `internal/app/scanner.go` (+ `app.Options.RouterTransport`): before each
+- [X] T023 [US2] Extend `internal/app/scanner.go` (+ `app.Options.RouterTransport`): before each
   built-in scan, set `engine.Routers` to `router.NewRemote` sources from `store.ListRouters`,
   with a `LoginFunc` reading `store.RouterLogin`. Keep the built-in rejected login hashes in the
   `router_rejected_builtin` setting (research R8): check before contacting a router, add after
   `login_rejected`/`locked`, using `router.LoginHash` (T022). Make T015 and T016 pass
-- [ ] T024 [US2] Add the phrase `login unavailable from the server` for `login_unavailable` to
+- [X] T024 [US2] Add the phrase `login unavailable from the server` for `login_unavailable` to
   `routerOutcome` in `internal/web/server.go`, and show `deviceData.RouterStatus` in the Router
   card (latest outcome per collector)
 
@@ -274,37 +293,37 @@ uploads finds nothing; requests without a valid collector token get 401.
 
 ### Tests for User Story 3 ⚠️ write first, see them fail
 
-- [ ] T025 [P] [US3] Write `tests/integration/us3_router_security_test.go` (it needs a real owner session; was `tests/contract/router_login_auth_test.go`) (SC-005): the login
+- [X] T025 [P] [US3] Write `tests/integration/us3_router_security_test.go` (it needs a real owner session; was `tests/contract/router_login_auth_test.go`) (SC-005): the login
   endpoint returns 401 `invalid_token` for no token, an unknown token, a revoked collector's
   token, and a request carrying only the owner's browser session cookie; the body never contains
   the password
-- [ ] T026 [P] [US3] Extend `cmd/hne-collector/secret_test.go`: a server-managed router whose
+- [X] T026 [P] [US3] Extend `cmd/hne-collector/secret_test.go`: a server-managed router whose
   server password is a unique marker; run `check`, `check --json`, `scan --once`, a rejected
   scan, a server-down scan and one `run` iteration; the marker is in no output, no file in the
   collector directory (including `hne-collector.routers` and the rejection marker) and no upload
-- [ ] T027 [P] [US3] Extend `tests/integration/us1_router_ui_test.go`: with a marker password
+- [X] T027 [P] [US3] Extend `tests/integration/us1_router_ui_test.go`: with a marker password
   stored, fetch `/`, `/devices`, the device page, `/collectors` (including a newly created
   collector's config) and `/settings`: the marker appears in none; the server's log output
   (capture `app.Options.Log` into a buffer) doesn't contain it after a login fetch
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Fix whatever T025, T026 and T027 reveal (expected: nothing beyond the code above);
+- [X] T028 [US3] Fix whatever T025, T026 and T027 reveal (expected: nothing beyond the code above);
   record any finding in the Implementation notes below
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T029 [P] Update `specs/001-lan-inventory-topology/contracts/collector-cli.md` and
+- [X] T029 [P] Update `specs/001-lan-inventory-topology/contracts/collector-cli.md` and
   `specs/002-router-device-lists/contracts/collector-config-and-cli.md` with server-managed
   routers, `hne-collector.routers` and the `check` source labels; update
   `specs/001-lan-inventory-topology/contracts/web-ui.md` with the Router card and routes
-- [ ] T030 Get CI green on the PR (lint, unit, contract, integration, Windows collector, build,
+- [X] T030 Get CI green on the PR (lint, unit, contract, integration, Windows collector, build,
   image + smoke)
 - [ ] T031 Run quickstart.md §2 on the real network (server first, then collector; UI router;
   wrong-password flow; password search) and record the results
-- [ ] T032 Set spec.md **Status** to `Implemented`, add Implementation notes here, and remind the
+- [X] T032 Set spec.md **Status** to `Implemented`, add Implementation notes here, and remind the
   owner of the deferred Security TODOs (TODO-SEC-1..5)
 
 ---

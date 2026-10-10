@@ -181,15 +181,12 @@ func (s *Scanner) routers(ctx context.Context) ([]router.Source, error) {
 	return out, nil
 }
 
-// builtinRejectedKey is the setting holding the built-in collector's rejected login hashes.
-const builtinRejectedKey = "router_rejected_builtin"
-
 // builtinRejections keeps rejected login hashes (never credentials) in a server setting, so a
 // wrong password saved in the UI is tried once until it changes, also across restarts.
 type builtinRejections struct{ s *Scanner }
 
 func (b builtinRejections) load(ctx context.Context) []string {
-	v, ok, err := b.s.store.Setting(ctx, builtinRejectedKey)
+	v, ok, err := b.s.store.Setting(ctx, store.SettingRouterRejectedBuiltin)
 	if err != nil || !ok {
 		return nil
 	}
@@ -211,9 +208,9 @@ func (b builtinRejections) Reject(hash string) {
 		return
 	}
 	v, _ := json.Marshal(append(hs, hash))
-	if err := b.s.store.SetSetting(ctx, builtinRejectedKey, string(v)); err != nil {
+	if err := b.s.store.SetSetting(ctx, store.SettingRouterRejectedBuiltin, string(v)); err != nil {
 		b.s.log.Error("cannot record a rejected router login", "err", err)
 		return
 	}
-	b.s.log.Warn("router login rejected; the built-in collector skips it until its login changes in the web UI")
+	b.s.log.Warn("router login rejected; the built-in collector skips it until the router is saved again in the web UI")
 }

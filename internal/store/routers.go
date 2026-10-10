@@ -14,6 +14,16 @@ import (
 // by owner decision (spec TODO-SEC-1) and only leaves the store through RouterLogin, for the
 // collector API.
 
+// SettingRouterRejectedBuiltin holds the built-in collector's rejected router login hashes
+// (feature 003, research R8). Saving or removing router settings clears it, so re-saving the
+// Router card makes the NAS try again (e.g. after a lockout with the right password).
+const SettingRouterRejectedBuiltin = "router_rejected_builtin"
+
+func clearBuiltinRejections(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, SettingRouterRejectedBuiltin)
+	return err
+}
+
 // ErrNoPassword means a router was saved without a password and none was stored before.
 var ErrNoPassword = errors.New("store: a router password is required")
 
@@ -47,6 +57,9 @@ type RouterRead struct {
 
 // SaveRouter creates or replaces the router settings of a device, keeping its id.
 func SaveRouter(ctx context.Context, tx *sql.Tx, identityKey string, r RouterSettings, at time.Time) error {
+	if err := clearBuiltinRejections(ctx, tx); err != nil {
+		return err
+	}
 	var stored string
 	err := tx.QueryRowContext(ctx, `SELECT password FROM router_settings WHERE identity_key = ?`, identityKey).Scan(&stored)
 	switch {
@@ -70,6 +83,9 @@ func SaveRouter(ctx context.Context, tx *sql.Tx, identityKey string, r RouterSet
 
 // DeleteRouter removes a device's router settings (no-op when there are none).
 func DeleteRouter(ctx context.Context, tx *sql.Tx, identityKey string) error {
+	if err := clearBuiltinRejections(ctx, tx); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `DELETE FROM router_settings WHERE identity_key = ?`, identityKey)
 	return err
 }
