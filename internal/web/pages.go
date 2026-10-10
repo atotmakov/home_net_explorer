@@ -135,6 +135,7 @@ type deviceData struct {
 	Device store.DeviceRow
 	Types  []string
 	Saved  bool
+	Router *routerData // Router card (feature 003); nil unless the type is "router"
 }
 
 func (s *Server) loadDevice(w http.ResponseWriter, r *http.Request) (store.DeviceRow, bool) {
@@ -160,8 +161,17 @@ func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	data := deviceData{Device: d, Types: inventory.DeviceTypes, Saved: r.URL.Query().Get("saved") == "1"}
-	s.render(w, r, http.StatusOK, "device.html", page{Title: d.DisplayName, Nav: true, Active: "devices", Data: data})
+	rd, err := s.loadRouterData(r, d)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.renderDevice(w, r, http.StatusOK, d, rd)
+}
+
+func (s *Server) renderDevice(w http.ResponseWriter, r *http.Request, status int, d store.DeviceRow, rd *routerData) {
+	data := deviceData{Device: d, Types: inventory.DeviceTypes, Saved: r.URL.Query().Get("saved") == "1", Router: rd}
+	s.render(w, r, status, "device.html", page{Title: d.DisplayName, Nav: true, Active: "devices", Data: data})
 }
 
 // handleDeviceAttrs records the fields present in the form as user facts (FR-014).
@@ -195,6 +205,12 @@ func (s *Server) handleDeviceAttrs(w http.ResponseWriter, r *http.Request) {
 			for _, c := range changes {
 				if err := inventory.SetDeviceAttr(r.Context(), tx, d.IdentityKey, c[0], c[1], at); err != nil {
 					return err
+				}
+				// A device that is no longer a router loses its router settings and password.
+				if c[0] == "type" && c[1] != "router" {
+					if err := store.DeleteRouter(r.Context(), tx, d.IdentityKey); err != nil {
+						return err
+					}
 				}
 			}
 			return nil

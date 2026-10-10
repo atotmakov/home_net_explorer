@@ -125,7 +125,7 @@ username shown, "Password: set", password absent from the HTML.
 
 ### Tests for User Story 1 ⚠️ write first, see them fail
 
-- [ ] T008 [P] [US1] Write `tests/integration/us1_router_ui_test.go` (owner logged in, device
+- [X] T008 [P] [US1] Write `tests/integration/us1_router_ui_test.go` (owner logged in, device
   created by uploading `valid_router.json`, router device `192.168.0.4` with type set through
   `POST /devices/{id}/attrs`):
   - The device page shows the Router card only when the type is `router`, with a model select
@@ -145,14 +145,14 @@ username shown, "Password: set", password absent from the HTML.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Extend `internal/web/pages.go`: `deviceData` gets `Router *store.RouterView`,
+- [X] T009 [US1] Extend `internal/web/pages.go`: `deviceData` gets `Router *store.RouterView`,
   `RouterModels []string` (from `router.Models()`), `RouterSubnets []string` (the device's current
   subnets), `RouterStatus` (from `store.RouterStatus`, used by US2 too) and `RouterError string`.
   Add `POST /devices/{id}/router` and `POST /devices/{id}/router/remove` in
   `internal/web/server.go` (owner-only, like `/attrs`), writing through
   `s.opts.Ingester.Do` so they serialize with ingest. In `handleDeviceAttrs`, a `type` change away
   from `router` also calls `store.DeleteRouter` in the same transaction
-- [ ] T010 [US1] Add the Router card to `internal/web/templates/device.html` exactly as in
+- [X] T010 [US1] Add the Router card to `internal/web/templates/device.html` exactly as in
   `contracts/web-ui-changes.md` (password input `type=password`, never prefilled,
   `autocomplete=new-password`; subnet select only when there are several subnets; latest read
   per collector; Remove button). Make T008 pass
