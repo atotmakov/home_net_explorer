@@ -41,7 +41,7 @@ it covers and must be seen failing in CI before that implementation is pushed.
 
 ## Phase 1: Setup
 
-- [ ] T001 Set `VERSION` to `0.4` and add `hne-collector.routers` to `.gitignore`
+- [X] T001 Set `VERSION` to `0.4` and add `hne-collector.routers` to `.gitignore`
 
 ---
 
@@ -54,13 +54,13 @@ uses.
 
 ### Tests first
 
-- [ ] T002 [P] Write `internal/store/testdata/seed_3.sql` (sample rows at schema v3, including a
+- [X] T002 [P] Write `internal/store/testdata/seed_3.sql` (sample rows at schema v3, including a
   `run_sources` row with outcome `ok`, a device with two current `device_addresses` on two
   subnets, and `user_device_attrs` type `router` for it). Add `TestMigration0004` to
   `internal/store/store_test.go`: after migrating 3 → 4 the `run_sources` row survives;
   `run_sources` accepts outcome `login_unavailable` and still rejects `rebooted`;
   `router_settings` exists with `identity_key` UNIQUE; add `router_settings` to `expectedTables`
-- [ ] T003 [P] Contract tests:
+- [X] T003 [P] Contract tests:
   - `internal/contract/validate_test.go`: a `sources[]` entry with outcome `login_unavailable`
     (online/offline 0) is valid; with counts > 0 it is invalid.
   - `tests/contract/fixtures/valid_router_login_unavailable.json` (copy of
@@ -71,7 +71,7 @@ uses.
     "192.168.0.0/24"}]` validates against `PingResponse`; one with an extra `password` field in a
     router entry fails (`additionalProperties: false`); `{"username": "root", "password": "x"}`
     validates against `RouterLogin`; an empty `username` fails (`minLength: 1`)
-- [ ] T004 [P] Write `internal/store/routers_test.go` (with `storetest` and
+- [X] T004 [P] Write `internal/store/routers_test.go` (with `storetest` and
   `inventorytest` to create devices):
   - `SaveRouter(ctx, identityKey, RouterSettings{Model, Subnet, Username, Password}, at)` inserts,
     then replaces (same `id` kept); an empty `Password` keeps the stored one; an empty password
@@ -92,7 +92,7 @@ uses.
 
 ### Implementation
 
-- [ ] T005 Write `internal/store/migrations/0004_router_settings.sql`:
+- [X] T005 Write `internal/store/migrations/0004_router_settings.sql`:
   - Rebuild `run_sources` (same columns as 0003; outcome CHECK adds `'login_unavailable'`;
     copy rows; drop; rename; PRIMARY KEY `(collection_id, idx)`).
   - `CREATE TABLE router_settings (id INTEGER PRIMARY KEY, identity_key TEXT NOT NULL UNIQUE,
@@ -100,14 +100,14 @@ uses.
     (length(username) BETWEEN 1 AND 128), password TEXT NOT NULL CHECK (length(password) BETWEEN
     1 AND 128), updated_at TEXT NOT NULL)` with a comment that the password is plain text by owner
     decision (spec TODO-SEC-1). Make T002 pass
-- [ ] T006 Extend `internal/contract/v1.go`/`validate.go`: `OutcomeLoginUnavailable =
+- [X] T006 Extend `internal/contract/v1.go`/`validate.go`: `OutcomeLoginUnavailable =
   "login_unavailable"` (in `ValidOutcome`); `PingResponse.Routers []RouterRef
   \`json:"routers,omitempty"\``; types `RouterRef{ID int64; Model, Address, Subnet string}` and
   `RouterLogin{Username, Password string}` with JSON tags from data-model.md. Edit the canonical
   `specs/001-lan-inventory-topology/contracts/collector-upload-api.yaml` exactly as in
   `contracts/api-changes.md` (schemas, the new path, the outcome, the deploy-order note). Make T003
   pass (the `contract-lint` job must stay green)
-- [ ] T007 Write `internal/store/routers.go` (`RouterSettings`, `RouterView` without password,
+- [X] T007 Write `internal/store/routers.go` (`RouterSettings`, `RouterView` without password,
   `SaveRouter`, `GetRouterSettings`, `DeleteRouter`, `ListRouters`, `RouterLogin`,
   `RouterStatus`). Use `contract.IsPrivateAddr` for addresses. Make T004 pass
 

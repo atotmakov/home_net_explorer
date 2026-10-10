@@ -8,6 +8,10 @@ info:
     adding /api/v2 while /api/v1 stays supported during the transition.
     Uploads are idempotent on `collection_id` (FR-011).
 
+    Additive change (feature 003, router setup from the web UI): ping lists `routers` (no
+    credentials), GET /api/v1/routers/{id}/login, and the outcome `login_unavailable`. Upgrade
+    the server first.
+
     Additive change (feature 002, router device lists): `router_table` scan and observation
     methods, `hostname_source: router`, `Observation.via` and `CollectionRun.sources`.
     `schema_version` stays 1. Upgrade the server before collectors that send these fields;
@@ -66,21 +70,37 @@ paths:
           description: Token valid
           content:
             application/json:
-              schema:
-                type: object
-                required: [collector, server_time, supported_schema_versions, ignored_subnets]
-                properties:
-                  collector: { type: string }
-                  server_time: { type: string, format: date-time }
-                  supported_schema_versions:
-                    type: array
-                    items: { type: integer }
-                  ignored_subnets:
-                    type: array
-                    items: { type: string }
-                    description: Subnets the owner has ignored. Collectors report them as method=skipped, skip_reason=ignored and do not probe them.
+              schema: { $ref: "#/components/schemas/PingResponse" }
         "401":
           description: Invalid token
+  /api/v1/routers/{id}/login:
+    get:
+      summary: The current login of a router configured in the web UI (feature 003)
+      description: |
+        Only active collector tokens are accepted (never a browser session). The answer is sent
+        with Cache-Control no-store; collectors keep it in memory for one router read only.
+      operationId: getRouterLogin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: The router login
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RouterLogin" }
+        "401":
+          description: Missing, unknown or revoked collector token (invalid_token)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such router (router_not_found)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   securitySchemes:
     collectorToken:
@@ -202,9 +222,42 @@ components:
         subnet: { type: string, description: "The subnet the router serves (private, /16 to /30)" }
         outcome:
           type: string
-          enum: [ok, unreachable, login_rejected, locked, session_busy, page_not_understood, skipped_after_rejection]
+          enum: [ok, unreachable, login_rejected, locked, session_busy, page_not_understood, skipped_after_rejection, login_unavailable]
         online: { type: integer, minimum: 0, description: "Online entries inside the subnet; 0 unless outcome = ok" }
         offline: { type: integer, minimum: 0, description: "Offline entries inside the subnet; 0 unless outcome = ok" }
+    PingResponse:
+      type: object
+      required: [collector, server_time, supported_schema_versions, ignored_subnets]
+      properties:
+        collector: { type: string }
+        server_time: { type: string, format: date-time }
+        supported_schema_versions:
+          type: array
+          items: { type: integer }
+        ignored_subnets:
+          type: array
+          items: { type: string }
+          description: Subnets the owner has ignored. Collectors report them as method=skipped, skip_reason=ignored and do not probe them.
+        routers:
+          type: array
+          description: Routers configured in the web UI (feature 003). Never carries credentials.
+          items: { $ref: "#/components/schemas/RouterRef" }
+    RouterRef:
+      type: object
+      additionalProperties: false
+      required: [id, model, address, subnet]
+      properties:
+        id: { type: integer, minimum: 1 }
+        model: { type: string, maxLength: 64 }
+        address: { type: string, format: ipv4 }
+        subnet: { type: string }
+    RouterLogin:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128 }
+        password: { type: string, minLength: 1, maxLength: 128 }
     Mac:
       type: string
       pattern: "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
