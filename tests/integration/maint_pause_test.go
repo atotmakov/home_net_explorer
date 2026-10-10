@@ -63,9 +63,9 @@ func TestMaintPauseResume(t *testing.T) {
 	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/settings?done=resumed" {
 		t.Fatalf("resume = %d %s", res.StatusCode, res.Header.Get("Location"))
 	}
-	if body := e.get("/"); !strings.Contains(body, "Scan now") {
-		t.Error("Scan now is not back after resume")
-	}
+	// The overdue scan runs at once after resume; then "Scan now" is back.
+	e.waitFor("the scan after resume", func() bool { return e.runCount() == 2 })
+	e.waitFor("Scan now after resume", func() bool { return strings.Contains(e.get("/"), "Scan now") })
 	if !strings.Contains(logs.String(), "action=pause") || !strings.Contains(logs.String(), "action=resume") {
 		t.Error("pause/resume not logged")
 	}
