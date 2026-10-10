@@ -332,7 +332,7 @@ still logged in; all pages empty; default settings; scanner running; old tokens 
   `specs/001-lan-inventory-topology/contracts/web-ui.md`; mention `result=discarded` in
   `specs/001-lan-inventory-topology/contracts/collector-cli.md`; note "back up the data volume
   before maintenance actions" in the deployment notes (README or `deploy/` docs)
-- [ ] T030 Run the full CI (PR to `main`): all jobs green, including the image smoke test with a
+- [X] T030 Run the full CI (PR to `main`): all jobs green, including the image smoke test with a
   fresh volume
 - [ ] T031 Real-network validation per `quickstart.md` §2 (owner)
 
