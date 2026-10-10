@@ -163,10 +163,10 @@ type ErrorResponse struct {
 
 // PingResponse is the body of GET /api/v1/ping.
 type PingResponse struct {
-	Collector               string    `json:"collector"`
-	ServerTime              time.Time `json:"server_time"`
-	SupportedSchemaVersions []int     `json:"supported_schema_versions"`
-	IgnoredSubnets          []string  `json:"ignored_subnets"`
+	Collector               string      `json:"collector"`
+	ServerTime              time.Time   `json:"server_time"`
+	SupportedSchemaVersions []int       `json:"supported_schema_versions"`
+	IgnoredSubnets          []string    `json:"ignored_subnets"`
 	Routers                 []RouterRef `json:"routers,omitempty"` // routers configured in the web UI (feature 003)
 }
 
