@@ -57,7 +57,7 @@ description: "Task list for Faked Answers Defence"
 
 - [X] T010 Docs: `specs/001-lan-inventory-topology/contracts/collector-cli.md` (check line,
   warning), `web-ui.md` (scan problems)
-- [ ] T011 CI green, merge to `main`, image built (standing instruction)
+- [X] T011 CI green, merge to `main`, image built (standing instruction)
 - [ ] T012 Real network (owner): with Happ not bypassing LAN, the desktop scan shows the scan
   problem and adds no devices; with "bypass LAN", the scan is normal
 
