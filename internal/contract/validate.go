@@ -89,7 +89,7 @@ func Validate(run *CollectionRun) error {
 			}
 			scanned = append(scanned, p)
 		case MethodSkipped:
-			if s.SkipReason != SkipTooLarge && s.SkipReason != SkipIgnored {
+			if s.SkipReason != SkipTooLarge && s.SkipReason != SkipIgnored && s.SkipReason != SkipFakedAnswers {
 				return invalid("subnet %s: skip_reason is required when method = skipped", s.CIDR)
 			}
 			if s.Complete || s.HostsProbed != 0 {

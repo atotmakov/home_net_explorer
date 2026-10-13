@@ -102,6 +102,7 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 
 	targets := planTargets(v, opts, e.Routers)
 	reads := e.readRouters(ctx, targets)
+	fakes := sync.OnceValue(func() bool { return e.PathFakesAnswers(ctx) }) // only if a routed subnet needs it
 	var arpScanned []netip.Prefix
 	var routerObs []contract.Observation // recorded last: one observation per IP, the router's wins
 	for i, t := range targets {
@@ -125,11 +126,15 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 		case t.iface == "" && t.router != nil && t.probe:
 			// ICMP/TCP fallback: presence only, never a completed scan of the router's subnet
 			// (FR-010), so devices only the router can see are not marked offline.
-			scan := e.probeSubnet(ctx, clk, t, record)
-			scan.Complete = false
+			scan := e.probeRouted(ctx, clk, v.Routes, t, record, fakes)
+			if scan.Method != contract.MethodSkipped {
+				scan.Complete = false
+			}
 			run.Subnets = append(run.Subnets, scan)
 		case t.iface == "" && t.router != nil:
 			run.Subnets = append(run.Subnets, contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodRouterTable})
+		case t.iface == "":
+			run.Subnets = append(run.Subnets, e.probeRouted(ctx, clk, v.Routes, t, record, fakes))
 		default:
 			scan := e.probeSubnet(ctx, clk, t, record)
 			run.Subnets = append(run.Subnets, scan)
@@ -192,6 +197,63 @@ func (e *Engine) readRouters(ctx context.Context, targets []target) map[int]rout
 	}
 	wg.Wait()
 	return out
+}
+
+// Faked answers (feature 005): a routed subnet where at least SaturationMinProbed addresses were
+// probed and SaturationPercent or more answered is treated as faked by the network path.
+const (
+	SaturationMinProbed = 16
+	SaturationPercent   = 90
+)
+
+// PathFakesAnswers reports whether the default route answers for an address that cannot exist
+// (contract.FakedAnswerCanary), as a VPN tunnel that replies for every destination does.
+func (e *Engine) PathFakesAnswers(ctx context.Context) bool {
+	if e.Presence == nil {
+		return false
+	}
+	_, ok := e.Presence.Present(ctx, contract.FakedAnswerCanary)
+	return ok
+}
+
+// probeRouted probes a routed subnet with ICMP/TCP, unless the network path fakes answers: then
+// the subnet is reported as skipped with reason faked_answers and nothing is recorded. The canary
+// (fakes) only speaks for subnets that use the default route; the saturation rule applies to all.
+func (e *Engine) probeRouted(ctx context.Context, clk clock.Clock, routes []contract.Route, t target,
+	record func(contract.Observation), fakes func() bool) contract.SubnetScan {
+	faked := contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodSkipped, SkipReason: contract.SkipFakedAnswers}
+	if viaDefaultRoute(routes, t.prefix) && fakes() {
+		return faked
+	}
+	var mu sync.Mutex
+	var found []contract.Observation
+	scan := e.probeSubnet(ctx, clk, t, func(o contract.Observation) {
+		mu.Lock()
+		found = append(found, o)
+		mu.Unlock()
+	})
+	if scan.HostsProbed >= SaturationMinProbed && len(found)*100 >= scan.HostsProbed*SaturationPercent {
+		return faked
+	}
+	for _, o := range found {
+		record(o)
+	}
+	return scan
+}
+
+// viaDefaultRoute reports whether p is reached only through a default route: no other route
+// covers it.
+func viaDefaultRoute(routes []contract.Route, p netip.Prefix) bool {
+	for _, r := range routes {
+		d, err := netip.ParsePrefix(r.Destination)
+		if err != nil || d.Bits() == 0 {
+			continue
+		}
+		if d.Bits() <= p.Bits() && d.Contains(p.Addr()) {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *Engine) probeSubnet(ctx context.Context, clk clock.Clock, t target, record func(contract.Observation)) contract.SubnetScan {

@@ -8,6 +8,13 @@
   <p class="muted">Name or ignore subnets in <a href="/settings">Settings</a>.</p>
 </section>
 {{end}}
+{{if .Problems}}
+<section class="card notice warn" role="status">
+  <h2>Scan problems</h2>
+  <ul>{{range .Problems}}<li><strong>{{.Collector}}</strong>: {{.CIDR}}: {{scanProblem .Reason}} <span class="muted">({{fmtTime .At}})</span></li>{{end}}</ul>
+  <p class="muted">Fix the collector's machine, e.g. make its VPN bypass local traffic. See <a href="/collectors">Collectors</a>.</p>
+</section>
+{{end}}
 <section class="stats">
   <div class="card stat"><span class="num">{{.Counts.Total}}</span> devices</div>
   <div class="card stat"><span class="num s-online">{{.Counts.Online}}</span> online</div>

@@ -312,6 +312,17 @@ func (c *collector) check(ctx context.Context) int {
 			fmt.Fprintf(w, "  %-18s on-link via %s: ARP\n", p.Prefix, p.Interface)
 		}
 	}
+	for _, p := range plan {
+		if p.Method == contract.MethodICMPTCP || p.Fallback {
+			if c.engine.PathFakesAnswers(ctx) {
+				fmt.Fprintln(w, "Network path: answers are faked ("+contract.FakedAnswerCanary.String()+", an address that cannot exist, answered):",
+					"routed subnets on the default route are skipped. Make the VPN on this computer bypass local traffic.")
+			} else {
+				fmt.Fprintln(w, "Network path: OK (an address that cannot exist does not answer)")
+			}
+			break
+		}
+	}
 	c.checkRouters(ctx, w)
 	ping, err := c.client.Ping(ctx)
 	if code := c.pingExit(err); code != exitOK {
@@ -394,6 +405,12 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 		return exitFailure
 	}
 	c.recordRejections(run.Sources)
+	for _, s := range run.Subnets {
+		if s.SkipReason == contract.SkipFakedAnswers {
+			c.log.Warn("subnet skipped: answers faked on the network path (every address answered, even one that cannot exist); "+
+				"make the VPN on this computer bypass local traffic", "subnet", s.CIDR)
+		}
+	}
 	run.SentAt = time.Now().UTC()
 	if dryRun {
 		enc := json.NewEncoder(c.env.stdout)

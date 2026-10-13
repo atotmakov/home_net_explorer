@@ -35,6 +35,7 @@ const (
 	ObsTCP                = "tcp"
 	SkipTooLarge          = "too_large"
 	SkipIgnored           = "ignored"
+	SkipFakedAnswers      = "faked_answers" // the network path answered for every address (feature 005)
 	HostnameSourceDNS     = "dns"
 	HostnameSourceMDNS    = "mdns"
 	HostnameSourceRouter  = "router"

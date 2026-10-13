@@ -138,6 +138,42 @@ type CollectorOverview struct {
 	Subnets     []string       // subnets scanned in its latest run
 	SkewFlagged bool           // last clock skew exceeds 5 minutes
 	Routers     []RouterStatus // router reads of its latest run (feature 002, FR-013)
+	Problems    []ScanProblem  // subnets its latest run could not scan (feature 005)
+}
+
+// ScanProblem is a subnet a collector's latest run skipped because the scan failed, e.g. its
+// network path answered for every address (contract.SkipFakedAnswers, feature 005).
+type ScanProblem struct {
+	Collector string
+	CIDR      string
+	Reason    string
+	At        time.Time // when that run finished
+}
+
+// ScanProblems lists the failed subnets of the latest run of every collector that is not removed.
+func (s *Store) ScanProblems(ctx context.Context) ([]ScanProblem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT c.name, rs.cidr, rs.skip_reason, r.finished_at
+		FROM run_subnets rs
+		JOIN collection_runs r ON r.collection_id = rs.collection_id
+		JOIN collectors c ON c.id = r.collector_id
+		WHERE rs.skip_reason = 'faked_answers' AND c.deleted_at IS NULL
+		AND r.rowid = (SELECT MAX(r2.rowid) FROM collection_runs r2 WHERE r2.collector_id = r.collector_id)
+		ORDER BY c.name, rs.cidr`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ScanProblem
+	for rows.Next() {
+		var p ScanProblem
+		var at string
+		if err := rows.Scan(&p.Collector, &p.CIDR, &p.Reason, &at); err != nil {
+			return nil, err
+		}
+		p.At = MustParseTime(at)
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // RouterStatus is the outcome of one router read.
@@ -152,6 +188,10 @@ type RouterStatus struct {
 // CollectorOverviews lists collectors with the subnets of their latest run.
 func (s *Store) CollectorOverviews(ctx context.Context) ([]CollectorOverview, error) {
 	cs, err := s.ListCollectors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	problems, err := s.ScanProblems(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +215,11 @@ func (s *Store) CollectorOverviews(ctx context.Context) ([]CollectorOverview, er
 		rows.Close()
 		if o.Routers, err = s.latestRouters(ctx, c.ID); err != nil {
 			return nil, err
+		}
+		for _, p := range problems {
+			if p.Collector == c.Name {
+				o.Problems = append(o.Problems, p)
+			}
 		}
 		out = append(out, o)
 	}

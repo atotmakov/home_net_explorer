@@ -21,6 +21,7 @@ type homeData struct {
 	Subnets    []store.SubnetInfo
 	NewSubnets []store.SubnetInfo
 	Scan       *scanView
+	Problems   []store.ScanProblem // failed subnet scans (feature 005)
 }
 
 type scanView struct {
@@ -52,6 +53,10 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.NewSubnets = newSubnets(data.Subnets, s.opts.Clock.Now())
+		if data.Problems, err = st.ScanProblems(r.Context()); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
 	}
 	s.render(w, r, http.StatusOK, "home.html", page{Title: "Home", Nav: true, Active: "home", Data: data})
 }

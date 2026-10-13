@@ -43,6 +43,7 @@ var fixtureCodes = map[string]string{
 	"valid_router.json":                    "",
 	"valid_router_failed.json":             "",
 	"valid_router_login_unavailable.json":  "",
+	"valid_faked_answers.json":             "", // feature 005
 	"invalid_router_bad_outcome.json":      contract.CodeValidation,
 	"invalid_source_with_password.json":    contract.CodeValidation,
 	"invalid_via_too_long.json":            contract.CodeValidation,

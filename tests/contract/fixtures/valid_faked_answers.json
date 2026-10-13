@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "collection_id": "7c9e6a1b-2d3f-4e5a-8b7c-005fa4ed0001",
+  "collector": {
+    "name": "desktop",
+    "version": "0.6.0",
+    "os": "windows"
+  },
+  "started_at": "2026-10-13T10:00:00.000Z",
+  "finished_at": "2026-10-13T10:01:00.000Z",
+  "sent_at": "2026-10-13T10:01:01.000Z",
+  "interval_seconds": 900,
+  "vantage": {
+    "hostname": "desktop",
+    "interfaces": [
+      {
+        "name": "home",
+        "ip": "192.168.1.10",
+        "prefix_len": 24,
+        "mac": "10:7b:44:01:02:03"
+      },
+      {
+        "name": "happ-tun",
+        "ip": "172.18.0.1",
+        "prefix_len": 30
+      }
+    ],
+    "routes": [
+      {
+        "destination": "0.0.0.0/0",
+        "next_hop": "172.18.0.2",
+        "interface": "happ-tun"
+      },
+      {
+        "destination": "192.168.1.0/24",
+        "interface": "home"
+      }
+    ]
+  },
+  "subnets": [
+    {
+      "cidr": "192.168.1.0/24",
+      "method": "arp",
+      "complete": true,
+      "hosts_probed": 254
+    },
+    {
+      "cidr": "192.168.0.0/24",
+      "method": "skipped",
+      "skip_reason": "faked_answers",
+      "complete": false,
+      "hosts_probed": 0
+    }
+  ],
+  "observations": [
+    {
+      "observed_at": "2026-10-13T10:00:10.000Z",
+      "ip": "192.168.1.20",
+      "mac": "00:11:32:aa:bb:cc",
+      "method": "arp"
+    }
+  ]
+}
