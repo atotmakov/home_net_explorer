@@ -91,6 +91,7 @@ type harness struct {
 	stdout, stderr bytes.Buffer
 	routerRT       http.RoundTripper // sends router requests to a routertest.Fake
 	ctx            context.Context   // parent context of the command (nil: background)
+	answerAll      bool              // the network path answers every address (a VPN, feature 005)
 }
 
 func newHarness(t *testing.T, serverURL string) *harness {
@@ -103,6 +104,7 @@ func (h *harness) run(args ...string) int {
 	h.stdout.Reset()
 	h.stderr.Reset()
 	fnet := collecttest.NewFakeNetwork().Add("192.168.1.100", collecttest.Host{MAC: "a0:b1:c2:d3:e4:f5", Hostname: "router.lan"})
+	fnet.AnswerAll = h.answerAll
 	return run(args, environment{
 		dir:             h.dir,
 		getenv:          func(k string) string { return h.env[k] },
@@ -241,5 +243,48 @@ func TestVersion(t *testing.T) {
 	h := newHarness(t, "http://unused")
 	if code := h.run("version"); code != 0 || !strings.Contains(h.stdout.String(), "schema") {
 		t.Errorf("version = %d %q", code, h.stdout.String())
+	}
+}
+
+// Feature 005: when the network path answers for every address, the collector skips the routed
+// subnet, says so in its log, and check reports the network path.
+func TestFakedAnswersReported(t *testing.T) {
+	srv := newFakeServer(t)
+	h := newHarness(t, srv.srv.URL)
+	writeConfig(t, h.dir, map[string]any{"server_url": srv.srv.URL, "name": "desktop", "token": "tok",
+		"subnets": []string{"192.168.0.0/24"}, "interval_seconds": 900})
+
+	if code := h.run("check"); code != 0 {
+		t.Fatalf("check = %d\n%s", code, h.stderr.String())
+	}
+	if !strings.Contains(h.stderr.String(), "Network path: OK") {
+		t.Errorf("check on a normal path:\n%s", h.stderr.String())
+	}
+
+	h.answerAll = true
+	if code := h.run("check"); code != 0 {
+		t.Fatalf("check = %d\n%s", code, h.stderr.String())
+	}
+	if !strings.Contains(h.stderr.String(), "Network path: answers are faked") {
+		t.Errorf("check with a faking path:\n%s", h.stderr.String())
+	}
+	if code := h.run("scan", "--once"); code != 0 {
+		t.Fatalf("scan = %d\n%s", code, h.stderr.String())
+	}
+	log := h.stderr.String()
+	if !strings.Contains(log, "192.168.0.0/24") || !strings.Contains(log, "faked") {
+		t.Errorf("no warning about the faked subnet:\n%s", log)
+	}
+	run, err := contract.Decode(bytes.NewReader(srv.bodies[len(srv.bodies)-1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range run.Subnets {
+		if s.CIDR == "192.168.0.0/24" && (s.Method != contract.MethodSkipped || s.SkipReason != contract.SkipFakedAnswers) {
+			t.Errorf("uploaded subnet = %+v, want skipped/faked_answers", s)
+		}
+	}
+	if len(run.Observations) > 2 {
+		t.Errorf("%d observations uploaded from a faking path", len(run.Observations))
 	}
 }

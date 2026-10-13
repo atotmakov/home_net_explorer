@@ -280,3 +280,40 @@ func TestMigration0005(t *testing.T) {
 		t.Error("the name CHECK was lost")
 	}
 }
+
+// TestMigration0006 (feature 005): seeded v5 data survives and run_subnets accepts the skip
+// reason faked_answers (and still rejects unknown reasons).
+func TestMigration0006(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seed, err := os.ReadFile(filepath.Join("testdata", "seed_5.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateTo(ctx, 6); err != nil {
+		t.Fatal(err)
+	}
+	db := s.DB()
+	var reason string
+	if err := db.QueryRow(`SELECT skip_reason FROM run_subnets WHERE cidr = '10.0.0.0/16'`).Scan(&reason); err != nil || reason != "too_large" {
+		t.Errorf("seeded skipped row = %q, %v", reason, err)
+	}
+	const id = "3f2b8c1e-5d4a-4c3b-9a1f-0e2d4c6b8a01"
+	ins := `INSERT INTO run_subnets (collection_id, cidr, method, skip_reason, complete, hosts_probed) VALUES (?, ?, 'skipped', ?, 0, 0)`
+	if _, err := db.Exec(ins, id, "192.168.0.0/24", "faked_answers"); err != nil {
+		t.Errorf("run_subnets rejects faked_answers: %v", err)
+	}
+	if _, err := db.Exec(ins, id, "192.168.7.0/24", "bogus"); err == nil {
+		t.Error("run_subnets accepted an unknown skip reason")
+	}
+	if _, err := db.Exec(`INSERT INTO run_subnets (collection_id, cidr, method, complete, hosts_probed) VALUES (?, '192.168.6.0/24', 'router_table', 1, 3)`, id); err != nil {
+		t.Errorf("run_subnets lost router_table: %v", err)
+	}
+}

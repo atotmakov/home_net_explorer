@@ -109,3 +109,17 @@ func TestUploadResultDiscarded(t *testing.T) {
 		t.Errorf("StatusDiscarded = %q", contract.StatusDiscarded)
 	}
 }
+
+// Feature 005: a subnet skipped because the network path faked answers; other reasons still fail.
+func TestSkipReasonFakedAnswers(t *testing.T) {
+	s := contracttest.Schema(t, "CollectionRun")
+	bad := contracttest.Modify(t, "valid_faked_answers.json", func(m map[string]any) {
+		m["subnets"].([]any)[1].(map[string]any)["skip_reason"] = "bogus"
+	})
+	if err := contracttest.Validate(s, bad); err == nil {
+		t.Error("schema accepted skip_reason bogus")
+	}
+	if contract.SkipFakedAnswers != "faked_answers" {
+		t.Errorf("SkipFakedAnswers = %q", contract.SkipFakedAnswers)
+	}
+}
