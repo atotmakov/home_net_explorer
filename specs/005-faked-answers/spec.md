@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-13
 
-**Status**: Draft
+**Status**: Implemented (real-network validation pending: tasks.md T012)
 
 **Input**: User description: "Implement this defence on collector side. In this situation collector should send some signal to backend, that scan complete with error. This should be visible in ui."
 

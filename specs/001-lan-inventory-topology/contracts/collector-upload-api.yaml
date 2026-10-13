@@ -190,8 +190,13 @@ components:
           description: router_table = covered by a router's device list; complete only when the read succeeded.
         skip_reason:
           type: string
-          enum: [too_large, ignored]
-          description: Required when method = skipped (prefix wider than /22, or ignored by the owner). Skipped entries have complete=false and hosts_probed=0.
+          enum: [too_large, ignored, faked_answers]
+          description: >-
+            Required when method = skipped: too_large (prefix wider than /22), ignored (by the
+            owner), or faked_answers (feature 005: the network path to this routed subnet answered
+            for every address, e.g. a VPN tunnel, so the collector recorded nothing; the server
+            shows it as a scan error. Servers older than 0.6 reject this value).
+            Skipped entries have complete=false and hosts_probed=0.
         complete:
           type: boolean
           description: false if the scan was interrupted. Incomplete scans do not count toward offline detection.

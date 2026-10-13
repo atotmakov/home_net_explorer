@@ -22,12 +22,14 @@
         <td>{{.Name}}</td>
         <td>{{if eq .Kind "builtin"}}built-in (NAS){{else}}remote{{end}}</td>
         <td>{{or .LastVersion "—"}}</td>
-        <td>{{range $i, $c := .Subnets}}{{if $i}}, {{end}}{{$c}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td>{{range $i, $c := .Subnets}}{{if $i}}, {{end}}{{$c}}{{else}}<span class="muted">—</span>{{end}}
+          {{range .Problems}}<br><span class="badge warn">{{.CIDR}}: {{scanProblem .Reason}}</span>{{end}}</td>
         <td>{{range $i, $r := .Routers}}{{if $i}}<br>{{end}}<span{{if ne $r.Outcome "ok"}} class="badge warn"{{end}}>{{$r.Model}} at {{$r.Address}}: {{routerOutcome $r}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
         <td>{{fmtTime .LastReportAt}}</td>
         <td>
           {{if and (eq .Kind "builtin") $paused}}<span class="badge warn">paused</span>
           {{else if not .RevokedAt.IsZero}}<span class="badge">revoked</span>
+          {{else if .Problems}}<span class="badge warn" title="Its latest run could not scan a subnet">scan error</span>
           {{else if .SkewFlagged}}<span class="badge warn" title="Its clock differs from the server's by more than 5 minutes">clock skew</span>
           {{else}}<span class="badge s-online">active</span>{{end}}
         </td>

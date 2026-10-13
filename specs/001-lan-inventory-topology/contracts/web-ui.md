@@ -22,7 +22,7 @@ yet.
 | `GET /timeline` | Event timeline. Query params: `from`, `to`, `type` (repeatable), `device`, `subnet` | FR-021, US3-5 |
 | `GET /map` | Topology page | FR-025, US4 |
 | `GET /ui/map.json?scope=online\|all` | Graph data for the map: compound subnet nodes, device nodes, and edges labeled by link kind and source | FR-025, US4-4 |
-| `GET /collectors` | Collector list with subnets, last report, skew, and status. Shows a create form and download links | FR-012 |
+| `GET /collectors` | Collector list with subnets, last report, skew, and status. Shows a create form and download links. A collector whose latest run skipped a subnet for `faked_answers` shows status `scan error` and the subnet with the reason (feature 005); the home page then shows a "Scan problems" notice | FR-012 |
 | `POST /collectors` | Create a remote collector. Responds **once** with the token and a downloadable `hne-collector.json`, which also lists the routers set up in the UI without credentials (feature 003) | FR-008 |
 | `POST /collectors/{id}/revoke` | Revoke a token | FR-008 |
 | `POST /scan` | Start an on-demand scan by the built-in `nas` collector. Returns 202, and the page polls for status | FR-004, US1-1 |

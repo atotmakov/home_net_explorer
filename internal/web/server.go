@@ -143,6 +143,7 @@ func (s *Server) loadTemplates() error {
 var funcs = template.FuncMap{
 	"statuses":      func() []string { return []string{"online", "offline", "new", "new_offline"} },
 	"routerOutcome": routerOutcome,
+	"scanProblem":   scanProblem,
 	"readOutcome": func(r store.RouterRead) string {
 		return routerOutcome(store.RouterStatus{Outcome: r.Outcome, Online: r.Online, Offline: r.Offline})
 	},
@@ -343,4 +344,12 @@ func routerOutcome(r store.RouterStatus) string {
 		return "login unavailable from the server"
 	}
 	return r.Outcome
+}
+
+// scanProblem is the owner-facing reason a subnet scan failed (feature 005).
+func scanProblem(reason string) string {
+	if reason == contract.SkipFakedAnswers {
+		return "answers faked on the network path (VPN?): every address answered, so nothing was recorded"
+	}
+	return reason
 }

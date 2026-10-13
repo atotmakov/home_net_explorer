@@ -33,6 +33,9 @@ type FakeNetwork struct {
 	inflight    int
 	MaxInflight int
 	Probes      int
+	// AnswerAll makes every address answer presence probes, like a VPN tunnel that holds the
+	// default route and replies for any destination (feature 005).
+	AnswerAll bool
 }
 
 // NewFakeNetwork returns an empty fake network.
@@ -104,6 +107,9 @@ func (n *FakeNetwork) Present(ctx context.Context, ip netip.Addr) (string, bool)
 	n.enter()
 	defer n.leave()
 	h, ok := n.host(ip)
+	if n.AnswerAll && (!ok || h.Silent) {
+		return contract.ObsICMP, true
+	}
 	if !ok || h.Silent {
 		return "", false
 	}
@@ -163,6 +169,13 @@ func (r *FakeRoutes) Set(gateway string, ifaces ...string) {
 	r.mu.Lock()
 	r.V = v
 	r.mu.Unlock()
+}
+
+// AddRoute adds a route (e.g. a subnet reached through its own gateway).
+func (r *FakeRoutes) AddRoute(dest, nextHop, iface string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.V.Routes = append(r.V.Routes, contract.Route{Destination: dest, NextHop: nextHop, Interface: iface})
 }
 
 // Vantage implements collect.RouteReader.

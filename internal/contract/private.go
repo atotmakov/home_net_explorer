@@ -32,3 +32,9 @@ func IsPrivateAddr(a netip.Addr) bool {
 func AutoScannable(p netip.Prefix) bool {
 	return IsPrivate(p) && p.Bits() >= MaxAutoScanPrefixBits && p.Bits() <= MaxPrefixBits
 }
+
+// FakedAnswerCanary is an address of TEST-NET-1 (RFC 5737), reserved for documentation and never
+// assigned to a host. If it answers a presence probe, the network path (e.g. a VPN tunnel holding
+// the default route) answers for every address, and routed scans through it are meaningless
+// (feature 005).
+var FakedAnswerCanary = netip.AddrFrom4([4]byte{192, 0, 2, 1})
