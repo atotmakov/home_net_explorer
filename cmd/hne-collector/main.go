@@ -313,7 +313,7 @@ func (c *collector) check(ctx context.Context) int {
 		}
 	}
 	for _, p := range plan {
-		if p.Method == contract.MethodICMPTCP || p.Fallback {
+		if (p.Method == contract.MethodICMPTCP || p.Fallback) && collect.ViaDefaultRoute(v.Routes, p.Prefix) {
 			if c.engine.PathFakesAnswers(ctx) {
 				fmt.Fprintln(w, "Network path: answers are faked ("+contract.FakedAnswerCanary.String()+", an address that cannot exist, answered):",
 					"routed subnets on the default route are skipped. Make the VPN on this computer bypass local traffic.")

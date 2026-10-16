@@ -76,7 +76,7 @@ path fakes answers.
 
 1. **Given** a scan that skipped a subnet for `faked_answers`, **Then** the collector logs a
    warning naming the subnet and suggesting to exclude local traffic from the VPN.
-2. **Given** `check` with a routed subnet planned, **Then** it tests the documentation address
+2. **Given** `check` with a routed subnet planned on the default route, **Then** it tests the documentation address
    and prints either "network path: OK" or a warning that the path fakes answers.
 
 ### Edge Cases
@@ -108,7 +108,7 @@ path fakes answers.
 - **FR-006**: The home page MUST show a "Scan problems" notice listing collector and subnet for
   each such subnet in the latest run of every collector that is not removed.
 - **FR-007**: The collector MUST log a warning per such subnet; `check` MUST report the result of
-  the documentation-address test when a routed subnet is planned.
+  the documentation-address test when a routed subnet on the default route is planned.
 
 ### Key Entities
 

@@ -222,7 +222,7 @@ func (e *Engine) PathFakesAnswers(ctx context.Context) bool {
 func (e *Engine) probeRouted(ctx context.Context, clk clock.Clock, routes []contract.Route, t target,
 	record func(contract.Observation), fakes func() bool) contract.SubnetScan {
 	faked := contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodSkipped, SkipReason: contract.SkipFakedAnswers}
-	if viaDefaultRoute(routes, t.prefix) && fakes() {
+	if ViaDefaultRoute(routes, t.prefix) && fakes() {
 		return faked
 	}
 	var mu sync.Mutex
@@ -241,9 +241,9 @@ func (e *Engine) probeRouted(ctx context.Context, clk clock.Clock, routes []cont
 	return scan
 }
 
-// viaDefaultRoute reports whether p is reached only through a default route: no other route
+// ViaDefaultRoute reports whether p is reached only through a default route: no other route
 // covers it.
-func viaDefaultRoute(routes []contract.Route, p netip.Prefix) bool {
+func ViaDefaultRoute(routes []contract.Route, p netip.Prefix) bool {
 	for _, r := range routes {
 		d, err := netip.ParsePrefix(r.Destination)
 		if err != nil || d.Bits() == 0 {
