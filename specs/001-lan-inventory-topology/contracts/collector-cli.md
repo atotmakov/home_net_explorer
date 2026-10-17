@@ -53,10 +53,9 @@ collector is created in the UI, and the user downloads it together with the bina
   (`stored`, `duplicate`, `discarded`, or `spooled`). `discarded` (feature 004) means the run
   started before the owner's latest data reset on the server; it is dropped from the spool. With routers configured it also has `router=<outcome>`
   (comma-separated for several routers). A router failure never changes an exit code.
-- Feature 005: when a routed subnet that uses the default route is planned, `check` prints `Network path: OK` or
-  `Network path: answers are faked (192.0.2.1, an address that cannot exist, answered): …`. A scan
-  skips a routed subnet whose path fakes answers (or where 90% or more of the probed addresses
-  answer), uploads it as `skipped`/`faked_answers` and logs a warning naming the subnet.
+- Feature 005: a scan skips a routed subnet where 90% or more of at least 16 probed addresses
+  answer (the network path, e.g. a VPN tunnel, answers for every address), uploads it as
+  `skipped`/`faked_answers` and logs a warning naming the subnet.
 - `check` lists router subnets (`router <model> at <address>`, with `(fallback: ICMP/TCP)` when
   the subnet is also an extra subnet) and a `Routers:` section with each router's result
   (feature 002).

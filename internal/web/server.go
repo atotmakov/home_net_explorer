@@ -349,7 +349,7 @@ func routerOutcome(r store.RouterStatus) string {
 // scanProblem is the owner-facing reason a subnet scan failed (feature 005).
 func scanProblem(reason string) string {
 	if reason == contract.SkipFakedAnswers {
-		return "answers faked on the network path (VPN?): every address answered, so nothing was recorded"
+		return "answers faked on the network path (VPN?): 90% or more of the addresses answered, so nothing was recorded"
 	}
 	return reason
 }

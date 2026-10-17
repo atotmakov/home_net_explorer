@@ -4,6 +4,9 @@
 
 ## Summary
 
+> **2026-10-17**: the canary was removed (false positive behind a proxy that answers for public
+> addresses only; see spec.md "Revision"). Only the saturation rule remains.
+
 The collector engine checks routed probing two ways: a canary probe of `192.0.2.1` (TEST-NET-1)
 for subnets that use the default route, and a saturation rule (≥ 90% of ≥ 16 probed addresses
 answering). A failing subnet is reported as `method = skipped`, `skip_reason = faked_answers`,
