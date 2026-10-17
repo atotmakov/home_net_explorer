@@ -32,4 +32,3 @@ func IsPrivateAddr(a netip.Addr) bool {
 func AutoScannable(p netip.Prefix) bool {
 	return IsPrivate(p) && p.Bits() >= MaxAutoScanPrefixBits && p.Bits() <= MaxPrefixBits
 }
-
