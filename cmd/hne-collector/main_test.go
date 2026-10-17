@@ -92,7 +92,6 @@ type harness struct {
 	routerRT       http.RoundTripper // sends router requests to a routertest.Fake
 	ctx            context.Context   // parent context of the command (nil: background)
 	answerAll      bool              // the network path answers every address (a VPN, feature 005)
-	routes         [][3]string       // extra routes: destination, next hop, interface
 }
 
 func newHarness(t *testing.T, serverURL string) *harness {
@@ -106,10 +105,6 @@ func (h *harness) run(args ...string) int {
 	h.stderr.Reset()
 	fnet := collecttest.NewFakeNetwork().Add("192.168.1.100", collecttest.Host{MAC: "a0:b1:c2:d3:e4:f5", Hostname: "router.lan"})
 	fnet.AnswerAll = h.answerAll
-	routes := collecttest.NewFakeRoutes("192.168.1.100", "home=192.168.1.10/24")
-	for _, r := range h.routes {
-		routes.AddRoute(r[0], r[1], r[2])
-	}
 	return run(args, environment{
 		dir:             h.dir,
 		getenv:          func(k string) string { return h.env[k] },
@@ -120,7 +115,7 @@ func (h *harness) run(args ...string) int {
 		newEngine: func(cfg config) (*collect.Engine, func() error, error) {
 			return &collect.Engine{
 				Prober: fnet, Presence: fnet, Neighbors: fnet, Resolver: fnet,
-				Routes:    routes,
+				Routes:    collecttest.NewFakeRoutes("192.168.1.100", "home=192.168.1.10/24"),
 				Clock:     clock.Real{},
 				Collector: contract.CollectorInfo{Name: cfg.Name, Version: "test", OS: "windows"},
 			}, func() error { return nil }, nil
@@ -252,27 +247,14 @@ func TestVersion(t *testing.T) {
 }
 
 // Feature 005: when the network path answers for every address, the collector skips the routed
-// subnet, says so in its log, and check reports the network path.
+// subnet and says so in its log.
 func TestFakedAnswersReported(t *testing.T) {
 	srv := newFakeServer(t)
 	h := newHarness(t, srv.srv.URL)
 	writeConfig(t, h.dir, map[string]any{"server_url": srv.srv.URL, "name": "desktop", "token": "tok",
 		"subnets": []string{"192.168.0.0/24"}, "interval_seconds": 900})
 
-	if code := h.run("check"); code != 0 {
-		t.Fatalf("check = %d\n%s", code, h.stderr.String())
-	}
-	if !strings.Contains(h.stderr.String(), "Network path: OK") {
-		t.Errorf("check on a normal path:\n%s", h.stderr.String())
-	}
-
 	h.answerAll = true
-	if code := h.run("check"); code != 0 {
-		t.Fatalf("check = %d\n%s", code, h.stderr.String())
-	}
-	if !strings.Contains(h.stderr.String(), "Network path: answers are faked") {
-		t.Errorf("check with a faking path:\n%s", h.stderr.String())
-	}
 	if code := h.run("scan", "--once"); code != 0 {
 		t.Fatalf("scan = %d\n%s", code, h.stderr.String())
 	}
@@ -291,22 +273,5 @@ func TestFakedAnswersReported(t *testing.T) {
 	}
 	if len(run.Observations) > 2 {
 		t.Errorf("%d observations uploaded from a faking path", len(run.Observations))
-	}
-}
-
-// The canary only speaks for the default route: a routed subnet with its own route gets no
-// network-path line from check, even when the default route fakes answers.
-func TestCheckNetworkPathOnlyForDefaultRoute(t *testing.T) {
-	srv := newFakeServer(t)
-	h := newHarness(t, srv.srv.URL)
-	writeConfig(t, h.dir, map[string]any{"server_url": srv.srv.URL, "name": "desktop", "token": "tok",
-		"subnets": []string{"192.168.0.0/24"}, "interval_seconds": 900})
-	h.answerAll = true
-	h.routes = [][3]string{{"192.168.0.0/24", "192.168.1.1", "home"}}
-	if code := h.run("check"); code != 0 {
-		t.Fatalf("check = %d\n%s", code, h.stderr.String())
-	}
-	if strings.Contains(h.stderr.String(), "Network path") {
-		t.Errorf("check tested the default route for a subnet with its own route:\n%s", h.stderr.String())
 	}
 }

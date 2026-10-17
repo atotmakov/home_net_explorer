@@ -49,15 +49,12 @@ func wantFaked(t *testing.T, run *contract.CollectionRun, cidr string) {
 	}
 }
 
-func TestCanaryAnswerSkipsDefaultRouteSubnet(t *testing.T) {
+func TestAnswerAllSkipsRoutedSubnet(t *testing.T) {
 	net := collecttest.NewFakeNetwork().Add("192.168.1.20", collecttest.Host{MAC: "00:11:32:aa:bb:cc"})
 	net.AnswerAll = true
 	e := newEngine(net, collecttest.NewFakeRoutes("172.18.0.2", "happ-tun=172.18.0.1/30", "home=192.168.1.10/24"))
 	run := scanRouted(t, e, collect.ScanOptions{Targets: prefixes("192.168.0.0/24", "192.168.1.0/24")})
 	wantFaked(t, run, "192.168.0.0/24")
-	if net.Probes > 1+254 { // the canary and the on-link ARP scan; the routed subnet is not probed
-		t.Errorf("probes = %d: the routed subnet was probed although the canary answered", net.Probes)
-	}
 	if s, _ := subnet(run, "192.168.1.0/24"); s.Method != contract.MethodARP || !s.Complete {
 		t.Errorf("on-link subnet = %+v, want an unaffected ARP scan", s)
 	}
@@ -68,7 +65,7 @@ func TestCanaryAnswerSkipsDefaultRouteSubnet(t *testing.T) {
 
 func TestSaturatedRoutedSubnetIsFaked(t *testing.T) {
 	net := collecttest.NewFakeNetwork()
-	for i := 1; i <= 240; i++ { // 240 of 254 answer; the canary does not
+	for i := 1; i <= 240; i++ { // 240 of 254 answer
 		net.Add(fmt.Sprintf("192.168.50.%d", i), collecttest.Host{})
 	}
 	e := newEngine(net, collecttest.NewFakeRoutes("192.168.1.100", "eth0=192.168.1.20/24"))
@@ -76,17 +73,17 @@ func TestSaturatedRoutedSubnetIsFaked(t *testing.T) {
 	wantFaked(t, run, "192.168.50.0/24")
 }
 
-func TestOwnRouteSubnetIgnoresCanary(t *testing.T) {
-	net := collecttest.NewFakeNetwork().Add("192.0.2.1", collecttest.Host{}).Add("10.20.30.5", collecttest.Host{})
-	routes := collecttest.NewFakeRoutes("172.18.0.2", "happ-tun=172.18.0.1/30", "home=192.168.1.10/24")
-	routes.AddRoute("10.20.30.0/24", "192.168.1.1", "home") // its own route, not the tunnel
-	e := newEngine(net, routes)
-	run := scanRouted(t, e, collect.ScanOptions{Targets: prefixes("10.20.30.0/24")})
-	if s, _ := subnet(run, "10.20.30.0/24"); s.Method != contract.MethodICMPTCP || !s.Complete {
-		t.Errorf("own-route subnet = %+v, want a normal icmp_tcp scan", s)
+// A proxy that answers for public addresses (here the reserved 192.0.2.1) but routes private
+// subnets directly must not stop a routed scan (found on the owner's network, 2026-10-17).
+func TestPublicAddressAnswerDoesNotSkip(t *testing.T) {
+	net := collecttest.NewFakeNetwork().Add("192.0.2.1", collecttest.Host{}).Add("192.168.0.5", collecttest.Host{})
+	e := newEngine(net, collecttest.NewFakeRoutes("192.168.8.1", "internet=192.168.8.176/24"))
+	run := scanRouted(t, e, collect.ScanOptions{Targets: prefixes("192.168.0.0/24")})
+	if s, _ := subnet(run, "192.168.0.0/24"); s.Method != contract.MethodICMPTCP || !s.Complete {
+		t.Errorf("routed subnet = %+v, want a normal icmp_tcp scan", s)
 	}
-	if o := observationsByIP(run)["10.20.30.5"]; len(o) != 1 {
-		t.Error("the host on the own-route subnet was not recorded")
+	if o := observationsByIP(run)["192.168.0.5"]; len(o) != 1 {
+		t.Error("the host on the routed subnet was not recorded")
 	}
 }
 
@@ -100,9 +97,6 @@ func TestNormalRoutedScanUnchanged(t *testing.T) {
 	if n := routedObservations(run, "192.168.50.0/24"); n != 2 {
 		t.Errorf("observations = %d, want 2", n)
 	}
-	if e.PathFakesAnswers(context.Background()) {
-		t.Error("PathFakesAnswers on a normal path = true")
-	}
 }
 
 func TestRouterFallbackFaked(t *testing.T) {
@@ -114,8 +108,5 @@ func TestRouterFallbackFaked(t *testing.T) {
 	wantFaked(t, run, "192.168.0.0/24")
 	if len(run.Sources) != 1 || run.Sources[0].Outcome != contract.OutcomeUnreachable {
 		t.Errorf("sources = %+v: the router read is still reported", run.Sources)
-	}
-	if !e.PathFakesAnswers(context.Background()) {
-		t.Error("PathFakesAnswers with a faking path = false")
 	}
 }
