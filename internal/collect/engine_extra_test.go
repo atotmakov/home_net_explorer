@@ -190,7 +190,7 @@ func TestRouterOfflineFlagCorrectedByProbe(t *testing.T) {
 		{IP: "192.168.0.8", MAC: "8c:85:90:cf:7f:0b", Method: contract.ObsRouterTable},
 	}
 	net := collecttest.NewFakeNetwork().
-		Add("192.168.0.7", collecttest.Host{}).               // listed offline, answers
+		Add("192.168.0.7", collecttest.Host{}).              // listed offline, answers
 		Add("192.168.0.50", collecttest.Host{TCPOnly: true}) // not listed, answers
 	fr := collecttest.NewFakeRouter("192.168.0.1", "192.168.0.0/24", res)
 	run, err := desktopEngine(net, fr).Scan(context.Background(), collect.ScanOptions{Extra: prefixes("192.168.0.0/24")})
