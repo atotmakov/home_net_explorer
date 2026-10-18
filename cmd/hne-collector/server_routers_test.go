@@ -43,8 +43,8 @@ func TestServerRouterIsRead(t *testing.T) {
 			n++
 		}
 	}
-	if n != 13 {
-		t.Errorf("router observations = %d, want 13", n)
+	if n != 14 { // 13 online devices and the router itself
+		t.Errorf("router observations = %d, want 14", n)
 	}
 	if srv.loginRequests != 1 {
 		t.Errorf("login requests = %d, want 1 per scan", srv.loginRequests)

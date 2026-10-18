@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -29,6 +31,7 @@ var fullRead = []string{
 	"POST /asp/GetRandCount.asp",
 	"POST /login.cgi",
 	"GET /html/bbsp/common/GetLanUserDevInfo.asp",
+	"GET /html/ssmp/deviceinfo/deviceinfo.asp",
 	"GET /index.asp",
 	"POST /logout.cgi",
 }
@@ -161,5 +164,24 @@ func TestReadUnreachable(t *testing.T) {
 	}
 	if d := time.Since(start); d > 2*time.Second {
 		t.Errorf("hanging router held the read for %v; the timeout is 200ms", d)
+	}
+}
+
+func TestParseDeviceInfo(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(routertest.FixturePath()), "hg8145v5_deviceinfo.asp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mac, name, ok := parseDeviceInfo(b); !ok || mac != "00:e0:fc:12:34:56" || name != "HG8145V5" {
+		t.Errorf("parse = %q %q %v", mac, name, ok)
+	}
+	alias := []byte(`new stDeviceInfo("D","SN","HW","SW","HG8145V5","HWTC","T","00:e0:fc:00:00:01","Desc","MI","ISP box"),null);`)
+	if _, name, ok := parseDeviceInfo(alias); !ok || name != "ISP box" {
+		t.Errorf("alias = %q %v, want the alias as the name", name, ok)
+	}
+	for _, bad := range []string{"<html>login</html>", `new stDeviceInfo("D","SN"),null);`, `new stDeviceInfo("D","SN","HW","SW","M","O","T","not-a-mac","","",""),null);`} {
+		if _, _, ok := parseDeviceInfo([]byte(bad)); ok {
+			t.Errorf("parse(%q) ok, want not understood", bad)
+		}
 	}
 }

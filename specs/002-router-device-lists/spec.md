@@ -153,6 +153,10 @@ too.
   carries the router's MAC and name. Reason: the HG8145V5's online flag lags (on the owner's
   network it listed 7 of 13 reachable devices as online). Router online entries still win for
   their addresses; saturated (faked) probe answers add nothing (feature 005).
+- **FR-007b** (added 2026-10-18): In the same session, the collector SHOULD read the router's own
+  device-information page and record the router itself (its address, MAC, and name: the alias the
+  owner set, else the model). The device list never contains the router. A failure there never
+  changes the read's outcome.
 - **FR-008**: Router entries whose address is outside the router's own subnet MUST be ignored.
 - **FR-009**: The router's subnet MUST be reported in the run like a scanned subnet, so it is
   discovered automatically (feature 001, FR-006) and a successful, complete router read counts as

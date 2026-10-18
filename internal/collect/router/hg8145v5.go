@@ -23,6 +23,7 @@ const (
 	pathRandToken = "/asp/GetRandCount.asp"
 	pathLogin     = "/login.cgi"
 	pathList      = "/html/bbsp/common/GetLanUserDevInfo.asp"
+	pathInfo      = "/html/ssmp/deviceinfo/deviceinfo.asp"
 	pathIndex     = "/index.asp"
 	pathLogout    = "/logout.cgi?RequestFile=html/logout.html"
 	pathLoginPage = "/"
@@ -91,7 +92,52 @@ func (h *hg8145v5) Read(ctx context.Context) Result {
 	if err != nil {
 		return failed(err)
 	}
-	return Filter(devs, h.prefix, time.Now().UTC())
+	res := Filter(devs, h.prefix, time.Now().UTC())
+	res.Self = h.self(ctx, client, session)
+	return res
+}
+
+// self reads the router's own MAC and name from its device-information page (the device list
+// never contains the router). It is optional: any failure leaves the read as it is.
+func (h *hg8145v5) self(ctx context.Context, c *http.Client, session string) *contract.Observation {
+	body, _, err := h.do(ctx, c, http.MethodGet, pathInfo, session, nil)
+	if err != nil {
+		return nil
+	}
+	mac, name, ok := parseDeviceInfo(body)
+	if !ok {
+		return nil
+	}
+	return &contract.Observation{ObservedAt: time.Now().UTC(), IP: h.addr.String(), MAC: mac,
+		Hostname: name, HostnameSource: contract.HostnameSourceRouter, Method: contract.ObsRouterTable}
+}
+
+// parseDeviceInfo reads deviceinfo.asp: new stDeviceInfo(Domain, SerialNumber, HardwareVersion,
+// SoftwareVersion, ModelName, ManufacturerOUI, ReleaseTime, MAC, Description, ManufactureInfo,
+// DeviceAlias). The name is the alias the owner set, else the model.
+func parseDeviceInfo(body []byte) (mac, name string, ok bool) {
+	s := string(body)
+	i := strings.Index(s, "new stDeviceInfo(")
+	if i < 0 {
+		return "", "", false
+	}
+	p := &jsParser{s: s, i: i + len("new stDeviceInfo(")}
+	a, ok := p.stringArgs()
+	if !ok || len(a) < 8 {
+		return "", "", false
+	}
+	mac = strings.ToLower(a[7])
+	if !contract.ValidMAC(mac) {
+		return "", "", false
+	}
+	name = strings.TrimSpace(a[4])
+	if len(a) > 10 && strings.TrimSpace(a[10]) != "" {
+		name = strings.TrimSpace(a[10])
+	}
+	if len(name) > 253 {
+		name = ""
+	}
+	return mac, name, true
 }
 
 func failed(err error) Result {

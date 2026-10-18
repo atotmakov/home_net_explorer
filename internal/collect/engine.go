@@ -118,6 +118,9 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 		ok := read && res.Outcome == contract.OutcomeOK
 		if ok {
 			routerObs = append(routerObs, res.Observations...)
+			if res.Self != nil && t.prefix.Contains(netip.MustParseAddr(res.Self.IP)) {
+				routerObs = append(routerObs, *res.Self)
+			}
 		}
 		switch {
 		case t.iface == "" && ok:
