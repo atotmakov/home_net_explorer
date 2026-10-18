@@ -56,7 +56,7 @@ collector is created in the UI, and the user downloads it together with the bina
 - Feature 005: a scan skips a routed subnet where 90% or more of at least 16 probed addresses
   answer (the network path, e.g. a VPN tunnel, answers for every address), uploads it as
   `skipped`/`faked_answers` and logs a warning naming the subnet.
-- `check` lists router subnets (`router <model> at <address>`, with `(fallback: ICMP/TCP)` when
+- `check` lists router subnets (`router <model> at <address>`, with `(plus ICMP/TCP: hosts that answer count as online)` when
   the subnet is also an extra subnet) and a `Routers:` section with each router's result
   (feature 002).
 

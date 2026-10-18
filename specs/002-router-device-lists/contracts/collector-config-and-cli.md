@@ -35,7 +35,7 @@ Extends `specs/001-lan-inventory-topology/contracts/collector-cli.md`.
 
 ```text
 Subnets to scan:
-  192.168.0.0/24     router huawei-hg8145v5 at 192.168.0.1 (fallback: ICMP/TCP)
+  192.168.0.0/24     router huawei-hg8145v5 at 192.168.0.1 (plus ICMP/TCP: hosts that answer count as online)
   192.168.1.0/24     on-link via home: ARP
   192.168.8.0/24     on-link via internet: ARP
 Routers:

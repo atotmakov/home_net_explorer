@@ -153,6 +153,9 @@ func TestFilter(t *testing.T) {
 	if o := res.Observations[1]; o.Hostname != "" || o.HostnameSource != "" || o.Via != "" {
 		t.Errorf("observation without hostname/via = %+v", o)
 	}
+	if len(res.Listed) != 1 || res.Listed[0].IP != "192.168.0.5" || res.Listed[0].MAC != "00:00:5e:10:00:05" || res.Listed[0].Hostname != "gone" {
+		t.Errorf("listed offline entries = %+v, want 192.168.0.5 only", res.Listed)
+	}
 }
 
 // The capture's counts inside 192.168.0.0/24: 13 online, 16 offline (the offline static

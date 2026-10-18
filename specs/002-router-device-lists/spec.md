@@ -147,6 +147,12 @@ too.
   collector's configuration file, protected by the machine's file permissions like the collector
   token (decided 2026-10-08; encryption at rest is out of scope).
 - **FR-007**: Entries the router reports as offline MUST NOT produce observations.
+- **FR-007a** (added 2026-10-18): When the router's subnet is also one the collector probes
+  itself (an extra subnet), the collector MUST probe it beside a successful read too. A host that
+  answers counts as online; if the router lists its address (even as offline), the observation
+  carries the router's MAC and name. Reason: the HG8145V5's online flag lags (on the owner's
+  network it listed 7 of 13 reachable devices as online). Router online entries still win for
+  their addresses; saturated (faked) probe answers add nothing (feature 005).
 - **FR-008**: Router entries whose address is outside the router's own subnet MUST be ignored.
 - **FR-009**: The router's subnet MUST be reported in the run like a scanned subnet, so it is
   discovered automatically (feature 001, FR-006) and a successful, complete router read counts as

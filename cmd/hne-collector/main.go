@@ -305,7 +305,7 @@ func (c *collector) check(ctx context.Context) int {
 		case contract.MethodRouterTable:
 			fallback := ""
 			if p.Fallback {
-				fallback = " (fallback: ICMP/TCP)"
+				fallback = " (plus ICMP/TCP: hosts that answer count as online)"
 			}
 			fmt.Fprintf(w, "  %-18s router %s%s\n", p.Prefix, p.Router, fallback)
 		default:
