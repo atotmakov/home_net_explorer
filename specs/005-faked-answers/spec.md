@@ -19,6 +19,16 @@ dry run: 254/254 ICMP answers, route via `happ-tun`).
 The collector must notice that the network path fakes answers, record nothing for that subnet,
 and tell the server, which shows the failed scan in the UI.
 
+## Revision 2026-10-17: canary withdrawn
+
+The canary probe of `192.0.2.1` (FR-001, US1 scenarios 1 and 3, US3 scenario 2) gave a false
+positive on the owner's network: the `192.168.8.1` router proxies public destinations and accepts
+any TCP connect to them (including `192.0.2.1`), while private subnets such as `192.168.0.0/24`
+are routed directly and answer truthfully. A public address cannot speak for private subnets, so
+the canary is removed from the collector (scans and `check`). The saturation rule (FR-002) alone
+decides; it is measured on the subnet itself and caught the original Happ case (254/254).
+Struck items below are kept for history.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Fake answers never become devices (Priority: P1)
@@ -32,15 +42,15 @@ failed with reason "faked answers".
 
 **Acceptance Scenarios**:
 
-1. **Given** a routed subnet reached through the default route, **When** an address reserved
+1. ~~**Given** a routed subnet reached through the default route, **When** an address reserved
    for documentation (`192.0.2.1`, never used on any network) answers the presence probe,
-   **Then** the subnet is not probed and is reported as skipped with reason `faked_answers`.
+   **Then** the subnet is not probed and is reported as skipped with reason `faked_answers`.~~ (withdrawn)
 2. **Given** a routed subnet, **When** 90% or more of at least 16 probed addresses answer,
    **Then** none of them is recorded and the subnet is reported as skipped with reason
    `faked_answers`.
-3. **Given** a subnet with its own route (not the default route), **When** the documentation
+3. ~~**Given** a subnet with its own route (not the default route), **When** the documentation
    address answers through the default route, **Then** that subnet is still probed (the check
-   says nothing about its path); the 90% rule still applies.
+   says nothing about its path); the 90% rule still applies.~~ (withdrawn)
 4. **Given** an on-link subnet (ARP), **Then** neither check applies (ARP answers carry MACs from
    the link itself).
 5. **Given** a normal path, **Then** routed scans work as before.
@@ -76,8 +86,8 @@ path fakes answers.
 
 1. **Given** a scan that skipped a subnet for `faked_answers`, **Then** the collector logs a
    warning naming the subnet and suggesting to exclude local traffic from the VPN.
-2. **Given** `check` with a routed subnet planned on the default route, **Then** it tests the documentation address
-   and prints either "network path: OK" or a warning that the path fakes answers.
+2. ~~**Given** `check` with a routed subnet planned on the default route, **Then** it tests the documentation address
+   and prints either "network path: OK" or a warning that the path fakes answers.~~ (withdrawn)
 
 ### Edge Cases
 
@@ -94,9 +104,9 @@ path fakes answers.
 
 ### Functional Requirements
 
-- **FR-001**: Before probing routed subnets that use the default route, the collector MUST probe
+- ~~**FR-001**: Before probing routed subnets that use the default route, the collector MUST probe
   `192.0.2.1` once per scan; if it answers, those subnets MUST be skipped with reason
-  `faked_answers` and not probed.
+  `faked_answers` and not probed.~~ (withdrawn 2026-10-17)
 - **FR-002**: After probing a routed subnet, if at least 16 addresses were probed and 90% or more
   answered, the collector MUST drop those observations and report the subnet as skipped with
   reason `faked_answers`.
@@ -107,8 +117,8 @@ path fakes answers.
   latest run has a `faked_answers` subnet, and list each such subnet with an explanation.
 - **FR-006**: The home page MUST show a "Scan problems" notice listing collector and subnet for
   each such subnet in the latest run of every collector that is not removed.
-- **FR-007**: The collector MUST log a warning per such subnet; `check` MUST report the result of
-  the documentation-address test when a routed subnet on the default route is planned.
+- **FR-007**: The collector MUST log a warning per such subnet. ~~`check` MUST report the result of
+  the documentation-address test when a routed subnet on the default route is planned.~~
 
 ### Key Entities
 
@@ -124,7 +134,7 @@ path fakes answers.
 
 ## Assumptions
 
-- `192.0.2.0/24` (TEST-NET-1, RFC 5737) is never assigned to a real host, so an answer from it
-  proves the path fakes replies.
+- ~~`192.0.2.0/24` (TEST-NET-1, RFC 5737) is never assigned to a real host, so an answer from it
+  proves the path fakes replies.~~ Wrong in practice: proxies answer for public addresses only.
 - Fixing the machine (e.g. Happ "bypass LAN") is the owner's action; the collector only detects
   and reports.
