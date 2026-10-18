@@ -126,13 +126,15 @@ type Device struct {
 // Result is the outcome of one router read. Online/Offline count the router's entries inside
 // its subnet; Observations are the online ones (FR-007, FR-008) and Listed the offline ones
 // (the router's status flag lags: a host that answers a probe is online anyway). All are empty
-// unless Outcome is ok.
+// unless Outcome is ok. Self is the router itself (its own MAC and name), when the model can
+// read it.
 type Result struct {
 	Outcome      string
 	Online       int
 	Offline      int
 	Observations []contract.Observation
 	Listed       []contract.Observation
+	Self         *contract.Observation
 }
 
 // Source reads the device list of one configured router.

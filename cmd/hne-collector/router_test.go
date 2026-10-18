@@ -88,8 +88,13 @@ func TestRouterScanUploadsDevices(t *testing.T) {
 			n++
 		}
 	}
-	if n != 13 {
-		t.Errorf("router observations = %d, want 13", n)
+	if n != 14 { // 13 online devices and the router itself
+		t.Errorf("router observations = %d, want 14", n)
+	}
+	for _, o := range run.Observations {
+		if o.IP == "192.168.0.1" && (o.MAC != "00:e0:fc:12:34:56" || o.Hostname != "HG8145V5") {
+			t.Errorf("the router itself = %+v, want its MAC and model from the device-information page", o)
+		}
 	}
 	if !strings.Contains(h.stderr.String(), "router=ok") {
 		t.Errorf("summary lacks router=ok:\n%s", h.stderr.String())

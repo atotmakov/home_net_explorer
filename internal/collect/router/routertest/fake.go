@@ -37,7 +37,7 @@ func FixturePath() string {
 	return filepath.Join(filepath.Dir(file), "..", "testdata", "hg8145v5_getlanuserdevinfo.asp")
 }
 
-// Fake is an httptest server that implements the five requests the collector may send, and
+// Fake is an httptest server that implements the six requests the collector may send, and
 // fails the test on any other request (FR-004, read-only access).
 type Fake struct {
 	t          testing.TB
@@ -163,6 +163,16 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write(list)
+	case "GET /html/ssmp/deviceinfo/deviceinfo.asp":
+		if !f.authorized(r) {
+			fmt.Fprint(w, redirectPage("/"))
+			return
+		}
+		b, err := os.ReadFile(filepath.Join(filepath.Dir(FixturePath()), "hg8145v5_deviceinfo.asp"))
+		if err != nil {
+			f.t.Error(err)
+		}
+		w.Write(b)
 	case "GET /index.asp":
 		if !f.authorized(r) {
 			fmt.Fprint(w, redirectPage("/"))
