@@ -58,7 +58,8 @@ type target struct {
 	skip   string        // contract.SkipTooLarge / SkipIgnored, or "" to scan
 	router router.Source // the router whose device list covers this subnet, if any
 	// probe marks a routed subnet the collector probes itself (listed in Targets or Extra).
-	// With a router, that probe is the ICMP/TCP fallback for a failed read (research R4).
+	// With a router, that probe replaces a failed read (research R4) and adds hosts that answer
+	// beside a good one (the router's online flag lags).
 	probe bool
 }
 
@@ -122,6 +123,9 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 		case t.iface == "" && ok:
 			run.Subnets = append(run.Subnets, contract.SubnetScan{CIDR: t.prefix.String(), Method: contract.MethodRouterTable,
 				Complete: true, HostsProbed: res.Online + res.Offline})
+			if t.probe {
+				e.probeBesideRouter(ctx, clk, t, res, record)
+			}
 		case t.iface == "" && t.router != nil && t.probe:
 			// ICMP/TCP fallback: presence only, never a completed scan of the router's subnet
 			// (FR-010), so devices only the router can see are not marked offline.
@@ -225,6 +229,24 @@ func (e *Engine) probeRouted(ctx context.Context, clk clock.Clock, t target, rec
 		record(o)
 	}
 	return scan
+}
+
+// probeBesideRouter probes a router's subnet that the collector can reach, after a successful
+// read: the router's online flag lags (a Huawei HG8145V5 lists devices that just reconnected as
+// offline), so a host that answers is online too. It keeps the MAC and name the router lists for
+// its address. The router's online entries are recorded later and win for their addresses.
+// Saturated (faked) answers add nothing.
+func (e *Engine) probeBesideRouter(ctx context.Context, clk clock.Clock, t target, res router.Result, record func(contract.Observation)) {
+	listed := map[string]contract.Observation{}
+	for _, o := range res.Listed {
+		listed[o.IP] = o
+	}
+	e.probeRouted(ctx, clk, t, func(o contract.Observation) {
+		if l, ok := listed[o.IP]; ok {
+			o.MAC, o.Hostname, o.HostnameSource = l.MAC, l.Hostname, l.HostnameSource
+		}
+		record(o)
+	})
 }
 
 func (e *Engine) probeSubnet(ctx context.Context, clk clock.Clock, t target, record func(contract.Observation)) contract.SubnetScan {
@@ -535,7 +557,7 @@ type PlannedSubnet struct {
 	Method     string // contract.MethodARP, MethodICMPTCP, MethodRouterTable or MethodSkipped
 	SkipReason string
 	Router     string // "<model> at <address>" when a router's device list covers the subnet
-	Fallback   bool   // a routed router subnet that is ICMP/TCP-probed when the read fails
+	Fallback   bool   // a routed router subnet the collector also probes (beside a good read, instead of a failed one)
 }
 
 // Plan reports which subnets a scan with these options and routers would cover, and how.

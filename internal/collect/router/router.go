@@ -124,13 +124,15 @@ type Device struct {
 }
 
 // Result is the outcome of one router read. Online/Offline count the router's entries inside
-// its subnet; Observations are the online ones (FR-007, FR-008). Both are empty unless
-// Outcome is ok.
+// its subnet; Observations are the online ones (FR-007, FR-008) and Listed the offline ones
+// (the router's status flag lags: a host that answers a probe is online anyway). All are empty
+// unless Outcome is ok.
 type Result struct {
 	Outcome      string
 	Online       int
 	Offline      int
 	Observations []contract.Observation
+	Listed       []contract.Observation
 }
 
 // Source reads the device list of one configured router.
@@ -171,15 +173,16 @@ func Filter(devs []Device, p netip.Prefix, at time.Time) Result {
 		if !p.Contains(d.IP) {
 			continue
 		}
-		if !d.Online {
-			res.Offline++
-			continue
-		}
-		res.Online++
 		o := contract.Observation{ObservedAt: at, IP: d.IP.String(), MAC: d.MAC, Via: d.Via, Method: contract.ObsRouterTable}
 		if d.Hostname != "" {
 			o.Hostname, o.HostnameSource = d.Hostname, contract.HostnameSourceRouter
 		}
+		if !d.Online {
+			res.Offline++
+			res.Listed = append(res.Listed, o)
+			continue
+		}
+		res.Online++
 		res.Observations = append(res.Observations, o)
 	}
 	slices.SortFunc(res.Observations, func(a, b contract.Observation) int {

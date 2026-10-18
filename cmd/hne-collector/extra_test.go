@@ -84,7 +84,7 @@ func TestCheckListsExtraSubnets(t *testing.T) {
 	if code := h.run("check"); code != 0 {
 		t.Fatalf("check = %d\n%s", code, h.stderr.String())
 	}
-	if !strings.Contains(h.stderr.String(), "192.168.0.0/24     router huawei-hg8145v5 at 192.168.0.1 (fallback: ICMP/TCP)") {
+	if !strings.Contains(h.stderr.String(), "192.168.0.0/24     router huawei-hg8145v5 at 192.168.0.1 (plus ICMP/TCP: hosts that answer count as online)") {
 		t.Errorf("check does not show the router subnet's fallback:\n%s", h.stderr.String())
 	}
 }

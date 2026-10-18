@@ -132,10 +132,13 @@ func TestExtraIsRouterFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s := methods(run)["192.168.0.0/24"]; s.Method != contract.MethodRouterTable || !s.Complete {
-		t.Errorf("router read ok: %+v, want router_table only", s)
+		t.Errorf("router read ok: %+v, want router_table", s)
 	}
-	if net.Probes != 2*254 {
-		t.Errorf("probes = %d: an extra subnet covered by a successful router read is not probed", net.Probes)
+	if net.Probes != 3*254 {
+		t.Errorf("probes = %d: an extra subnet is also probed after a successful router read", net.Probes)
+	}
+	if o := observationsByIP(run)["192.168.0.4"]; len(o) != 1 || o[0].Method != contract.ObsRouterTable {
+		t.Errorf("192.168.0.4 = %+v: the router's online entry wins over the probe", o)
 	}
 
 	net = collecttest.NewFakeNetwork().Add("192.168.0.4", collecttest.Host{})
@@ -175,5 +178,62 @@ func TestPlanExtra(t *testing.T) {
 	}
 	if p := plan["192.168.8.0/24"]; p.Method != contract.MethodARP {
 		t.Errorf("on-link = %+v", p)
+	}
+}
+
+// The HG8145V5 lists devices that just reconnected as offline: a reachable router subnet is
+// probed too, and a host that answers is online with the MAC and name the router lists for it.
+func TestRouterOfflineFlagCorrectedByProbe(t *testing.T) {
+	res := routerResult()
+	res.Offline, res.Listed = 2, []contract.Observation{
+		{IP: "192.168.0.7", MAC: "58:20:b1:4d:af:10", Hostname: "DEV4DAF10", HostnameSource: contract.HostnameSourceRouter, Via: "LAN1", Method: contract.ObsRouterTable},
+		{IP: "192.168.0.8", MAC: "8c:85:90:cf:7f:0b", Method: contract.ObsRouterTable},
+	}
+	net := collecttest.NewFakeNetwork().
+		Add("192.168.0.7", collecttest.Host{}).              // listed offline, answers
+		Add("192.168.0.50", collecttest.Host{TCPOnly: true}) // not listed, answers
+	fr := collecttest.NewFakeRouter("192.168.0.1", "192.168.0.0/24", res)
+	run, err := desktopEngine(net, fr).Scan(context.Background(), collect.ScanOptions{Extra: prefixes("192.168.0.0/24")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := observationsByIP(run)
+	if o := got["192.168.0.7"]; len(o) != 1 || o[0].MAC != "58:20:b1:4d:af:10" || o[0].Hostname != "DEV4DAF10" ||
+		o[0].HostnameSource != contract.HostnameSourceRouter || o[0].Method != contract.ObsICMP || o[0].Via != "" {
+		t.Errorf("192.168.0.7 = %+v, want online with the router's MAC and name", o)
+	}
+	if o := got["192.168.0.50"]; len(o) != 1 || o[0].MAC != "" || o[0].Method != contract.ObsTCP {
+		t.Errorf("192.168.0.50 = %+v, want presence only", o)
+	}
+	if _, ok := got["192.168.0.8"]; ok {
+		t.Error("192.168.0.8 is listed offline and does not answer: it must not be recorded")
+	}
+	for _, ip := range []string{"192.168.0.4", "192.168.0.9"} {
+		if len(got[ip]) != 1 {
+			t.Errorf("router online entry %s missing", ip)
+		}
+	}
+	if s := methods(run)["192.168.0.0/24"]; s.Method != contract.MethodRouterTable || !s.Complete {
+		t.Errorf("subnet = %+v, want router_table complete", s)
+	}
+	if err := contract.Validate(run); err != nil {
+		t.Errorf("run fails validation: %v", err)
+	}
+
+	// A path that answers for every address adds nothing beside the router.
+	net = collecttest.NewFakeNetwork()
+	net.AnswerAll = true
+	run, err = desktopEngine(net, collecttest.NewFakeRouter("192.168.0.1", "192.168.0.0/24", res)).Scan(context.Background(), collect.ScanOptions{Extra: prefixes("192.168.0.0/24")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, o := range run.Observations {
+		if prefixes("192.168.0.0/24")[0].Contains(netip.MustParseAddr(o.IP)) {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Errorf("%d observations in the router subnet with a faking path, want the router's 2", n)
 	}
 }
