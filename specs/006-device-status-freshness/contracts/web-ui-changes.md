@@ -6,8 +6,8 @@ Changes to `specs/001-lan-inventory-topology/contracts/web-ui.md`.
 
 - Status column: badge `online` (green), `online (stale)` (gray, `title="last seen <age> ago"`),
   or `offline` (own style, distinct from gray). Text is always present (FR-009).
-- Status filter (`status=`): accepted values `online`, `stale`, `offline`; anything else is
-  ignored (shows all). `new`, `new_offline` are no longer offered.
+- Status filter (`status=`): accepted values `online`, `stale`, `offline` (option labels
+  "online", "online (stale)", "offline"); anything else is ignored (shows all). `new`, `new_offline` are no longer offered.
 
 ## Device page (`/devices/{id}`)
 

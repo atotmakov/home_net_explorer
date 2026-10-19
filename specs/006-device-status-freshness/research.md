@@ -3,8 +3,10 @@
 ## R1 Offline after one missed complete scan (stored rule)
 
 - **Decision**: after a complete, not ignored scan R of subnet S is applied, every device with a
-  current address in S whose status is online, that R did not see, **and whose `last_seen` is
-  before R's `started_at`**, becomes offline with a `went_offline` event at R's `finished_at`.
+  current address in S whose status is online, that R did not see, **whose `last_seen` is
+  before R's `started_at`**, **and that is not current in another subnet whose latest complete
+  scan saw it** (that subnet's latest complete scan finished at or before R and no earlier than
+  the device's `last_seen`), becomes offline with a `went_offline` event at R's `finished_at`.
   The old conditions (time ≥ multiplier × interval; every active collector completed ≥ multiplier
   scans after `last_seen`) are removed.
 - **Rationale**: the owner chose "offline as soon as the latest complete scan misses it". The

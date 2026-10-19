@@ -85,7 +85,7 @@ the Devices filter each give the matching device.
 - **Device with addresses in several subnets**: it is online if any of its current addresses'
   subnets saw it in their latest complete scan; the freshest "Last seen" decides green or gray.
 - **Subnet nobody scans any more** (collector stopped, removed, or paused): its devices keep the
-  result of the last complete scan and turn gray when that scan is older than one interval;
+  result of the last complete scan and turn gray when "Last seen" is older than two intervals;
   nothing is guessed.
 - **Clock differences**: "Last seen" is the server-corrected scan time, so a collector's wrong
   clock (the desktop's is 4.5 min off) does not change the state.
@@ -112,6 +112,8 @@ the Devices filter each give the matching device.
   a current address in did not see it: one missed complete scan is enough.
 - **FR-005**: The freshness threshold (FR-002a) MUST be based on the scan interval of the collector whose
   scan last covered the device's subnet (for the NAS built-in collector, the interval in Settings).
+  If none of the device's subnets has a complete scan, the built-in scan interval from Settings
+  is used.
 - **FR-006**: The state MUST be evaluated when the page is viewed, so a gray state appears without
   any new scan.
 - **FR-007**: The Devices list, the device page, the Devices status filter and the home page
@@ -120,9 +122,11 @@ the Devices filter each give the matching device.
   stored scans (constitution, Principle V); the time-based gray state is a view of the stored
   data, not a new stored fact. History follows the same offline rule: a device "went offline" at
   the first complete scan that missed it.
-- **FR-010**: The "Mark a device offline after this many missed scans" setting MUST be removed
-  (one missed scan is the rule); an already stored value is ignored.
 - **FR-009**: Status MUST stay readable without color (text plus color), as today.
+- **FR-010**: The "Mark a device offline after this many missed scans" setting MUST be removed
+  (one missed scan is the rule); an already stored value is ignored. The home page "stale" badge
+  for a subnet uses the same freshness rule: no complete scan of it within two of the scanning
+  collector's intervals.
 
 ### Key Entities
 
@@ -132,8 +136,8 @@ the Devices filter each give the matching device.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: A device whose subnet has not been scanned for more than one interval never shows a
-  green "online" (was: shown "online" indefinitely).
+- **SC-001**: A device not seen for more than two scan intervals never shows a green "online"
+  (was: shown "online" indefinitely).
 - **SC-002**: Within one scan of a device leaving the network, it shows "offline", and within one
   scan of it coming back it shows green "online".
 - **SC-003**: The online/stale/offline counts on the home page always equal the number of devices

@@ -10,7 +10,7 @@ No schema change. Facts (collection runs, user facts) are unchanged.
 |------------|--------------------------------------------------|
 | → online (create) | first observation of a new identity |
 | offline → online | an observation newer than `last_seen` (`came_online` event), unchanged |
-| online → offline | complete, not ignored scan R of subnet S: device has a current address in S, was not seen by R, and `last_seen < R.started_at` (`went_offline` at `R.finished_at`) — **new rule, research R1** |
+| online → offline | complete, not ignored scan R of subnet S: device has a current address in S, was not seen by R, `last_seen < R.started_at`, and not current in another subnet whose latest complete scan (finished ≤ R) has `finished_at ≥ last_seen` (`went_offline` at `R.finished_at`) — **new rule, research R1** |
 
 ## Shown state (computed at view time, never stored)
 

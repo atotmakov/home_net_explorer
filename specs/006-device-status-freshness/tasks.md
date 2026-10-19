@@ -36,7 +36,9 @@ Go toolchain).
 - [ ] T004 [P] [US1] Integration test `tests/integration/status_freshness_test.go`
   `TestStaleOnlineShown`: upload a scan seeing a device; `/devices` and `/devices/{id}` show the
   `s-online` badge "online"; with the server clock advanced past 2 × interval (test clock), the
-  badge is `s-stale` "online (stale)" with `title="last seen … ago"`; a new upload makes it green
+  badge is `s-stale` "online (stale)" with `title="last seen … ago"`; a new upload makes it green;
+  the badge text alone distinguishes the states ("online", "online (stale)", "offline"),
+  independent of the CSS class (FR-009)
 - [ ] T005 [US1] Templates `internal/web/templates/devices.html`, `device.html`: badge by
   `.State` (`s-online` "online", `s-stale` "online (stale)" + tooltip, `s-offline` "offline");
   `internal/web/pages.go` passes `now` from the server clock; CSS in `internal/web/static/` adds
@@ -52,12 +54,16 @@ Go toolchain).
   `TestLateUploadDoesNotMarkOffline` (a scan that started before the device's `last_seen`, uploaded
   after a newer sighting, changes nothing); `TestIncompleteScansDontCount` and ignored/skipped
   subnets unchanged; `TestComesBackOnline`; `TestTwoCollectorsLatestScanDecides` (collector A
-  misses the device after collector B saw it earlier → offline); `TestRebuildSameStatuses`
+  misses the device after collector B saw it earlier → offline);
+  `TestTwoSubnetsOfflineOnlyWhenBothMiss` (device current in A and B; B's latest complete scan
+  saw it; A's next complete scan misses it → still online; B's next complete scan misses it too
+  → offline, `went_offline` at B's scan); `TestRebuildSameStatuses`
   (rebuild gives identical statuses and events); remove `TestOfflineNeedsEveryActiveCollector`,
   `TestMultiplierFromSettings`, `TestStaleSubnetKeepsStatus` (time-based rule gone)
 - [ ] T007 [US2] Implement the rule in `internal/inventory/offline.go`: candidates = devices with
   a current address in the scanned subnet, status `online`/`new`, not seen by R, and
-  `last_seen < R.started_at`; drop the time window, active-collector and multiplier logic and
+  `last_seen < R.started_at`, skipping devices still current in another subnet whose latest
+  complete scan (finished ≤ R) has `finished_at` ≥ the device's `last_seen`; drop the time window, active-collector and multiplier logic and
   `OfflineMultiplier`/`DefaultOfflineMultiplier`. Make T006 pass
 - [ ] T008 [P] [US2] Test `internal/app` `TestOneTimeRebuild`: a store with `projection_rules`
   unset (or < 6) and a device that the new rule makes offline is re-derived at `app.New` start-up
