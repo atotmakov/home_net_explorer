@@ -138,13 +138,8 @@ func TestRouterOfflineDetection(t *testing.T) {
 	h = it.New(t)
 	routerAt(h, 0, routerScan(true), phone, tv)
 	routerAt(h, 15, routerScan(true), tv)
-	routerAt(h, 30, routerScan(true), tv)
-	if s := status(t, h, phone.MAC); s != "online" {
-		t.Fatalf("after 2 router reads without it: %s, want online", s)
-	}
-	routerAt(h, 45, routerScan(true), tv)
 	if s := status(t, h, phone.MAC); s != "offline" {
-		t.Errorf("after 3 complete router reads without it: %s, want offline (same as ARP)", s)
+		t.Errorf("after a complete router read without it: %s, want offline (same as ARP, feature 006)", s)
 	}
 	if s := status(t, h, tv.MAC); s != "online" {
 		t.Errorf("listed device = %s", s)
