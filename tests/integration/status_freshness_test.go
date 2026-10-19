@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 )
 
 // Feature 006: the Devices list and device page show online / online (stale) / offline; the

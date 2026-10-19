@@ -237,12 +237,12 @@ func (s *Server) handleDeviceAttrs(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------- settings
 
 type settingsData struct {
-	Subnets           []store.SubnetInfo
-	Skipped           []store.SkippedSubnet
-	IntervalMinutes   int
-	BuiltinEnabled    bool
-	Scan              *scanView // built-in scanner, for the Maintenance card (feature 004)
-	Notice            string    // result of a maintenance action
+	Subnets         []store.SubnetInfo
+	Skipped         []store.SkippedSubnet
+	IntervalMinutes int
+	BuiltinEnabled  bool
+	Scan            *scanView // built-in scanner, for the Maintenance card (feature 004)
+	Notice          string    // result of a maintenance action
 }
 
 func (s *Server) settingInt(r *http.Request, key string, def int) int {
@@ -260,10 +260,10 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status int, errMsg string) {
 	data := settingsData{
-		IntervalMinutes:   s.settingInt(r, "builtin_interval_seconds", 900) / 60,
-		BuiltinEnabled:    s.opts.Scanner != nil,
-		Scan:              s.scanView(r.Context()),
-		Notice:            maintenanceNotice(r.URL.Query()),
+		IntervalMinutes: s.settingInt(r, "builtin_interval_seconds", 900) / 60,
+		BuiltinEnabled:  s.opts.Scanner != nil,
+		Scan:            s.scanView(r.Context()),
+		Notice:          maintenanceNotice(r.URL.Query()),
 	}
 	var err error
 	if data.Subnets, err = s.opts.Store.SubnetStatus(r.Context(), s.opts.Clock.Now()); err != nil {
