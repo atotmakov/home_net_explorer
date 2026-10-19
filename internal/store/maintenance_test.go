@@ -63,7 +63,8 @@ func usedStore(t *testing.T) *it.Harness {
 		store.SettingRouterRejectedBuiltin: `["abc"]`,
 		store.SettingBuiltinPaused:         "2026-10-05T10:30:00.000Z",
 		"builtin_interval_seconds":         "1800",
-		"offline_multiplier":               "5",
+		"offline_multiplier":               "5", // removed by feature 006; an old value is just deleted
+		store.SettingProjectionRules:       "6",
 	} {
 		if err := h.Store.SetSetting(ctx, k, v); err != nil {
 			t.Fatal(err)
@@ -129,7 +130,7 @@ func removeCollectors(ctx context.Context, tx *sql.Tx) (store.RemovalCounts, err
 	return store.RemoveAllCollectors(ctx, tx, removeAt)
 }
 
-var defaults = map[string]string{"builtin_interval_seconds": "900", "offline_multiplier": "3"}
+var defaults = map[string]string{"builtin_interval_seconds": "900"}
 
 func dropAll(ctx context.Context, tx *sql.Tx) (store.RemovalCounts, error) {
 	return store.DropAllData(ctx, tx, removeAt, defaults)
@@ -313,7 +314,7 @@ func TestDropAllData(t *testing.T) {
 		t.Error("the owner's session was deleted")
 	}
 	want := map[string]string{store.SettingOwnerPassword: "hash", store.SettingDataResetAt: store.FormatTime(removeAt),
-		"builtin_interval_seconds": "900", "offline_multiplier": "3"}
+		store.SettingProjectionRules: "6", "builtin_interval_seconds": "900"}
 	got := map[string]string{}
 	r, err := h.Store.DB().Query(`SELECT key, value FROM settings`)
 	if err != nil {

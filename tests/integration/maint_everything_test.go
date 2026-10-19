@@ -31,7 +31,7 @@ func TestMaintDropAllData(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if res, _ := e.post("/settings", url.Values{"interval_minutes": {"30"}, "offline_multiplier": {"5"}}); res.StatusCode != http.StatusSeeOther {
+	if res, _ := e.post("/settings", url.Values{"interval_minutes": {"30"}}); res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("save settings = %d", res.StatusCode)
 	}
 	if res, _ := e.post("/maintenance/pause", url.Values{}); res.StatusCode != http.StatusSeeOther {
@@ -64,7 +64,7 @@ func TestMaintDropAllData(t *testing.T) {
 
 	// Still logged in, with the same password.
 	settings := e.get("/settings") // e.get fails on a login redirect
-	if !strings.Contains(settings, `value="15"`) || !strings.Contains(settings, `name="offline_multiplier" min="1" max="10" value="3"`) {
+	if !strings.Contains(settings, `value="15"`) {
 		t.Errorf("settings not back to defaults:\n%s", settings)
 	}
 	if strings.Contains(settings, "paused since") || strings.Contains(settings, `value="home"`) {

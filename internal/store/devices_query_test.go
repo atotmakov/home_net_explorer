@@ -97,17 +97,17 @@ func TestGetDeviceAndCounts(t *testing.T) {
 	h := seed(t)
 	ctx := context.Background()
 	rows, _ := h.Store.ListDevices(ctx, store.DeviceFilter{Q: "printer"})
-	d, err := h.Store.GetDevice(ctx, rows[0].ID)
+	d, err := h.Store.GetDevice(ctx, rows[0].ID, it.T0.Add(10*time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if d.Hostname != "printer.local" || len(d.Addresses) != 1 || d.Addresses[0].CIDR != "192.168.8.0/24" {
 		t.Errorf("device detail = %+v", d)
 	}
-	if _, err := h.Store.GetDevice(ctx, 9999); err != store.ErrNotFound {
+	if _, err := h.Store.GetDevice(ctx, 9999, it.T0); err != store.ErrNotFound {
 		t.Errorf("missing device: %v", err)
 	}
-	c, err := h.Store.HomeCounts(ctx)
+	c, err := h.Store.HomeCounts(ctx, it.T0.Add(10*time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,5 +140,110 @@ func TestIgnoredSubnetsFromFacts(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].String() != "10.20.30.0/24" {
 		t.Errorf("IgnoredSubnets = %v, want [10.20.30.0/24]", got)
+	}
+}
+
+// Feature 006: the shown state is online (seen within two scan intervals), stale (older), or
+// offline (stored offline), computed from an injected "now".
+func states(t *testing.T, h *it.Harness, now time.Time) map[string]string {
+	t.Helper()
+	rows, err := h.Store.ListDevices(context.Background(), store.DeviceFilter{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := map[string]string{}
+	for _, r := range rows {
+		m[r.PrimaryIP()] = r.State
+	}
+	return m
+}
+
+func TestDeviceState(t *testing.T) {
+	h := seed(t) // nas scans 192.168.1.0/24 at T0 (900 s); desktop scans 192.168.8.0/24 at T0+5m
+	if got := states(t, h, it.T0.Add(10*time.Minute)); got["192.168.1.9"] != "online" || got["192.168.8.23"] != "online" {
+		t.Errorf("10 min after the scans: %v, want all online", got)
+	}
+	// 31 min after T0: the 192.168.1.0/24 devices are older than 2 × 900 s, the printer is not.
+	got := states(t, h, it.T0.Add(31*time.Minute))
+	if got["192.168.1.20"] != "stale" || got["192.168.1.100"] != "stale" || got["192.168.8.23"] != "online" {
+		t.Errorf("31 min after T0: %v, want 192.168.1.x stale and the printer online", got)
+	}
+	// One complete scan that misses 192.168.1.9 makes it offline (research R1).
+	h.Ingest(it.Run{Start: it.T0.Add(15 * time.Minute), Subnets: []contract.SubnetScan{it.Scan("192.168.1.0/24")},
+		Obs: []contract.Observation{it.ARP("192.168.1.100", "a0:b1:c2:d3:e4:f5", "router.lan"), it.ARP("192.168.1.20", "00:11:32:aa:bb:cc", "nas.lan")}})
+	got = states(t, h, it.T0.Add(16*time.Minute))
+	if got["192.168.1.9"] != "offline" || got["192.168.1.20"] != "online" {
+		t.Errorf("after a scan without 192.168.1.9: %v", got)
+	}
+	rows, _ := h.Store.ListDevices(context.Background(), store.DeviceFilter{Q: "printer"})
+	if d, err := h.Store.GetDevice(context.Background(), rows[0].ID, it.T0.Add(5*time.Minute+31*time.Minute)); err != nil || d.State != "stale" {
+		t.Errorf("GetDevice state = %q (%v), want stale", d.State, err)
+	}
+}
+
+// The interval is that of the latest complete scan of the device's subnet (any collector); with
+// no complete scan, the built-in interval setting is used.
+func TestDeviceStateInterval(t *testing.T) {
+	h := it.New(t)
+	x := it.ARP("10.1.1.5", "00:00:5e:00:01:05", "")
+	h.Ingest(it.Run{Collector: "nas", Interval: 900, Subnets: []contract.SubnetScan{it.Scan("10.1.1.0/24")}, Obs: []contract.Observation{x}})
+	h.Ingest(it.Run{Collector: "slow", Interval: 3600, Start: it.T0.Add(2 * time.Minute),
+		Subnets: []contract.SubnetScan{it.Scan("10.1.1.0/24")}, Obs: []contract.Observation{x}})
+	if got := states(t, h, it.T0.Add(42*time.Minute)); got["10.1.1.5"] != "online" {
+		t.Errorf("40 min after the latest (3600 s) scan: %v, want online", got)
+	}
+
+	h = it.New(t)
+	if err := h.Store.SetSetting(context.Background(), "builtin_interval_seconds", "60"); err != nil {
+		t.Fatal(err)
+	}
+	h.Ingest(it.Run{Subnets: []contract.SubnetScan{it.Partial("10.2.2.0/24")}, Obs: []contract.Observation{it.ARP("10.2.2.5", "00:00:5e:00:02:05", "")}})
+	got := states(t, h, it.T0.Add(3*time.Minute))
+	if got["10.2.2.5"] != "stale" {
+		t.Errorf("no complete scan, built-in interval 60 s, 3 min later: %v, want stale", got)
+	}
+}
+
+// Home counts equal the Devices filter for each state; unknown filter values show everything.
+func TestHomeCountsByState(t *testing.T) {
+	h := seed(t)
+	h.Ingest(it.Run{Start: it.T0.Add(15 * time.Minute), Subnets: []contract.SubnetScan{it.Scan("192.168.1.0/24")},
+		Obs: []contract.Observation{it.ARP("192.168.1.100", "a0:b1:c2:d3:e4:f5", "router.lan")}})
+	ctx := context.Background()
+	now := it.T0.Add(40 * time.Minute) // router seen at T0+15 (online), printer at T0+5 (stale), two offline
+	c, err := h.Store.HomeCounts(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Online != 1 || c.Stale != 1 || c.Offline != 2 || c.Total != 4 {
+		t.Errorf("counts = %+v, want 1 online / 1 stale / 2 offline", c)
+	}
+	for state, want := range map[string]int{"online": c.Online, "stale": c.Stale, "offline": c.Offline, "new": 4, "bogus": 4} {
+		rows, err := h.Store.ListDevices(ctx, store.DeviceFilter{Status: state, Now: now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != want {
+			t.Errorf("filter %q: %d devices, want %d", state, len(rows), want)
+		}
+	}
+}
+
+// A subnet is stale when no complete scan of it is within two of the collector's intervals.
+func TestSubnetStatusStale(t *testing.T) {
+	h := seed(t) // 192.168.1.0/24 finished at T0+1m, 900 s
+	for _, c := range []struct {
+		at    time.Duration
+		stale bool
+	}{{29 * time.Minute, false}, {32 * time.Minute, true}} {
+		subs, err := h.Store.SubnetStatus(context.Background(), it.T0.Add(c.at))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range subs {
+			if s.CIDR == "192.168.1.0/24" && s.Stale != c.stale {
+				t.Errorf("at T0+%v stale = %v, want %v", c.at, s.Stale, c.stale)
+			}
+		}
 	}
 }

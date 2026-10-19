@@ -7,16 +7,13 @@ import (
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
+	"github.com/atotmakov/home_net_explorer/internal/inventory"
 	it "github.com/atotmakov/home_net_explorer/internal/inventory/inventorytest"
 )
 
-// Rule (research R7):
-//   - "A collector is active for subnet S at time t if it completed a scan of S within
-//     3 × its interval before t."
-//   - "After ingesting a completed scan R of subnet S, each device in S that R didn't see goes
-//     offline when both of these hold: (1) every collector that is active for S at
-//     R.finished_at has completed ≥ 3 scans of S since the device's last_seen, and none of those
-//     scans saw it, and (2) R.finished_at − last_seen ≥ 3 × the interval of R's collector."
+// Rule (feature 006, research R1): after a complete, not ignored scan R of subnet S, a device
+// with a current address in S that R did not see goes offline when its last_seen is before
+// R.started_at and it is not current in another subnet whose latest complete scan saw it.
 
 const home = "192.168.1.0/24"
 
@@ -32,6 +29,23 @@ func status(t *testing.T, h *it.Harness, mac string) string {
 	return s
 }
 
+func wentOfflineAt(t *testing.T, h *it.Harness, mac string) []string {
+	t.Helper()
+	rows, err := h.Store.DB().Query(`SELECT e.at FROM events e JOIN devices d ON d.id = e.device_id
+		WHERE d.mac = ? AND e.type = 'went_offline' ORDER BY e.at`, mac)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var at string
+		rows.Scan(&at)
+		out = append(out, at)
+	}
+	return out
+}
+
 func minutes(m int) time.Time { return it.T0.Add(time.Duration(m) * time.Minute) }
 
 func scanAt(h *it.Harness, collector string, m int, scan contract.SubnetScan, obs ...contract.Observation) *contract.CollectionRun {
@@ -39,54 +53,42 @@ func scanAt(h *it.Harness, collector string, m int, scan contract.SubnetScan, ob
 	return run
 }
 
-func TestOfflineWithSilentCollector(t *testing.T) {
+func fmtTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
+
+func TestOfflineAfterOneMissedScan(t *testing.T) {
 	h := it.New(t)
 	scanAt(h, "nas", 0, it.Scan(home), phone, nasDev)
-	scanAt(h, "nas", 15, it.Scan(home), nasDev)
-	scanAt(h, "nas", 30, it.Scan(home), nasDev)
-	if s := status(t, h, phone.MAC); s != "online" {
-		t.Fatalf("after 2 missed scans status = %s, want online", s)
-	}
-	third := scanAt(h, "nas", 45, it.Scan(home), nasDev)
+	missed := scanAt(h, "nas", 15, it.Scan(home), nasDev)
 	if s := status(t, h, phone.MAC); s != "offline" {
-		t.Fatalf("NAS active, desktop silent: after 3 missed scans status = %s, want offline", s)
+		t.Fatalf("after one missed complete scan status = %s, want offline", s)
 	}
-	var at string
-	if err := h.Store.DB().QueryRow(`SELECT e.at FROM events e JOIN devices d ON d.id = e.device_id
-		WHERE d.mac = ? AND e.type = 'went_offline'`, phone.MAC).Scan(&at); err != nil {
-		t.Fatal(err)
-	}
-	if want := third.FinishedAt.UTC().Format("2006-01-02T15:04:05.000Z"); at != want {
-		t.Errorf("went_offline at %s, want the triggering scan's finished_at %s", at, want)
+	if at := wentOfflineAt(t, h, phone.MAC); len(at) != 1 || at[0] != fmtTime(missed.FinishedAt) {
+		t.Errorf("went_offline at %v, want the missing scan's finished_at %s", at, fmtTime(missed.FinishedAt))
 	}
 	if s := status(t, h, nasDev.MAC); s != "online" {
 		t.Errorf("seen device status = %s", s)
 	}
+}
 
-	scanAt(h, "nas", 60, it.Scan(home), nasDev, phone)
+func TestComesBackOnline(t *testing.T) {
+	h := it.New(t)
+	scanAt(h, "nas", 0, it.Scan(home), phone)
+	scanAt(h, "nas", 15, it.Scan(home))
+	scanAt(h, "nas", 30, it.Scan(home), phone)
 	if s := status(t, h, phone.MAC); s != "online" {
 		t.Errorf("device seen again: status = %s, want online", s)
 	}
 }
 
-func TestOfflineNeedsEveryActiveCollector(t *testing.T) {
+// A spooled scan that started before the device's latest sighting is uploaded late: it must not
+// mark the device offline.
+func TestLateUploadDoesNotMarkOffline(t *testing.T) {
 	h := it.New(t)
-	scanAt(h, "nas", 0, it.Scan(home), phone)
-	scanAt(h, "desktop", 0, it.Scan(home), phone)
-	scanAt(h, "nas", 15, it.Scan(home))
-	scanAt(h, "desktop", 20, it.Scan(home))
-	scanAt(h, "nas", 30, it.Scan(home))
-	scanAt(h, "nas", 45, it.Scan(home))
+	late := h.Build(it.Run{Collector: "desktop", Start: minutes(10), Subnets: []contract.SubnetScan{it.Scan(home)}})
+	scanAt(h, "nas", 20, it.Scan(home), phone)
+	h.IngestRun(late, minutes(30))
 	if s := status(t, h, phone.MAC); s != "online" {
-		t.Fatalf("desktop (active) has only 1 scan since last_seen; status = %s, want online", s)
-	}
-	scanAt(h, "desktop", 35, it.Scan(home))
-	if s := status(t, h, phone.MAC); s != "online" {
-		t.Fatalf("desktop has 2 scans; status = %s, want online", s)
-	}
-	scanAt(h, "desktop", 50, it.Scan(home))
-	if s := status(t, h, phone.MAC); s != "offline" {
-		t.Fatalf("both active collectors have 3 scans; status = %s, want offline", s)
+		t.Errorf("a late upload of an older scan made the device %s", s)
 	}
 }
 
@@ -95,51 +97,70 @@ func TestIncompleteScansDontCount(t *testing.T) {
 	scanAt(h, "nas", 0, it.Scan(home), phone)
 	scanAt(h, "nas", 15, it.Partial(home))
 	scanAt(h, "nas", 30, it.Partial(home))
-	scanAt(h, "nas", 45, it.Partial(home))
-	scanAt(h, "nas", 60, it.Partial(home))
 	if s := status(t, h, phone.MAC); s != "online" {
 		t.Errorf("incomplete scans marked the device %s", s)
 	}
 }
 
-func TestStaleSubnetKeepsStatus(t *testing.T) {
+// Several collectors scan the same subnet: the latest complete scan of any of them decides.
+func TestTwoCollectorsLatestScanDecides(t *testing.T) {
 	h := it.New(t)
-	scanAt(h, "nas", 0, it.Scan(home), phone)
-	before := h.Snapshot()
-
-	ctx := context.Background()
-	subnets, err := h.Store.SubnetStatus(ctx, minutes(10))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(subnets) != 1 || subnets[0].Stale {
-		t.Errorf("subnet scanned 10 minutes ago reported stale: %+v", subnets)
-	}
-	// No scans for a day: the subnet is stale, but nothing in the database changes.
-	subnets, err = h.Store.SubnetStatus(ctx, minutes(24*60))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !subnets[0].Stale {
-		t.Error("subnet with no active collector not reported stale")
-	}
-	if s := status(t, h, phone.MAC); s != "online" {
-		t.Errorf("status changed without scans: %s", s)
-	}
-	if after := h.Snapshot(); !reflect.DeepEqual(before, after) {
-		t.Error("reading status with a later clock changed the database")
+	scanAt(h, "desktop", 0, it.Scan(home), phone)
+	scanAt(h, "nas", 5, it.Scan(home))
+	if s := status(t, h, phone.MAC); s != "offline" {
+		t.Errorf("the NAS's later complete scan missed the device: status = %s, want offline", s)
 	}
 }
 
-func TestMultiplierFromSettings(t *testing.T) {
+// A device current in two subnets goes offline only when both subnets' latest complete scans
+// missed it.
+func TestTwoSubnetsOfflineOnlyWhenBothMiss(t *testing.T) {
 	h := it.New(t)
-	if err := h.Store.SetSetting(context.Background(), "offline_multiplier", "2"); err != nil {
+	const lab = "10.9.9.0/24"
+	nic1 := it.ARP("192.168.1.30", "00:00:5e:00:00:30", "")
+	nic2 := it.ARP("10.9.9.30", "00:00:5e:00:00:30", "") // the same device (same MAC) in a second subnet
+	scanAt(h, "nas", 0, it.Scan(home), nic1)
+	scanAt(h, "lab", 5, it.Scan(lab), nic2)
+	scanAt(h, "nas", 15, it.Scan(home))
+	if s := status(t, h, nic1.MAC); s != "online" {
+		t.Fatalf("missed in %s but seen by the latest scan of %s: status = %s, want online", home, lab, s)
+	}
+	missed := scanAt(h, "lab", 20, it.Scan(lab))
+	if s := status(t, h, nic1.MAC); s != "offline" {
+		t.Fatalf("missed by the latest scans of both subnets: status = %s, want offline", s)
+	}
+	if at := wentOfflineAt(t, h, nic1.MAC); len(at) != 1 || at[0] != fmtTime(missed.FinishedAt) {
+		t.Errorf("went_offline at %v, want %s", at, fmtTime(missed.FinishedAt))
+	}
+}
+
+// Rebuild reaches the same statuses and events (Principle V).
+func TestRebuildSameStatuses(t *testing.T) {
+	h := it.New(t)
+	scanAt(h, "nas", 0, it.Scan(home), phone, nasDev)
+	scanAt(h, "nas", 15, it.Scan(home), nasDev)
+	late := h.Build(it.Run{Collector: "desktop", Start: minutes(20), Subnets: []contract.SubnetScan{it.Scan(home)}})
+	scanAt(h, "nas", 30, it.Scan(home), nasDev, phone)
+	h.IngestRun(late, minutes(40))
+	scanAt(h, "nas", 45, it.Scan(home), nasDev)
+	before := h.Snapshot()
+	if err := inventory.Rebuild(context.Background(), h.Store, h.Applier); err != nil {
 		t.Fatal(err)
 	}
+	if after := h.Snapshot(); !reflect.DeepEqual(before, after) {
+		t.Errorf("rebuild changed the projections:\nbefore %v\nafter  %v", before, after)
+	}
+}
+
+// Reading subnet status with a later clock never changes the database.
+func TestSubnetStatusReadOnly(t *testing.T) {
+	h := it.New(t)
 	scanAt(h, "nas", 0, it.Scan(home), phone)
-	scanAt(h, "nas", 15, it.Scan(home))
-	scanAt(h, "nas", 30, it.Scan(home))
-	if s := status(t, h, phone.MAC); s != "offline" {
-		t.Errorf("with multiplier 2, 2 missed scans should mark offline; status = %s", s)
+	before := h.Snapshot()
+	if _, err := h.Store.SubnetStatus(context.Background(), minutes(24*60)); err != nil {
+		t.Fatal(err)
+	}
+	if after := h.Snapshot(); !reflect.DeepEqual(before, after) {
+		t.Error("reading status with a later clock changed the database")
 	}
 }

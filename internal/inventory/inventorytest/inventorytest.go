@@ -38,6 +38,11 @@ func New(t testing.TB) *Harness {
 	return &Harness{T: t, Store: s, Applier: a, Ingester: ingest.New(s, a), collectors: map[string]int64{}}
 }
 
+// Over returns a harness over an existing store, applier and ingester (e.g. an app's).
+func Over(t testing.TB, s *store.Store, a *inventory.Applier, in *ingest.Ingester) *Harness {
+	return &Harness{T: t, Store: s, Applier: a, Ingester: in, collectors: map[string]int64{}}
+}
+
 // Collector returns the id of a named collector, creating it.
 func (h *Harness) Collector(name string) int64 {
 	h.T.Helper()
