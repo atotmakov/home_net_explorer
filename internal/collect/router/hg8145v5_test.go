@@ -52,6 +52,10 @@ func TestReadOK(t *testing.T) {
 	if got := f.Requests(); !slices.Equal(got, fullRead) {
 		t.Errorf("requests = %q\nwant %q", got, fullRead)
 	}
+	if s := res.Self; s == nil || s.IP != h.Address().String() || s.MAC != "00:e0:fc:12:34:56" || s.Hostname != "HG8145V5" ||
+		s.HostnameSource != contract.HostnameSourceRouter || s.Method != contract.ObsRouterTable {
+		t.Errorf("router itself = %+v, want its MAC and model name", res.Self)
+	}
 	if f.Logouts() != 1 || f.SessionOpen() {
 		t.Errorf("logouts = %d, session open = %v; the collector must log out (FR-004, SC-006)", f.Logouts(), f.SessionOpen())
 	}
@@ -201,8 +205,7 @@ func TestReadOKWithoutDeviceInfo(t *testing.T) {
 		t.Errorf("router itself = %+v, want none when its page is not understood", res.Self)
 	}
 	if got := f.Requests(); !slices.Equal(got, fullRead) {
-		t.Errorf("requests = %q
-want %q", got, fullRead)
+		t.Errorf("requests = %q\nwant %q", got, fullRead)
 	}
 	if f.Logouts() != 1 || f.SessionOpen() {
 		t.Errorf("logouts = %d, session open = %v; the collector must still log out", f.Logouts(), f.SessionOpen())
