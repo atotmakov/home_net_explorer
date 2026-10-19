@@ -52,6 +52,10 @@ func TestReadOK(t *testing.T) {
 	if got := f.Requests(); !slices.Equal(got, fullRead) {
 		t.Errorf("requests = %q\nwant %q", got, fullRead)
 	}
+	if s := res.Self; s == nil || s.IP != h.Address().String() || s.MAC != "00:e0:fc:12:34:56" || s.Hostname != "HG8145V5" ||
+		s.HostnameSource != contract.HostnameSourceRouter || s.Method != contract.ObsRouterTable {
+		t.Errorf("router itself = %+v, want its MAC and model name", res.Self)
+	}
 	if f.Logouts() != 1 || f.SessionOpen() {
 		t.Errorf("logouts = %d, session open = %v; the collector must log out (FR-004, SC-006)", f.Logouts(), f.SessionOpen())
 	}
@@ -183,5 +187,27 @@ func TestParseDeviceInfo(t *testing.T) {
 		if _, _, ok := parseDeviceInfo([]byte(bad)); ok {
 			t.Errorf("parse(%q) ok, want not understood", bad)
 		}
+	}
+}
+
+// The device-information page is optional: if it is not understood, the read is still ok, the
+// router itself is just not recorded, and the session is still closed.
+func TestReadOKWithoutDeviceInfo(t *testing.T) {
+	f := routertest.New(t, "root", testPassword)
+	f.SetMode(routertest.NoDeviceInfo)
+	h := newSource(t, f.Transport(), testPassword)
+	res := h.Read(context.Background())
+	if res.Outcome != contract.OutcomeOK || res.Online != 13 || res.Offline != 16 || len(res.Observations) != 13 {
+		t.Fatalf("read = %s, %d online / %d offline, %d observations; want ok 13 / 16 / 13",
+			res.Outcome, res.Online, res.Offline, len(res.Observations))
+	}
+	if res.Self != nil {
+		t.Errorf("router itself = %+v, want none when its page is not understood", res.Self)
+	}
+	if got := f.Requests(); !slices.Equal(got, fullRead) {
+		t.Errorf("requests = %q\nwant %q", got, fullRead)
+	}
+	if f.Logouts() != 1 || f.SessionOpen() {
+		t.Errorf("logouts = %d, session open = %v; the collector must still log out", f.Logouts(), f.SessionOpen())
 	}
 }

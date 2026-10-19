@@ -93,3 +93,31 @@ func TestUS1RouterDevicesFoldWeakRecords(t *testing.T) {
 		t.Errorf("%d router devices went offline after failed reads", n)
 	}
 }
+
+// Feature 002, FR-007b: the router's own observation (MAC and name from its device-information
+// page) becomes a device whose manufacturer comes from the MAC.
+func TestUS1RouterItselfHasManufacturer(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	e.login()
+	cfg := e.createCollector("desktop")
+	body := withID(t, "valid_router.json", "1b4e28ba-2fa1-41d2-883f-0016d3cca4a0", func(m map[string]any) {
+		obs := m["observations"].([]any)
+		self := map[string]any{}
+		for k, v := range obs[1].(map[string]any) {
+			self[k] = v
+		}
+		delete(self, "via")
+		self["ip"], self["mac"] = "192.168.0.1", "00:e0:fc:12:34:56" // a Huawei OUI
+		self["hostname"], self["hostname_source"] = "HG8145V5", "router"
+		m["observations"] = append(obs, self)
+	})
+	if status, r := e.upload(cfg.Token, body); status != http.StatusCreated {
+		t.Fatalf("upload = %d %s", status, r.Status)
+	}
+	page := e.get("/devices")
+	for _, want := range []string{"HG8145V5", "00:e0:fc:12:34:56", "HUAWEI"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("devices page lacks %q", want)
+		}
+	}
+}

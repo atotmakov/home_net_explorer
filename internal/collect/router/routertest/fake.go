@@ -29,6 +29,7 @@ const (
 	GarbledList               // the device list page is not the expected JavaScript
 	NoOntToken                // index.asp carries no onttoken, so no logout is possible
 	Hang                      // GetRandCount.asp never answers
+	NoDeviceInfo              // the device-information page is not the expected JavaScript
 )
 
 // FixturePath is the anonymized capture served as the device list.
@@ -166,6 +167,10 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case "GET /html/ssmp/deviceinfo/deviceinfo.asp":
 		if !f.authorized(r) {
 			fmt.Fprint(w, redirectPage("/"))
+			return
+		}
+		if mode == NoDeviceInfo {
+			fmt.Fprint(w, loginPage(0, 0, 0))
 			return
 		}
 		b, err := os.ReadFile(filepath.Join(filepath.Dir(FixturePath()), "hg8145v5_deviceinfo.asp"))
