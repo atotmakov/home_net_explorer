@@ -10,7 +10,7 @@
   </select>
   <select name="status" aria-label="Status">
     <option value="">Any status</option>
-    {{range $s := statuses}}<option value="{{$s}}" {{if eq $s $.Data.Filter.Status}}selected{{end}}>{{$s}}</option>{{end}}
+    {{range $s := statuses}}<option value="{{$s}}" {{if eq $s $.Data.Filter.Status}}selected{{end}}>{{stateLabel $s}}</option>{{end}}
   </select>
   <input type="text" name="manufacturer" value="{{.Filter.Manufacturer}}" placeholder="Manufacturer" aria-label="Manufacturer">
   <select name="sort" aria-label="Sort by">
@@ -39,7 +39,7 @@
   <td><code>{{.MAC}}</code>{{if .MACRandomized}} <span class="badge" title="Locally administered (randomized) MAC">randomized MAC</span>{{end}}{{if .Weak}} <span class="badge warn" title="Identified by IP/hostname, no MAC">weak ID</span>{{end}}</td>
   <td>{{.Hostname}}</td>
   <td>{{.Manufacturer}}</td>
-  <td><span class="badge s-{{.Status}}">{{.Status}}</span></td>
+  <td><span class="badge s-{{.State}}"{{if eq .State "stale"}} title="last seen {{ago .Age}} ago"{{end}}>{{stateLabel .State}}</span></td>
   <td>{{fmtTime .FirstSeen}}</td>
   <td>{{fmtTime .LastSeen}}</td>
 </tr>

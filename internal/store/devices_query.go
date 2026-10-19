@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -33,7 +32,9 @@ type DeviceRow struct {
 	MACRandomized bool
 	Weak          bool
 	Manufacturer  string
-	Status        string
+	Status        string        // stored status
+	State         string        // shown state: StateOnline, StateStale or StateOffline (feature 006)
+	Age           time.Duration // time since last_seen at the moment of viewing
 	UserName      string
 	Notes         string
 	Type          string
@@ -60,6 +61,7 @@ type DeviceFilter struct {
 	Weak         bool
 	SeenAfter    time.Time // last_seen >= SeenAfter
 	SeenBefore   time.Time // last_seen < SeenBefore
+	Now          time.Time // moment of viewing, for the shown state (zero: online unless offline)
 	Sort         string    // ip (default), mac, hostname, manufacturer, first_seen, last_seen, name
 	Desc         bool
 }
@@ -113,6 +115,10 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]DeviceRow, e
 	if err != nil {
 		return nil, err
 	}
+	eval, err := s.newStateEval(ctx, f.Now)
+	if err != nil {
+		return nil, err
+	}
 
 	q := strings.ToLower(strings.TrimSpace(f.Q))
 	man := strings.ToLower(strings.TrimSpace(f.Manufacturer))
@@ -122,14 +128,15 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]DeviceRow, e
 		if len(d.Addresses) == 0 && hidden[d.ID] {
 			continue // only seen on ignored subnets
 		}
+		eval.apply(&d)
 		if q != "" && !matches(d, q) {
 			continue
 		}
 		if f.Subnet != "" && !slices.ContainsFunc(d.Addresses, func(a Address) bool { return a.CIDR == f.Subnet }) {
 			continue
 		}
-		if f.Status != "" && d.Status != f.Status {
-			continue
+		if slices.Contains(States, f.Status) && d.State != f.Status {
+			continue // other values (e.g. the old "new") filter nothing
 		}
 		if man != "" && !strings.Contains(strings.ToLower(d.Manufacturer), man) {
 			continue
@@ -236,8 +243,8 @@ func (s *Store) currentAddresses(ctx context.Context) (map[int64][]Address, map[
 	return addrs, hidden, rows.Err()
 }
 
-// GetDevice loads one device with its current addresses.
-func (s *Store) GetDevice(ctx context.Context, id int64) (DeviceRow, error) {
+// GetDevice loads one device with its current addresses and its state at now.
+func (s *Store) GetDevice(ctx context.Context, id int64, now time.Time) (DeviceRow, error) {
 	d, err := scanDevice(s.db.QueryRowContext(ctx, `SELECT `+deviceCols+` FROM devices WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
@@ -250,24 +257,39 @@ func (s *Store) GetDevice(ctx context.Context, id int64) (DeviceRow, error) {
 		return d, err
 	}
 	d.Addresses = addrs[d.ID]
+	eval, err := s.newStateEval(ctx, now)
+	if err != nil {
+		return d, err
+	}
+	eval.apply(&d)
 	return d, nil
 }
 
-// Counts summarizes the inventory for the home page.
+// Counts summarizes the inventory for the home page by shown state.
 type Counts struct {
-	Total, Online, Offline, New int
+	Total, Online, Stale, Offline int
 }
 
-// HomeCounts counts devices by status.
-func (s *Store) HomeCounts(ctx context.Context) (Counts, error) {
+// HomeCounts counts the devices the Devices list shows, by state at now (so the numbers always
+// equal the status filter's results, feature 006 SC-003).
+func (s *Store) HomeCounts(ctx context.Context, now time.Time) (Counts, error) {
 	var c Counts
-	err := s.db.QueryRowContext(ctx, `SELECT
-		count(*),
-		count(*) FILTER (WHERE status IN ('online', 'new')),
-		count(*) FILTER (WHERE status IN ('offline', 'new_offline')),
-		count(*) FILTER (WHERE status IN ('new', 'new_offline'))
-		FROM devices WHERE status != 'merged_away'`).Scan(&c.Total, &c.Online, &c.Offline, &c.New)
-	return c, err
+	rows, err := s.ListDevices(ctx, DeviceFilter{Now: now})
+	if err != nil {
+		return c, err
+	}
+	c.Total = len(rows)
+	for _, d := range rows {
+		switch d.State {
+		case StateOnline:
+			c.Online++
+		case StateStale:
+			c.Stale++
+		case StateOffline:
+			c.Offline++
+		}
+	}
+	return c, nil
 }
 
 // SubnetInfo is a subnet with its scan status.
@@ -309,12 +331,6 @@ func (s *Store) SubnetStatus(ctx context.Context, now time.Time) ([]SubnetInfo, 
 		return nil, err
 	}
 
-	mult := 3
-	if v, ok, _ := s.Setting(ctx, "offline_multiplier"); ok {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
-			mult = n
-		}
-	}
 	for i := range out {
 		si := &out[i]
 		si.Stale = true
@@ -336,7 +352,7 @@ func (s *Store) SubnetStatus(ctx context.Context, now time.Time) ([]SubnetInfo, 
 			if t.After(si.LastScanned) {
 				si.LastScanned, si.LastScannedBy = t, name
 			}
-			if now.Sub(t) <= time.Duration(mult*interval)*time.Second {
+			if now.Sub(t) <= time.Duration(FreshScans*interval)*time.Second {
 				si.Stale = false
 			}
 		}

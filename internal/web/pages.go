@@ -44,7 +44,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	data := homeData{Scan: s.scanView(r.Context())}
 	if st := s.opts.Store; st != nil {
 		var err error
-		if data.Counts, err = st.HomeCounts(r.Context()); err != nil {
+		if data.Counts, err = st.HomeCounts(r.Context(), s.opts.Clock.Now()); err != nil {
 			s.serverError(w, r, err)
 			return
 		}
@@ -120,6 +120,7 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	f.Now = s.opts.Clock.Now()
 	rows, err := s.opts.Store.ListDevices(r.Context(), f)
 	if errors.Is(err, store.ErrBadSort) {
 		http.Error(w, "unknown sort key", http.StatusBadRequest)
@@ -154,7 +155,7 @@ func (s *Server) loadDevice(w http.ResponseWriter, r *http.Request) (store.Devic
 		http.NotFound(w, r)
 		return store.DeviceRow{}, false
 	}
-	d, err := s.opts.Store.GetDevice(r.Context(), id)
+	d, err := s.opts.Store.GetDevice(r.Context(), id, s.opts.Clock.Now())
 	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return d, false
@@ -239,7 +240,6 @@ type settingsData struct {
 	Subnets           []store.SubnetInfo
 	Skipped           []store.SkippedSubnet
 	IntervalMinutes   int
-	OfflineMultiplier int
 	BuiltinEnabled    bool
 	Scan              *scanView // built-in scanner, for the Maintenance card (feature 004)
 	Notice            string    // result of a maintenance action
@@ -261,7 +261,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status int, errMsg string) {
 	data := settingsData{
 		IntervalMinutes:   s.settingInt(r, "builtin_interval_seconds", 900) / 60,
-		OfflineMultiplier: s.settingInt(r, "offline_multiplier", inventory.DefaultOfflineMultiplier),
 		BuiltinEnabled:    s.opts.Scanner != nil,
 		Scan:              s.scanView(r.Context()),
 		Notice:            maintenanceNotice(r.URL.Query()),
@@ -287,7 +286,6 @@ func (s *Server) handleSettingsSave(w http.ResponseWriter, r *http.Request) {
 	}
 	fields := []field{
 		{"interval_minutes", "builtin_interval_seconds", 1, 1440, 60, "Scan interval must be 1–1440 minutes."},
-		{"offline_multiplier", "offline_multiplier", 1, 10, 1, "Offline threshold must be 1–10 missed scans."},
 	}
 	for _, f := range fields {
 		v := strings.TrimSpace(r.PostFormValue(f.form))

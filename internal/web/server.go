@@ -141,7 +141,9 @@ func (s *Server) loadTemplates() error {
 }
 
 var funcs = template.FuncMap{
-	"statuses":      func() []string { return []string{"online", "offline", "new", "new_offline"} },
+	"statuses":      func() []string { return store.States },
+	"stateLabel":    stateLabel,
+	"ago":           ago,
 	"routerOutcome": routerOutcome,
 	"scanProblem":   scanProblem,
 	"readOutcome": func(r store.RouterRead) string {
@@ -352,4 +354,27 @@ func scanProblem(reason string) string {
 		return "answers faked on the network path (VPN?): 90% or more of the addresses answered, so nothing was recorded"
 	}
 	return reason
+}
+
+// stateLabel is the text of a shown device state (feature 006); it carries the meaning without
+// color (FR-009).
+func stateLabel(state string) string {
+	if state == store.StateStale {
+		return "online (stale)"
+	}
+	return state
+}
+
+// ago formats an age as "45 min", "3 h 5 min" or "2 d 4 h".
+func ago(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "<1 min"
+	case d < time.Hour:
+		return fmt.Sprintf("%d min", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d h %d min", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		return fmt.Sprintf("%d d %d h", int(d.Hours())/24, int(d.Hours())%24)
+	}
 }

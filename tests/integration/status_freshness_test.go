@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atotmakov/home_net_explorer/internal/contract/contracttest"
 )
 
 // Feature 006: the Devices list and device page show online / online (stale) / offline; the

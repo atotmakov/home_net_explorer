@@ -13,17 +13,17 @@ Go toolchain).
 
 ## Phase 1: Setup
 
-- [ ] T001 Set `VERSION` to `0.7`
+- [X] T001 Set `VERSION` to `0.7`
 
 ## Phase 2: Foundational (shown state in the store)
 
-- [ ] T002 Tests in `internal/store/devices_query_test.go`: `TestDeviceState` — with an injected
+- [X] T002 Tests in `internal/store/devices_query_test.go`: `TestDeviceState` — with an injected
   `now`: a stored-online device seen within 2 × I is `online`, older than 2 × I is `stale`, a
   stored-offline device is `offline`; I is the `interval_seconds` of the most recent complete scan
   (by `finished_at`, any collector) of a subnet holding one of the device's current addresses
   (two collectors with 900 s and 3600 s intervals: the later scan's interval is used); a device
   with no complete scan of its subnets uses the `builtin_interval_seconds` setting (default 900 s)
-- [ ] T003 Implement in `internal/store/devices_query.go`: `DeviceRow.State` (`online` | `stale` |
+- [X] T003 Implement in `internal/store/devices_query.go`: `DeviceRow.State` (`online` | `stale` |
   `offline`) and `DeviceRow.StaleFor` (age of `last_seen`), computed in `ListDevices`/`GetDevice`
   from a `now` argument (callers pass the request time); stored `online`/`new` → online or stale,
   `offline`/`new_offline` → offline. Make T002 pass
@@ -33,13 +33,13 @@ Go toolchain).
 **Goal**: green "online" vs gray "online (stale)" on the Devices list and device page.
 **Independent test**: upload a scan, view at once (green), view later with no scan (gray).
 
-- [ ] T004 [P] [US1] Integration test `tests/integration/status_freshness_test.go`
+- [X] T004 [P] [US1] Integration test `tests/integration/status_freshness_test.go`
   `TestStaleOnlineShown`: upload a scan seeing a device; `/devices` and `/devices/{id}` show the
   `s-online` badge "online"; with the server clock advanced past 2 × interval (test clock), the
   badge is `s-stale` "online (stale)" with `title="last seen … ago"`; a new upload makes it green;
   the badge text alone distinguishes the states ("online", "online (stale)", "offline"),
   independent of the CSS class (FR-009)
-- [ ] T005 [US1] Templates `internal/web/templates/devices.html`, `device.html`: badge by
+- [X] T005 [US1] Templates `internal/web/templates/devices.html`, `device.html`: badge by
   `.State` (`s-online` "online", `s-stale` "online (stale)" + tooltip, `s-offline` "offline");
   `internal/web/pages.go` passes `now` from the server clock; CSS in `internal/web/static/` adds
   `.s-stale` (gray) and gives `.s-offline` a distinct, non-gray style. Make T004 pass
@@ -49,7 +49,7 @@ Go toolchain).
 **Goal**: one missed complete scan makes a device offline; late uploads never do.
 **Independent test**: scan sees device, next complete scan misses it → offline + event.
 
-- [ ] T006 [P] [US2] Rewrite `internal/inventory/offline_test.go` for research R1:
+- [X] T006 [P] [US2] Rewrite `internal/inventory/offline_test.go` for research R1:
   `TestOfflineAfterOneMissedScan` (`went_offline` at the missing scan's `finished_at`);
   `TestLateUploadDoesNotMarkOffline` (a scan that started before the device's `last_seen`, uploaded
   after a newer sighting, changes nothing); `TestIncompleteScansDontCount` and ignored/skipped
@@ -60,15 +60,15 @@ Go toolchain).
   → offline, `went_offline` at B's scan); `TestRebuildSameStatuses`
   (rebuild gives identical statuses and events); remove `TestOfflineNeedsEveryActiveCollector`,
   `TestMultiplierFromSettings`, `TestStaleSubnetKeepsStatus` (time-based rule gone)
-- [ ] T007 [US2] Implement the rule in `internal/inventory/offline.go`: candidates = devices with
+- [X] T007 [US2] Implement the rule in `internal/inventory/offline.go`: candidates = devices with
   a current address in the scanned subnet, status `online`/`new`, not seen by R, and
   `last_seen < R.started_at`, skipping devices still current in another subnet whose latest
-  complete scan (finished ≤ R) has `finished_at` ≥ the device's `last_seen`; drop the time window, active-collector and multiplier logic and
+  complete scan (finished ≤ R) has `started_at` ≤ the device's `last_seen`; drop the time window, active-collector and multiplier logic and
   `OfflineMultiplier`/`DefaultOfflineMultiplier`. Make T006 pass
-- [ ] T008 [P] [US2] Test `internal/app` `TestOneTimeRebuild`: a store with `projection_rules`
+- [X] T008 [P] [US2] Test `internal/app` `TestOneTimeRebuild`: a store with `projection_rules`
   unset (or < 6) and a device that the new rule makes offline is re-derived at `app.New` start-up
   and `projection_rules` = `6`; a second start does not rebuild again
-- [ ] T009 [US2] Implement in `internal/app/app.go`: after migrations, if `projection_rules` < 6,
+- [X] T009 [US2] Implement in `internal/app/app.go`: after migrations, if `projection_rules` < 6,
   run `Rebuild` under the ingester lock, log it, set `projection_rules` = `6`; add
   `store.SettingProjectionRules`; keep it out of maintenance "drop all" deletion (like the
   owner password and `data_reset_at`). Make T008 pass
@@ -77,7 +77,7 @@ Go toolchain).
 
 **Goal**: filter and home counts use online / stale / offline; the multiplier setting is gone.
 
-- [ ] T010 [P] [US3] Tests: `internal/store/devices_query_test.go` `TestHomeCountsByState`
+- [X] T010 [P] [US3] Tests: `internal/store/devices_query_test.go` `TestHomeCountsByState`
   (Counts.Online/Stale/Offline equal `ListDevices` with `Status` = each state) and
   `TestListDevicesFilterByState` (`stale` accepted; `new` returns everything as unknown);
   `TestSubnetStatusStale` (stale = no complete scan within 2 × interval); integration
@@ -86,7 +86,7 @@ Go toolchain).
   `tests/integration/us1_inventory_test.go`, `maint_everything_test.go` and
   `internal/store/maintenance_test.go` so they no longer post or expect `offline_multiplier`,
   and assert the Settings page has no `name="offline_multiplier"`
-- [ ] T011 [US3] Implement: `store.HomeCounts(ctx, now)` with `Stale`; filter by `State` in
+- [X] T011 [US3] Implement: `store.HomeCounts(ctx, now)` with `Stale`; filter by `State` in
   `ListDevices`; `SubnetStatus` stale rule (2 × interval, no multiplier); `internal/web/server.go`
   `statuses` = online, stale, offline; `home.html` three counts; remove the multiplier field from
   `settings.html`, its validation and value in `internal/web/pages.go`, and its default in
@@ -94,7 +94,7 @@ Go toolchain).
 
 ## Phase 6: Polish
 
-- [ ] T012 Docs: `specs/001-lan-inventory-topology/contracts/web-ui.md` (states, filter, counts,
+- [X] T012 Docs: `specs/001-lan-inventory-topology/contracts/web-ui.md` (states, filter, counts,
   settings) and `data-model.md` (offline rule R7 replaced by 006 R1, stale state); note in 001
   spec/research where the multiplier is mentioned that feature 006 replaced it
 - [ ] T013 CI green, merge to `main`, image built, deployed to ocean (standing instructions)
