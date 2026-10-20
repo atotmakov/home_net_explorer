@@ -98,8 +98,9 @@ the Devices filter each give the matching device.
 
 ### Functional Requirements
 
-- **FR-001**: The status shown for a device MUST be one of: "online" (green), "online (stale)"
-  (gray), "offline".
+- **FR-001**: The status shown for a device MUST be one of: "online" (green), "online" in the
+  normal text color (stale), "offline" (gray). Every status carries the tooltip
+  "last seen <days, hours, mins> ago" (owner revision after release 0.7).
 - **FR-002**: A device MUST be shown "online" (green) when the latest complete scan of one of its
   subnets saw it and its "Last seen" is within the freshness threshold (FR-005) of the moment the
   page is viewed.
@@ -122,7 +123,8 @@ the Devices filter each give the matching device.
   stored scans (constitution, Principle V); the time-based gray state is a view of the stored
   data, not a new stored fact. History follows the same offline rule: a device "went offline" at
   the first complete scan that missed it.
-- **FR-009**: Status MUST stay readable without color (text plus color), as today.
+- **FR-009**: Offline MUST stay readable without color (its own text). Fresh and stale online
+  share the text "online" and differ by color and the "last seen" tooltip (owner revision).
 - **FR-010**: The "Mark a device offline after this many missed scans" setting MUST be removed
   (one missed scan is the rule); an already stored value is ignored. The home page "stale" badge
   for a subnet uses the same freshness rule: no complete scan of it within two of the scanning

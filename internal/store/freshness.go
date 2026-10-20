@@ -82,10 +82,13 @@ func (s *Store) newStateEval(ctx context.Context, now time.Time) (*stateEval, er
 	return &stateEval{now: now, scans: scans, fallback: s.builtinInterval(ctx)}, nil
 }
 
-// apply sets d.State and d.Age. The interval is that of the most recent complete scan of any
+// apply sets d.State and d.Age (time since last seen, for every state). The interval is that of the most recent complete scan of any
 // subnet holding one of d's current addresses, else the built-in interval. With a zero time,
 // stored online devices are shown online.
 func (e *stateEval) apply(d *DeviceRow) {
+	if !e.now.IsZero() {
+		d.Age = e.now.Sub(d.LastSeen)
+	}
 	if d.Status == "offline" || d.Status == "new_offline" {
 		d.State = StateOffline
 		return
@@ -94,7 +97,6 @@ func (e *stateEval) apply(d *DeviceRow) {
 	if e.now.IsZero() {
 		return
 	}
-	d.Age = e.now.Sub(d.LastSeen)
 	interval := e.fallback
 	var latest time.Time
 	for _, a := range d.Addresses {
