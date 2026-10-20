@@ -28,16 +28,20 @@ scan but that scan is old, so I don't trust stale data.
 found on the owner's network.
 
 **Independent Test**: upload a scan that sees a device, then view the Devices page at once (green
-"online") and again more than one scan interval later with no new scan (gray "online").
+"online") and again more than two scan intervals later with no new scan ("online" in the normal
+text color).
 
 **Acceptance Scenarios**:
 
-1. **Given** a device whose subnet's latest scan saw it, **When** the page is viewed less than one
-   scan interval after it was last seen, **Then** its status is a green "online".
+1. **Given** a device whose subnet's latest scan saw it, **When** the page is viewed less than two
+   scan intervals after it was last seen, **Then** its status is a green "online".
 2. **Given** the same device and no newer scan of its subnet, **When** the page is viewed more than
-   one scan interval after it was last seen, **Then** its status is a gray "online" with a hint
-   that the information is old (e.g. "last scan 2 h ago").
-3. **Given** a gray "online" device, **When** a new scan sees it, **Then** it is green again.
+   two scan intervals after it was last seen, **Then** its status is "online" in the normal text
+   color (stale), and its tooltip says how old the information is ("last seen 2 hours, 5 mins
+   ago").
+3. **Given** a stale "online" device, **When** a new scan sees it, **Then** it is green again.
+4. **Given** any device, **When** the owner hovers its status, **Then** the tooltip reads
+   "last seen <days, hours, mins> ago".
 
 ---
 
@@ -67,7 +71,7 @@ same subnet that does not: the device shows "offline".
 As the owner, I want the status filter on the Devices page and the online/offline counts on the
 home page to use the same three states, so numbers match what I see in the list.
 
-**Independent Test**: with one green, one gray and one offline device, the home page counts and
+**Independent Test**: with one fresh online, one stale online and one offline device, the home page counts and
 the Devices filter each give the matching device.
 
 **Acceptance Scenarios**:
@@ -83,15 +87,15 @@ the Devices filter each give the matching device.
 - **Several collectors scan the same subnet**: the latest complete scan by any of them decides
   offline; the interval is that of the collector whose scan is the latest.
 - **Device with addresses in several subnets**: it is online if any of its current addresses'
-  subnets saw it in their latest complete scan; the freshest "Last seen" decides green or gray.
+  subnets saw it in their latest complete scan; the freshest "Last seen" decides fresh or stale.
 - **Subnet nobody scans any more** (collector stopped, removed, or paused): its devices keep the
-  result of the last complete scan and turn gray when "Last seen" is older than two intervals;
+  result of the last complete scan and turn stale when "Last seen" is older than two intervals;
   nothing is guessed.
 - **Clock differences**: "Last seen" is the server-corrected scan time, so a collector's wrong
   clock (the desktop's is 4.5 min off) does not change the state.
 - **Boundary**: a scan takes some seconds and uploads after it finishes, so "Last seen" is about
   one interval old just before the next scan arrives. Green therefore lasts up to two scan
-  intervals; a device turns gray only when a scan is clearly late or missing.
+  intervals; a device turns stale only when a scan is clearly late or missing.
 - **Merged devices** (identity merges) are not listed, as today.
 
 ## Requirements *(mandatory)*
@@ -106,21 +110,21 @@ the Devices filter each give the matching device.
   page is viewed.
 - **FR-002a**: The freshness threshold MUST be two scan intervals (e.g. 30 minutes for a 15-minute
   interval).
-- **FR-003**: A device MUST be shown "online (stale)" (gray) when the latest complete scan of its
-  subnet saw it but its "Last seen" is older than the freshness threshold; the page MUST say how
-  old the information is.
+- **FR-003**: A device MUST be shown stale ("online" in the normal text color) when the latest
+  complete scan of its subnet saw it but its "Last seen" is older than the freshness threshold;
+  the tooltip (FR-001) says how old the information is.
 - **FR-004**: A device MUST be shown "offline" when the latest complete scan of every subnet it has
   a current address in did not see it: one missed complete scan is enough.
 - **FR-005**: The freshness threshold (FR-002a) MUST be based on the scan interval of the collector whose
   scan last covered the device's subnet (for the NAS built-in collector, the interval in Settings).
   If none of the device's subnets has a complete scan, the built-in scan interval from Settings
   is used.
-- **FR-006**: The state MUST be evaluated when the page is viewed, so a gray state appears without
+- **FR-006**: The state MUST be evaluated when the page is viewed, so the stale state appears without
   any new scan.
 - **FR-007**: The Devices list, the device page, the Devices status filter and the home page
   counts MUST use the same states.
 - **FR-008**: Device history (came online / went offline events) MUST remain reproducible from the
-  stored scans (constitution, Principle V); the time-based gray state is a view of the stored
+  stored scans (constitution, Principle V); the time-based stale state is a view of the stored
   data, not a new stored fact. History follows the same offline rule: a device "went offline" at
   the first complete scan that missed it.
 - **FR-009**: Offline MUST stay readable without color (its own text). Fresh and stale online
@@ -132,7 +136,7 @@ the Devices filter each give the matching device.
 
 ### Key Entities
 
-- **Device status (shown)**: online / online (stale) / offline, derived from the device's latest
+- **Device status (shown)**: online (fresh) / online (stale) / offline, derived from the device's latest
   observation, the latest complete scans of its subnets, those scans' collector interval, and the
   current time.
 
@@ -151,8 +155,8 @@ the Devices filter each give the matching device.
   subnet (the built-in collector's interval from Settings, a remote collector's configured
   interval as it reports it in each scan).
 - Only complete scans decide offline, as today (skipped or incomplete scans never do).
-- Gray is used for the stale state; "offline" gets its own, clearly different style (today offline
-  is gray, so it changes).
+- Colors (owner revision after 0.7): fresh online green, stale online in the normal text color,
+  offline gray. The status filter keeps the label "online (stale)" so its three choices differ.
 - No change to collectors or the upload contract.
 - Devices that answer only now and then (sleeping phones) will flip between online and offline
   more often; the owner accepted this (clarification 2026-10-19).
@@ -164,3 +168,8 @@ the Devices filter each give the matching device.
 - Q: When does a device become offline? → A: as soon as the latest complete scan of its subnet
   misses it (one missed scan); the N-missed-scans setting goes away.
 - Q: When does green turn gray? → A: when "Last seen" is older than two scan intervals.
+
+### Revision 2026-10-20 (after release 0.7)
+
+- Owner: statuses read "online" (green), "online" (normal text color, stale) and "offline" (gray),
+  each with the tooltip "last seen <days, hours, mins> ago". FR-001, FR-003, FR-009 updated.

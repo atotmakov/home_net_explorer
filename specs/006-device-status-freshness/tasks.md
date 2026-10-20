@@ -97,9 +97,17 @@ Go toolchain).
 - [X] T012 Docs: `specs/001-lan-inventory-topology/contracts/web-ui.md` (states, filter, counts,
   settings) and `data-model.md` (offline rule R7 replaced by 006 R1, stale state); note in 001
   spec/research where the multiplier is mentioned that feature 006 replaced it
-- [ ] T013 CI green, merge to `main`, image built, deployed to ocean (standing instructions)
-- [ ] T014 Real network (quickstart.md): green after a scan, gray after 30 min without scans,
+- [X] T013 CI green, merge to `main`, image built, deployed to ocean (standing instructions)
+- [ ] T014 Real network (quickstart.md): green after a scan, stale after 30 min without scans,
   offline after one scan without the device, counts match the filter
+
+## Revision 2026-10-20 (owner, after 0.7)
+
+- [X] T015 Badges: stale reads "online" in the normal text color, offline is gray, every badge has
+  the tooltip "last seen <days, hours, mins> ago" (`internal/web/server.go` `badgeLabel`, `ago`;
+  `internal/store/freshness.go` sets `Age` for offline too; `app.css`); tests
+  `TestStaleOnlineShown` / `TestStatusFilterAndCounts` updated (PR #14). Supersedes the badge text
+  and colors of T004/T005.
 
 ## Dependencies
 
