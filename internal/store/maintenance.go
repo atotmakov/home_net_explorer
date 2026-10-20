@@ -14,6 +14,9 @@ const (
 	SettingDataResetAt = "data_reset_at"
 	// SettingBuiltinPaused holds the time the built-in scanner was paused; absent when running.
 	SettingBuiltinPaused = "builtin_paused"
+	// SettingProjectionRules is the version of the rules the projections were derived with
+	// (feature 006). It describes the data, so "drop all data" keeps it.
+	SettingProjectionRules = "projection_rules"
 )
 
 // RemovalCounts is what a maintenance action removed.
@@ -96,7 +99,7 @@ func DropAllData(ctx context.Context, tx *sql.Tx, at time.Time, defaults map[str
 	if _, err := tx.ExecContext(ctx, `DELETE FROM collectors WHERE kind = ?`, KindRemote); err != nil {
 		return c, err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key NOT IN (?, ?)`, SettingOwnerPassword, SettingDataResetAt); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key NOT IN (?, ?, ?)`, SettingOwnerPassword, SettingDataResetAt, SettingProjectionRules); err != nil {
 		return c, err
 	}
 	for k, v := range defaults {

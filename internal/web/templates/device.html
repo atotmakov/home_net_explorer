@@ -1,7 +1,7 @@
 {{define "content"}}
 {{with .Data}}{{with .Device}}
 <p><a href="/devices">← Devices</a></p>
-<h1>{{.DisplayName}} <span class="badge s-{{.Status}}">{{.Status}}</span></h1>
+<h1>{{.DisplayName}} <span class="badge s-{{.State}}"{{if eq .State "stale"}} title="last seen {{ago .Age}} ago"{{end}}>{{stateLabel .State}}</span></h1>
 <div class="grid2">
 <section class="card">
   <h2>Identity</h2>

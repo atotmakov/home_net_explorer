@@ -114,7 +114,7 @@ Device type values: `router`, `access_point`, `switch`, `computer`, `phone`, `ta
 ### Settings
 
 `settings(key, value)`: owner password hash, scan interval for the built-in collector (default
-900 s), offline threshold multiplier (default 3). There is no retention setting: history is kept
+900 s). The offline threshold multiplier was removed by feature 006. There is no retention setting: history is kept
 indefinitely (FR-024).
 
 ### Sessions
@@ -179,11 +179,12 @@ current addresses on different subnets (multi-homed edge case).
 
 - **Baseline**: devices first seen in the **first completed scan of a subnet** (by any collector)
   start as `online`, not `new`. A `new_device` event is still recorded for history.
-- The offline rule is defined in research.md R7. It is evaluated only at ingest, using scan
-  timestamps.
-- If every collector covering a device's subnet is silent, the device keeps its status, and the
-  subnet is reported as **stale** (computed when a page loads, never stored). Devices are not
-  marked offline in this case.
+- The offline rule is defined in feature 006, research R1 (it replaced R7): a device goes offline
+  at the first complete scan of its subnet that misses it. It is evaluated only at ingest, using
+  scan timestamps.
+- If every collector covering a device's subnet is silent, the device keeps its status. Pages
+  show it as **online (stale)** once it has not been seen for two scan intervals, and the subnet
+  as **stale** (both computed when a page loads, never stored; feature 006).
 - `merged_away`: a terminal status for a device record absorbed into another by a merge. It is
   hidden from lists and kept for history.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -25,9 +26,11 @@ import (
 
 // Settings keys.
 const (
-	SettingOfflineMultiplier = "offline_multiplier"
-	SettingBuiltinInterval   = "builtin_interval_seconds"
-	BuiltinCollector         = "nas"
+	SettingBuiltinInterval = "builtin_interval_seconds"
+	BuiltinCollector       = "nas"
+	// ProjectionRules is the version of the derivation rules (feature 006: offline after one
+	// missed complete scan). Data derived by older rules is rebuilt once at start-up.
+	ProjectionRules = 6
 )
 
 // Options configure the server.
@@ -82,10 +85,10 @@ func New(ctx context.Context, o Options) (*App, error) {
 
 	cid, err := st.EnsureCollector(ctx, BuiltinCollector, store.KindBuiltin, int(o.ScanInterval.Seconds()))
 	if err == nil {
-		err = st.SetDefaultSetting(ctx, SettingOfflineMultiplier, strconv.Itoa(inventory.DefaultOfflineMultiplier))
+		err = st.SetDefaultSetting(ctx, SettingBuiltinInterval, strconv.Itoa(int(o.ScanInterval.Seconds())))
 	}
 	if err == nil {
-		err = st.SetDefaultSetting(ctx, SettingBuiltinInterval, strconv.Itoa(int(o.ScanInterval.Seconds())))
+		err = a.upgradeProjections(ctx, o.Log)
 	}
 	if err != nil {
 		st.Close()
@@ -116,8 +119,7 @@ func New(ctx context.Context, o Options) (*App, error) {
 		Ingester:     a.Ingester,
 		DownloadsDir: o.DownloadsDir,
 		SettingDefaults: map[string]string{ // what "drop all data" restores (feature 004)
-			SettingOfflineMultiplier: strconv.Itoa(inventory.DefaultOfflineMultiplier),
-			SettingBuiltinInterval:   strconv.Itoa(int(o.ScanInterval.Seconds())),
+			SettingBuiltinInterval: strconv.Itoa(int(o.ScanInterval.Seconds())),
 		},
 		Version: version(o.Version),
 		Commit:  o.Commit,
@@ -180,4 +182,20 @@ func (a *App) Close() error {
 // Rebuild replays all facts into fresh projections, serialized with ingest.
 func (a *App) Rebuild(ctx context.Context) error {
 	return a.Ingester.Do(ctx, func(tx *sql.Tx) error { return inventory.RebuildTx(ctx, tx, a.Applier) })
+}
+
+// upgradeProjections re-derives the projections once when they were derived by older rules
+// (feature 006, research R5), so stored statuses and history follow the current rules.
+func (a *App) upgradeProjections(ctx context.Context, log *slog.Logger) error {
+	if v, ok, err := a.Store.Setting(ctx, store.SettingProjectionRules); err != nil {
+		return err
+	} else if n, _ := strconv.Atoi(v); ok && n >= ProjectionRules {
+		return nil
+	}
+	start := time.Now()
+	if err := a.Rebuild(ctx); err != nil {
+		return fmt.Errorf("re-deriving the inventory with the current rules: %w", err)
+	}
+	log.Info("inventory re-derived with the current rules", "projection_rules", ProjectionRules, "duration", time.Since(start))
+	return a.Store.SetSetting(ctx, store.SettingProjectionRules, strconv.Itoa(ProjectionRules))
 }

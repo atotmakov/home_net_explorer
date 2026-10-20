@@ -86,6 +86,9 @@ func TestUS1HomeAndSettings(t *testing.T) {
 	if !strings.Contains(settings, "192.168.1.0/24") {
 		t.Error("settings page does not list the discovered subnet")
 	}
+	if strings.Contains(settings, `name="offline_multiplier"`) {
+		t.Error("the missed-scans setting is still on the Settings page (removed by feature 006)")
+	}
 	res, _ := e.req("POST", "/settings", url.Values{"interval_minutes": {"30"}, "offline_multiplier": {"4"}})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("POST /settings = %d", res.StatusCode)
