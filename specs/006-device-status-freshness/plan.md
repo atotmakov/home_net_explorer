@@ -6,7 +6,8 @@
 
 A device goes offline at the first complete scan of its subnet that misses it (stored rule,
 replayed by rebuild). "Online" is shown green while `last_seen` is within two scan intervals of
-now and gray "online (stale)" after that (computed at view time). The Devices list, device page,
+now and "online" in the normal text color (stale) after that (computed at view time); offline
+is gray; every badge has a "last seen … ago" tooltip (revision 2026-10-20). The Devices list, device page,
 status filter and home counts use the three states. The "missed scans" setting is removed, and
 existing data is re-derived once at start-up.
 
@@ -45,7 +46,7 @@ internal/store/devices_query.go      DeviceRow.State, freshness interval, filter
 internal/app/app.go                  drop offline_multiplier default; one-time rebuild (R5)
 internal/web/pages.go, server.go     statuses list, settings form without multiplier, counts
 internal/web/templates/devices.html, device.html, home.html, settings.html
-internal/web/static/*.css            s-stale (gray), offline style
+internal/web/static/*.css            s-stale (normal text color), s-offline (gray)
 specs/001-.../contracts/web-ui.md, data-model.md (offline rule)
 VERSION                              0.7
 ```

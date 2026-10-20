@@ -36,8 +36,9 @@
 ## R3 Shown states and filter values
 
 - **Decision**: `DeviceRow.State` ∈ {`online`, `stale`, `offline`} derived from the stored
-  status (`online`/`new` → online or stale; `offline`/`new_offline` → offline). Badge text:
-  "online", "online (stale)" with a tooltip "last seen … ago", "offline". The filter offers
+  status (`online`/`new` → online or stale; `offline`/`new_offline` → offline). Badge text
+  (revision 2026-10-20): "online" (green), "online" (normal text color) for stale, "offline"
+  (gray), each with the tooltip "last seen … ago"; the filter labels stale "online (stale)". The filter offers
   online, stale, offline; `new`/`new_offline` are dropped from it (never produced since 001).
 - **Rationale**: FR-001, FR-007, US3; the stored CHECK constraint stays as it is (no migration
   for statuses).

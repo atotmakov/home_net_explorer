@@ -8,8 +8,9 @@ with the router). Automated coverage runs in CI (see tasks.md).
 2. **Green**: run `hne-collector-windows-amd64.exe scan --once`. Devices page: the
    `192.168.0.0/24` devices that answered are green "online".
 3. **Stale**: wait more than 30 minutes (2 × 15-minute interval) without scanning. The same
-   devices show gray "online (stale)" with "last seen … ago"; the home page counts them as stale.
-4. **Offline**: switch a device off (e.g. a phone's Wi-Fi), run one scan. It shows "offline" and
+   devices show "online" in the normal text color, the tooltip "last seen … ago"; the home page
+   counts them as stale.
+4. **Offline**: switch a device off (e.g. a phone's Wi-Fi), run one scan. It shows gray "offline" and
    its history has "went offline" at that scan; the filter `status=offline` lists it.
 5. **Back**: switch it on, scan again: green "online", history "came online".
 6. **Counts**: the home page online/stale/offline numbers equal the Devices filter results.

@@ -17,8 +17,12 @@ No schema change. Facts (collection runs, user facts) are unchanged.
 | State | Condition | Badge |
 |-------|-----------|-------|
 | `online` | stored online and `now − last_seen ≤ 2 × I` | green "online" |
-| `stale` | stored online and `now − last_seen > 2 × I` | gray "online (stale)", tooltip "last seen … ago" |
-| `offline` | stored offline | distinct "offline" style (not gray) |
+| `stale` | stored online and `now − last_seen > 2 × I` | "online" in the normal text color |
+| `offline` | stored offline | gray "offline" |
+
+Every badge has the tooltip "last seen <age> ago" (`DeviceRow.Age = now − last_seen`, set for all
+states), the age written as "2 days, 3 hours, 5 mins", "3 hours, 5 mins", "5 mins" or "less than
+a minute".
 
 I = `interval_seconds` of the most recent complete scan (by `finished_at`, any collector) of any
 subnet holding one of the device's current addresses; else the built-in interval setting
