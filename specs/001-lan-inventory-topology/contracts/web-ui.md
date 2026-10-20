@@ -12,7 +12,7 @@ yet.
 | `GET /setup`, `POST /setup` | First-run screen to set the owner password. Disabled once a password exists | FR-030 |
 | `GET /login`, `POST /login`, `POST /logout` | Owner session. Login is rate-limited to 5 attempts per minute | FR-030 |
 | `GET /` | Home: counts (online/stale/offline, feature 006), "joined in last 7 days", newly discovered subnets, stale subnets, collectors with clock skew | SC-009, SC-010 |
-| `GET /devices` | Inventory table. Query params: `q`, `subnet`, `status` (`online`, `stale`, `offline`; feature 006: the Status column shows green online, gray "online (stale)" with its age, or offline), `manufacturer`, `sort`, `dir`, `seen_after`, `seen_before` | FR-017, US1 |
+| `GET /devices` | Inventory table. Query params: `q`, `subnet`, `status` (`online`, `stale`, `offline`; feature 006: the Status column shows green online, online in the normal text color when stale, or gray offline, each with a "last seen … ago" tooltip), `manufacturer`, `sort`, `dir`, `seen_after`, `seen_before` | FR-017, US1 |
 | `GET /devices/{id}` | Device detail: addresses, user fields, full history (sightings + events), the collectors that saw it | FR-022, US3-4 |
 | `POST /devices/{id}/attrs` | Set name, notes, or type. Saving a type other than `router` removes the device's router settings (feature 003) | FR-014 |
 | `POST /devices/{id}/router`, `POST /devices/{id}/router/remove` | Router card of a device of type `router`: model, username, password (never shown again; empty keeps it), subnet. See `specs/003-router-ui-setup/contracts/web-ui-changes.md` | 003 FR-001 – FR-006 |

@@ -32,7 +32,7 @@ th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--lin
 th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .muted { color: var(--muted); }
 .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: .8rem; border: 1px solid currentColor; }
-.s-online { color: var(--ok); } .s-stale { color: var(--muted); } .s-offline { color: var(--bad); }
+.s-online { color: var(--ok); } .s-stale { color: var(--fg); } .s-offline { color: var(--muted); }
 .warn { color: var(--warn); }
 .table-wrap { overflow-x: auto; }
 h2 { font-size: 1.1rem; margin: 20px 0 10px; }

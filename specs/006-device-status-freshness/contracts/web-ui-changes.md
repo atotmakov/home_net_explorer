@@ -4,8 +4,9 @@ Changes to `specs/001-lan-inventory-topology/contracts/web-ui.md`.
 
 ## Devices list (`/devices`)
 
-- Status column: badge `online` (green), `online (stale)` (gray, `title="last seen <age> ago"`),
-  or `offline` (own style, distinct from gray). Text is always present (FR-009).
+- Status column: badge `online` (green), `online` in the normal text color (stale), or `offline`
+  (gray). Every badge has `title="last seen <age> ago"`, the age written as
+  "2 days, 3 hours, 5 mins" / "3 hours, 5 mins" / "5 mins" / "less than a minute".
 - Status filter (`status=`): accepted values `online`, `stale`, `offline` (option labels
   "online", "online (stale)", "offline"); anything else is ignored (shows all). `new`, `new_offline` are no longer offered.
 

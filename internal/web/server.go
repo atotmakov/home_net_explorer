@@ -144,6 +144,7 @@ var funcs = template.FuncMap{
 	"statuses":      func() []string { return store.States },
 	"stateLabel":    stateLabel,
 	"ago":           ago,
+	"badgeLabel":    badgeLabel,
 	"routerOutcome": routerOutcome,
 	"scanProblem":   scanProblem,
 	"readOutcome": func(r store.RouterRead) string {
@@ -356,8 +357,7 @@ func scanProblem(reason string) string {
 	return reason
 }
 
-// stateLabel is the text of a shown device state (feature 006); it carries the meaning without
-// color (FR-009).
+// stateLabel names a shown device state in the status filter (feature 006).
 func stateLabel(state string) string {
 	if state == store.StateStale {
 		return "online (stale)"
@@ -365,16 +365,35 @@ func stateLabel(state string) string {
 	return state
 }
 
-// ago formats an age as "45 min", "3 h 5 min" or "2 d 4 h".
+// badgeLabel is the text of a device's status badge: stale devices read "online" too; the color
+// and the "last seen" tooltip tell fresh from stale (feature 006, FR-001).
+func badgeLabel(state string) string {
+	if state == store.StateOffline {
+		return "offline"
+	}
+	return "online"
+}
+
+// ago formats an age as "less than a minute", "45 mins", "3 hours, 5 mins" or
+// "2 days, 4 hours, 1 min".
 func ago(d time.Duration) string {
+	if d < time.Minute {
+		return "less than a minute"
+	}
+	unit := func(n int, name string) string {
+		if n == 1 {
+			return "1 " + name
+		}
+		return fmt.Sprintf("%d %ss", n, name)
+	}
+	m := int(d.Minutes())
+	days, hours, mins := m/(24*60), m/60%24, m%60
 	switch {
-	case d < time.Minute:
-		return "<1 min"
-	case d < time.Hour:
-		return fmt.Sprintf("%d min", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%d h %d min", int(d.Hours()), int(d.Minutes())%60)
+	case days > 0:
+		return unit(days, "day") + ", " + unit(hours, "hour") + ", " + unit(mins, "min")
+	case hours > 0:
+		return unit(hours, "hour") + ", " + unit(mins, "min")
 	default:
-		return fmt.Sprintf("%d d %d h", int(d.Hours())/24, int(d.Hours())%24)
+		return unit(mins, "min")
 	}
 }

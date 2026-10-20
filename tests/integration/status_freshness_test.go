@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-// Feature 006: the Devices list and device page show online / online (stale) / offline; the
-// filter and the home page counts use the same states.
+// Feature 006: the Devices list and device page show online (green), online (stale: normal text
+// color) or offline (gray), each with a "last seen" tooltip; the filter and the home page counts
+// use the same states.
 
 // routerRun is valid_router.json (scanned 2026-10-09 10:00, interval 900 s) moved by d, with the
 // router entries limited to keep (IPs); the ARP device 192.168.1.20 is always kept.
@@ -69,24 +70,33 @@ func TestStaleOnlineShown(t *testing.T) {
 	}
 	host := fmt.Sprintf("/devices/%d", e.deviceID("00:00:5e:10:00:02")) // 192.168.0.4
 
+	// 192.168.0.4 was last seen at 10:00:01.
 	e.clock.Set(scanned.Add(5 * time.Minute))
 	for _, path := range []string{"/devices", host} {
 		page := e.get(path)
 		if !hasBadge(page, "online", "online") || strings.Contains(page, "badge s-stale") {
 			t.Errorf("%s 5 min after the scan: want only green online badges", path)
 		}
+		if !strings.Contains(page, `title="last seen 4 mins ago"`) {
+			t.Errorf("%s: the online badge lacks its last seen tooltip", path)
+		}
 	}
 
 	e.clock.Set(scanned.Add(40 * time.Minute)) // > 2 × 900 s
 	for _, path := range []string{"/devices", host} {
 		page := e.get(path)
-		if !hasBadge(page, "stale", "online (stale)") || !strings.Contains(page, `title="last seen`) {
-			t.Errorf("%s 40 min after the scan: want the gray online (stale) badge with its age", path)
+		// Stale reads "online" too; the color and the tooltip tell it apart.
+		if !hasBadge(page, "stale", "online") || !strings.Contains(page, `title="last seen 39 mins ago"`) {
+			t.Errorf("%s 40 min after the scan: want the stale online badge with its age", path)
 		}
-		// FR-009: the text alone tells the states apart.
-		if strings.Contains(page, ">online</span>") {
-			t.Errorf("%s: a stale device is labelled plain online", path)
+		if strings.Contains(page, "online (stale)</span>") {
+			t.Errorf("%s: the badge still reads online (stale)", path)
 		}
+	}
+
+	e.clock.Set(scanned.Add(26*time.Hour + 6*time.Minute))
+	if page := e.get(host); !strings.Contains(page, `title="last seen 1 day, 2 hours, 5 mins ago"`) {
+		t.Error("an age over a day is not written as days, hours, mins")
 	}
 
 	if code, _ := e.upload(cfg.Token, routerRun(t, "6a000000-0000-4000-8000-000000000002", 45*time.Minute)); code != http.StatusCreated {
@@ -132,5 +142,10 @@ func TestStatusFilterAndCounts(t *testing.T) {
 	}
 	if n := strings.Count(e.get("/devices?status=offline"), `<a href="/devices/`); n != 2 {
 		t.Errorf("offline devices = %d, want 2 (192.168.0.7 and .9)", n)
+	}
+	// Offline badges are gray and still tell when the device was last seen (10:00:01).
+	offline := e.get(fmt.Sprintf("/devices/%d", e.deviceID("02:00:5e:10:00:05")))
+	if !strings.Contains(offline, `<span class="badge s-offline" title="last seen 24 mins ago">offline</span>`) {
+		t.Error("the offline badge lacks its last seen tooltip")
 	}
 }
