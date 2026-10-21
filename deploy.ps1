@@ -162,4 +162,4 @@ if (-not $healthy) {
 }
 
 Write-Host ""
-Write-Host "Done! Open http://${NasHost}:${Port} (first visit asks you to set the owner password)."
+Write-Host "Done! Open http://${NasHost}:${Port} (no login: the UI is open to your home network)."

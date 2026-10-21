@@ -123,7 +123,7 @@ internal/
 ├── ingest/              # server side: validate → store run → fold into projections
 ├── inventory/           # identity, merge/split, sightings, events, offline rule, links, rebuild
 ├── store/               # SQLite open/migrate, queries, rebuild, userfacts.go
-├── auth/                # owner password/session, collector tokens
+├── auth/                # collector tokens (owner login removed by feature 007)
 ├── oui/                 # embedded IEEE OUI table + lookup
 └── web/                 # handlers, templates/, static/ (htmx, cytoscape, css) via embed
 

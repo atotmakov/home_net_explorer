@@ -113,13 +113,14 @@ Device type values: `router`, `access_point`, `switch`, `computer`, `phone`, `ta
 
 ### Settings
 
-`settings(key, value)`: owner password hash, scan interval for the built-in collector (default
+`settings(key, value)`: scan interval for the built-in collector (default
 900 s). The offline threshold multiplier was removed by feature 006. There is no retention setting: history is kept
 indefinitely (FR-024).
 
 ### Sessions
 
-`sessions(id_hash, created_at, expires_at)`: owner login sessions (R10).
+Removed by feature 007 (migration 7 drops `sessions` and the owner password hash): the web UI has
+no login.
 
 ## Projections
 

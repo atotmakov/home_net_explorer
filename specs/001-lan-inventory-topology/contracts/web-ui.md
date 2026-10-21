@@ -1,16 +1,15 @@
 # Contract: Web UI and owner endpoints
 
-The server renders HTML pages, and htmx loads parts of pages from routes under `/ui/...`. Every
-route except `/login`, `/setup`, `/static/*`, and `/api/v1/*` requires an owner session (FR-030).
-A request without a session is redirected to `/login`, or to `/setup` if no password has been set
-yet.
+The server renders HTML pages, and htmx loads parts of pages from routes under `/ui/...`. There is
+no login (feature 007, replacing FR-030): every page is open to the home network. State-changing
+forms still refuse cross-site requests (Origin / `Sec-Fetch-Site`), and `/api/v1/*` still needs a
+collector's bearer token.
 
 ## Pages
 
 | Route | Purpose | Spec |
 |-------|---------|------|
-| `GET /setup`, `POST /setup` | First-run screen to set the owner password. Disabled once a password exists | FR-030 |
-| `GET /login`, `POST /login`, `POST /logout` | Owner session. Login is rate-limited to 5 attempts per minute | FR-030 |
+| `GET /setup`, `GET /login` | Redirect to `/` (old bookmarks; feature 007 removed the login) | 007 FR-002 |
 | `GET /` | Home: counts (online/stale/offline, feature 006), "joined in last 7 days", newly discovered subnets, stale subnets, collectors with clock skew | SC-009, SC-010 |
 | `GET /devices` | Inventory table. Query params: `q`, `subnet`, `status` (`online`, `stale`, `offline`; feature 006: the Status column shows green online, online in the normal text color when stale, or gray offline, each with a "last seen … ago" tooltip), `manufacturer`, `sort`, `dir`, `seen_after`, `seen_before` | FR-017, US1 |
 | `GET /devices/{id}` | Device detail: addresses, user fields, full history (sightings + events), the collectors that saw it | FR-022, US3-4 |

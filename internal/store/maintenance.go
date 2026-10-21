@@ -8,7 +8,6 @@ import (
 
 // Settings keys used by the maintenance actions (feature 004).
 const (
-	SettingOwnerPassword = "owner_password_hash"
 	// SettingDataResetAt is the time of the latest "remove all devices" or "drop all data". Runs
 	// that started before it are discarded on arrival (research R2). It is never deleted.
 	SettingDataResetAt = "data_reset_at"
@@ -28,8 +27,8 @@ type RemovalCounts struct {
 
 // RemoveAllDevices deletes every device with all scan history and all owner edits about devices
 // (names, types, notes, links, acknowledgements, merges, router settings), facts and projections
-// together, so a rebuild stays empty (Principle V). Subnet facts, collectors, sessions and
-// settings are kept. Runs that started before at are discarded when they arrive later. Callers
+// together, so a rebuild stays empty (Principle V). Subnet facts, collectors and settings are
+// kept. Runs that started before at are discarded when they arrive later. Callers
 // run it inside the ingest lock.
 func RemoveAllDevices(ctx context.Context, tx *sql.Tx, at time.Time) (RemovalCounts, error) {
 	var c RemovalCounts
@@ -79,8 +78,7 @@ func RemoveAllCollectors(ctx context.Context, tx *sql.Tx, at time.Time) (Removal
 	return c, err
 }
 
-// DropAllData deletes everything except the owner (password and sessions) and the built-in
-// collector: what RemoveAllDevices deletes, plus subnet facts, all remote collectors and every
+// DropAllData deletes everything except the built-in collector: what RemoveAllDevices deletes, plus subnet facts, all remote collectors and every
 // setting, after which defaults (the server's start-up values) are written again. The built-in
 // scanner is no longer paused.
 func DropAllData(ctx context.Context, tx *sql.Tx, at time.Time, defaults map[string]string) (RemovalCounts, error) {
@@ -99,7 +97,7 @@ func DropAllData(ctx context.Context, tx *sql.Tx, at time.Time, defaults map[str
 	if _, err := tx.ExecContext(ctx, `DELETE FROM collectors WHERE kind = ?`, KindRemote); err != nil {
 		return c, err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key NOT IN (?, ?, ?)`, SettingOwnerPassword, SettingDataResetAt, SettingProjectionRules); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key NOT IN (?, ?)`, SettingDataResetAt, SettingProjectionRules); err != nil {
 		return c, err
 	}
 	for k, v := range defaults {

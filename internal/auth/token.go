@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
@@ -94,4 +96,13 @@ func Authenticate(ctx context.Context, db *sql.DB, token string) (store.Collecto
 		return store.Collector{}, ErrInvalidToken
 	}
 	return store.CollectorByID(ctx, db, match)
+}
+
+// RandomToken returns 256 random bits, base64url-encoded without padding.
+func RandomToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
