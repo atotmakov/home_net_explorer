@@ -74,7 +74,6 @@ func withID(t *testing.T, fixture, id string, f func(m map[string]any)) []byte {
 // User Story 2: a remote collector uploads what the NAS cannot see (quickstart.md §4).
 func TestUS2RemoteCollector(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 
 	cfg := e.createCollector("desktop")
 	if cfg.Name != "desktop" || cfg.Token == "" || cfg.ServerURL != e.srv.URL || cfg.IntervalSeconds != 900 || cfg.Subnets == nil {
@@ -176,7 +175,6 @@ func TestUS2RemoteCollector(t *testing.T) {
 
 func TestCollectorNameRules(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	for _, name := range []string{"Desktop PC", "", "nas"} {
 		if res, _ := e.req("POST", "/collectors", url.Values{"name": {name}}); res.StatusCode != http.StatusBadRequest {
 			t.Errorf("collector name %q accepted (%d)", name, res.StatusCode)
@@ -186,7 +184,6 @@ func TestCollectorNameRules(t *testing.T) {
 
 func TestCollectorDownloads(t *testing.T) {
 	e := newEnv(t, envOpts{downloads: map[string]string{"hne-collector-windows-amd64.exe": "MZ fake binary"}})
-	e.login()
 	res, body := e.req("GET", "/downloads/hne-collector-windows-amd64.exe", nil)
 	if res.StatusCode != http.StatusOK || body != "MZ fake binary" {
 		t.Errorf("download = %d %q", res.StatusCode, body)

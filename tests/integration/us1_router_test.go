@@ -23,7 +23,6 @@ func (e *env) count(q string, args ...any) int {
 
 func TestUS1RouterSubnetIsDiscovered(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	cfg := e.createCollector("desktop")
 	status, r := e.upload(cfg.Token, contracttest.Fixture(t, "valid_router.json"))
 	if status != http.StatusCreated {
@@ -39,7 +38,6 @@ func TestUS1RouterSubnetIsDiscovered(t *testing.T) {
 
 func TestUS1RouterDevicesFoldWeakRecords(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	cfg := e.createCollector("desktop")
 
 	// Earlier ICMP/TCP-only scans of the routed subnet left an IP-only record.
@@ -98,7 +96,6 @@ func TestUS1RouterDevicesFoldWeakRecords(t *testing.T) {
 // page) becomes a device whose manufacturer comes from the MAC.
 func TestUS1RouterItselfHasManufacturer(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	cfg := e.createCollector("desktop")
 	body := withID(t, "valid_router.json", "1b4e28ba-2fa1-41d2-883f-0016d3cca4a0", func(m map[string]any) {
 		obs := m["observations"].([]any)

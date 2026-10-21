@@ -18,7 +18,7 @@ import (
 var removeAt = it.T0.Add(2 * time.Hour)
 
 // usedStore builds a store with history from two collectors (one of them revoked later), owner
-// edits of every kind, a router, subnet facts, an owner password, a session and settings.
+// edits of every kind, a router, subnet facts and settings.
 func usedStore(t *testing.T) *it.Harness {
 	t.Helper()
 	ctx := context.Background()
@@ -50,7 +50,6 @@ func usedStore(t *testing.T) *it.Harness {
 		`INSERT INTO user_links (from_identity_key, to_identity_key, at) VALUES ('mac:00:11:32:aa:bb:cc', 'mac:00:00:5e:10:00:01', '2026-10-05T10:13:00.000Z')`,
 		`INSERT INTO user_acks (identity_key, at) VALUES ('mac:00:11:32:aa:bb:cc', '2026-10-05T10:13:00.000Z')`,
 		`INSERT INTO user_identity_alias (identity_key, target_identity_key, kind, at) VALUES ('mac:52:54:00:12:34:56', 'mac:00:11:32:aa:bb:cc', 'split', '2026-10-05T10:13:00.000Z')`,
-		`INSERT INTO sessions (id_hash, created_at, expires_at) VALUES (x'01', '2026-10-05T10:00:00.000Z', '2026-11-05T10:00:00.000Z')`,
 		`UPDATE collectors SET revoked_at = '2026-10-05T10:20:00.000Z', token_hash = x'02' WHERE name = 'laptop'`,
 		`UPDATE collectors SET token_hash = x'03' WHERE name = 'desktop'`,
 	} {
@@ -59,7 +58,6 @@ func usedStore(t *testing.T) *it.Harness {
 		}
 	}
 	for k, v := range map[string]string{
-		store.SettingOwnerPassword:         "hash",
 		store.SettingRouterRejectedBuiltin: `["abc"]`,
 		store.SettingBuiltinPaused:         "2026-10-05T10:30:00.000Z",
 		"builtin_interval_seconds":         "1800",
@@ -159,7 +157,7 @@ func TestRemoveAllDevices(t *testing.T) {
 	if _, ok := setting(t, h, store.SettingRouterRejectedBuiltin); ok {
 		t.Error("the built-in collector's rejected router logins were kept")
 	}
-	// Kept: collectors (with their last report), sessions, owner, settings, pause, subnet facts.
+	// Kept: collectors (with their last report), settings, pause, subnet facts.
 	if n := rows(t, h, "collectors"); n != collectorsBefore {
 		t.Errorf("collectors %d -> %d", collectorsBefore, n)
 	}
@@ -168,10 +166,10 @@ func TestRemoveAllDevices(t *testing.T) {
 	if lr != lastReport {
 		t.Errorf("last_report_at %s -> %s", lastReport, lr)
 	}
-	if rows(t, h, "sessions") != 1 || rows(t, h, "user_subnet_attrs") != 2 {
-		t.Error("sessions or subnet facts were removed")
+	if rows(t, h, "user_subnet_attrs") != 2 {
+		t.Error("subnet facts were removed")
 	}
-	for k, want := range map[string]string{store.SettingOwnerPassword: "hash", store.SettingBuiltinPaused: "2026-10-05T10:30:00.000Z",
+	for k, want := range map[string]string{store.SettingBuiltinPaused: "2026-10-05T10:30:00.000Z",
 		"builtin_interval_seconds": "1800", "offline_multiplier": "5", store.SettingDataResetAt: store.FormatTime(removeAt)} {
 		if v, _ := setting(t, h, k); v != want {
 			t.Errorf("setting %s = %q, want %q", k, v, want)
@@ -310,10 +308,7 @@ func TestDropAllData(t *testing.T) {
 	if n := scalarQ(t, h, `SELECT count(*) FROM collectors WHERE name = 'nas'`); n != 1 || rows(t, h, "collectors") != 1 {
 		t.Error("collectors left other than nas, or nas deleted")
 	}
-	if rows(t, h, "sessions") != 1 {
-		t.Error("the owner's session was deleted")
-	}
-	want := map[string]string{store.SettingOwnerPassword: "hash", store.SettingDataResetAt: store.FormatTime(removeAt),
+	want := map[string]string{store.SettingDataResetAt: store.FormatTime(removeAt),
 		store.SettingProjectionRules: "6", "builtin_interval_seconds": "900"}
 	got := map[string]string{}
 	r, err := h.Store.DB().Query(`SELECT key, value FROM settings`)

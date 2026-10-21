@@ -23,7 +23,6 @@ import (
 
 var t0 = time.Date(2026, 10, 5, 10, 0, 0, 0, time.UTC)
 
-const password = "correct horse battery"
 
 type env struct {
 	t     *testing.T
@@ -109,14 +108,6 @@ func (e *env) req(method, path string, form url.Values) (*http.Response, string)
 	b, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	return res, string(b)
-}
-
-func (e *env) login() {
-	e.t.Helper()
-	res, _ := e.req("POST", "/setup", url.Values{"password": {password}, "confirm": {password}})
-	if res.StatusCode != http.StatusSeeOther {
-		e.t.Fatalf("setup: %d", res.StatusCode)
-	}
 }
 
 func (e *env) get(path string) string {

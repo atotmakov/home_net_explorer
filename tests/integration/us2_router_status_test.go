@@ -15,7 +15,6 @@ import (
 // SC-005), and nothing the server stores carries router credentials (FR-006).
 func TestUS2RouterStatusOnCollectorsPage(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	desktop := e.createCollector("desktop")
 	e.createCollector("laptop")
 

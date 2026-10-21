@@ -72,7 +72,6 @@ func shifted(t *testing.T, fixture, id string, d time.Duration) []byte {
 
 func TestMaintenanceCard(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	if body := e.get("/settings"); !strings.Contains(body, `id="maintenance"`) {
 		t.Fatal("no Maintenance card on the Settings page")
 	}

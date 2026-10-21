@@ -13,7 +13,7 @@ import (
 var expectedTables = []string{
 	// facts
 	"collectors", "collection_runs", "run_subnets", "user_device_attrs", "user_identity_alias",
-	"user_links", "user_acks", "user_subnet_attrs", "settings", "sessions", "run_sources",
+	"user_links", "user_acks", "user_subnet_attrs", "settings", "run_sources",
 	"router_settings",
 	// projections
 	"subnets", "sightings", "devices", "device_addresses", "events", "links",
@@ -315,5 +315,41 @@ func TestMigration0006(t *testing.T) {
 	}
 	if _, err := db.Exec(`INSERT INTO run_subnets (collection_id, cidr, method, complete, hosts_probed) VALUES (?, '192.168.6.0/24', 'router_table', 1, 3)`, id); err != nil {
 		t.Errorf("run_subnets lost router_table: %v", err)
+	}
+}
+
+// TestMigration0007 (feature 007, no login): the sessions table and the owner password hash are
+// dropped; other settings stay.
+func TestMigration0007(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	db := s.DB()
+	for _, q := range []string{
+		`INSERT INTO sessions (id_hash, created_at, expires_at) VALUES (x'01', '2026-10-05T10:00:00.000Z', '2026-11-05T10:00:00.000Z')`,
+		`INSERT INTO settings (key, value) VALUES ('owner_password_hash', '$2a$12$x'), ('builtin_interval_seconds', '900')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.MigrateTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).Scan(&n)
+	if n != 0 {
+		t.Error("the sessions table is still there")
+	}
+	db.QueryRow(`SELECT count(*) FROM settings WHERE key = 'owner_password_hash'`).Scan(&n)
+	if n != 0 {
+		t.Error("the owner password hash is still stored")
+	}
+	db.QueryRow(`SELECT count(*) FROM settings WHERE key = 'builtin_interval_seconds'`).Scan(&n)
+	if n != 1 {
+		t.Error("another setting was deleted")
 	}
 }

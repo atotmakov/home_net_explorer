@@ -35,7 +35,6 @@ func configuredRouter(t *testing.T, e *env, password string) (routerID int64, to
 
 func TestUS3RouterLoginNeedsACollectorToken(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	routerID, token := configuredRouter(t, e, routerMarker)
 	path := fmt.Sprintf("%s/api/v1/routers/%d/login", e.srv.URL, routerID)
 
@@ -82,7 +81,6 @@ func TestUS3RouterLoginNeedsACollectorToken(t *testing.T) {
 func TestUS3PasswordInNoPageOrLog(t *testing.T) {
 	var logs bytes.Buffer
 	e := newEnv(t, envOpts{log: &logs})
-	e.login()
 	routerID, token := configuredRouter(t, e, routerMarker)
 	var dev int64
 	e.app.Store.DB().QueryRow(`SELECT id FROM devices WHERE mac = '00:00:5e:10:00:02'`).Scan(&dev)

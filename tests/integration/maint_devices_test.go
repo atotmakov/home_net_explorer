@@ -20,7 +20,6 @@ import (
 func TestMaintRemoveAllDevices(t *testing.T) {
 	var logs bytes.Buffer
 	e := newEnv(t, envOpts{log: &logs})
-	e.login()
 	_, token := configuredRouter(t, e, "pw-maint") // uploads valid_router.json as "desktop"
 	var dev int64
 	e.app.Store.DB().QueryRow(`SELECT id FROM devices WHERE mac = '00:00:5e:10:00:02'`).Scan(&dev)

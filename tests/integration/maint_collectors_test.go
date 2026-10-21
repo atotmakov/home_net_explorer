@@ -16,7 +16,6 @@ import (
 func TestMaintRemoveAllCollectors(t *testing.T) {
 	var logs bytes.Buffer
 	e := newEnv(t, envOpts{log: &logs})
-	e.login()
 	routerID, desktop := configuredRouter(t, e, "pw-maint") // "desktop" uploaded valid_router.json
 	laptop := e.createCollector("laptop")
 	if code, _ := e.upload(laptop.Token, withID(t, "valid_full.json", "5a7c1e2d-3b4f-4a6e-9d8c-000000000011", nil)); code != http.StatusCreated {
