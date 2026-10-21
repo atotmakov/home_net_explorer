@@ -23,7 +23,6 @@ import (
 
 var t0 = time.Date(2026, 10, 5, 10, 0, 0, 0, time.UTC)
 
-
 type env struct {
 	t     *testing.T
 	app   *app.App
