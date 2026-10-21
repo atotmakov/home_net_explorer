@@ -98,8 +98,12 @@ Go toolchain).
   settings) and `data-model.md` (offline rule R7 replaced by 006 R1, stale state); note in 001
   spec/research where the multiplier is mentioned that feature 006 replaced it
 - [X] T013 CI green, merge to `main`, image built, deployed to ocean (standing instructions)
-- [ ] T014 Real network (quickstart.md): green after a scan, stale after 30 min without scans,
-  offline after one scan without the device, counts match the filter
+- [X] T014 Real network (quickstart.md): green after a scan, stale after 30 min without scans,
+  offline after one scan without the device, counts match the filter. Verified on ocean
+  2026-10-21 (0.8.102, desktop collector stopped): 192.168.1.x green from the built-in scanner
+  ("last seen less than a minute ago"); 192.168.0.x stale, normal text color, "last seen 1 day,
+  0 hours, 50 mins ago"; Pixel-10a offline (gray) after the first desktop scan without it
+  (2026-10-20); home counts 10 / 16 / 2 equal the status filter results
 
 ## Revision 2026-10-20 (owner, after 0.7)
 
