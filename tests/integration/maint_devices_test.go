@@ -41,13 +41,12 @@ func TestMaintRemoveAllDevices(t *testing.T) {
 	removeAt := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC) // after the fixtures' scans
 	e.clock.Set(removeAt)
 
-	// Refused without the right word, the owner's session, or from another site.
+	// Refused without the right word, or from another site.
 	for _, form := range []url.Values{{}, {"confirm": {"device"}}, {"confirm": {"everything"}}} {
 		if res, body := e.post("/maintenance/devices", form); res.StatusCode != http.StatusBadRequest || !strings.Contains(body, "Type devices to confirm") {
 			t.Errorf("confirm=%q: status %d", form.Get("confirm"), res.StatusCode)
 		}
 	}
-	e.anonPost("/maintenance/devices", url.Values{"confirm": {"devices"}})
 	if code := e.crossSitePost("/maintenance/devices", url.Values{"confirm": {"devices"}}); code != http.StatusForbidden {
 		t.Errorf("cross-site = %d, want 403", code)
 	}

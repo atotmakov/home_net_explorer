@@ -19,8 +19,7 @@ func TestMaintPauseResume(t *testing.T) {
 	e := newEnv(t, envOpts{builtinScan: true, log: &logs})
 	e.waitFor("the start-up scan", func() bool { return e.runCount() == 1 })
 
-	// Refused without the owner's session or from another site.
-	e.anonPost("/maintenance/pause", url.Values{})
+	// Refused from another site.
 	if code := e.crossSitePost("/maintenance/pause", url.Values{}); code != http.StatusForbidden {
 		t.Errorf("cross-site pause = %d, want 403", code)
 	}

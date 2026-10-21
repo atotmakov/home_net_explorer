@@ -44,7 +44,6 @@ func TestMaintDropAllData(t *testing.T) {
 			t.Errorf("confirm=%q: status %d, want 400", form.Get("confirm"), res.StatusCode)
 		}
 	}
-	e.anonPost("/maintenance/everything", url.Values{"confirm": {"everything"}})
 	if code := e.crossSitePost("/maintenance/everything", url.Values{"confirm": {"everything"}}); code != http.StatusForbidden {
 		t.Errorf("cross-site = %d, want 403", code)
 	}

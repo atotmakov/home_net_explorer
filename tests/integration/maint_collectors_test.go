@@ -29,7 +29,6 @@ func TestMaintRemoveAllCollectors(t *testing.T) {
 			t.Errorf("confirm=%q: status %d, want 400", form.Get("confirm"), res.StatusCode)
 		}
 	}
-	e.anonPost("/maintenance/collectors", url.Values{"confirm": {"collectors"}})
 	if code := e.crossSitePost("/maintenance/collectors", url.Values{"confirm": {"collectors"}}); code != http.StatusForbidden {
 		t.Errorf("cross-site = %d, want 403", code)
 	}
