@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/atotmakov/home_net_explorer/internal/auth"
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
@@ -111,7 +110,6 @@ func New(ctx context.Context, o Options) (*App, error) {
 	}
 
 	a.Web, err = web.New(web.Options{
-		Owner:        auth.NewOwner(st.DB(), o.Clock),
 		Clock:        o.Clock,
 		Log:          o.Log,
 		Store:        st,

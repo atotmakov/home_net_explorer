@@ -214,6 +214,8 @@ Each section resolves an unknown from the plan's Technical Context.
   - **Collector tokens**: 256-bit random tokens, shown once when created. Only a SHA-256 hash is
     stored. Each collector has its own revocable token (FR-008).
 - **Rationale**: this fulfills FR-030 for a single owner without any external identity provider.
+- **Superseded (feature 007)**: the owner password, sessions and login rate limit were removed;
+  the web UI has no login. CSRF protection (Origin / `Sec-Fetch-Site`) and collector tokens stay.
 
 ## R11. MAC vendor lookup
 

@@ -34,7 +34,7 @@ go test ./tests/integration/...    # server + temp SQLite fed scripted runs over
 go run ./cmd/hne-server --data ./tmp-data --listen :8080 --no-builtin-scan
 ```
 
-Open `http://localhost:8080`. You should be sent to `/setup`. Set a password, log in, and
+Open `http://localhost:8080` (no login, feature 007) and
 confirm that the empty inventory and the Collectors page both render.
 
 ## 3. Deploy to the NAS (User Story 1)
@@ -54,7 +54,7 @@ prepares `NAS_DIR/data` (owned by uid 65532), uploads `deploy/compose.yaml` as
 `docker-compose.yml` (host networking, `NET_RAW`, `./data:/data`) and runs
 `docker compose up -d`. It finishes with a `/healthz` check from the desktop.
 
-1. Open `http://<nas-ip>:<HNE_PORT>`, run `/setup`, and log in.
+1. Open `http://<nas-ip>:<HNE_PORT>` (no login, feature 007).
 2. Click **Scan now**. Nothing about subnets is configured beforehand.
 3. In **Settings → Subnets**, confirm that the NAS's own subnet appeared automatically.
 

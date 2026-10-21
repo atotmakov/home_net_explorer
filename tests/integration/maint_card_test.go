@@ -12,22 +12,7 @@ import (
 
 // Feature 004: the Maintenance card on the Settings page and helpers shared by the maint_ tests.
 
-// anonPost posts without the owner's session.
-func (e *env) anonPost(path string, form url.Values) int {
-	e.t.Helper()
-	r, _ := http.NewRequest("POST", e.srv.URL+path, strings.NewReader(form.Encode()))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.Header.Set("Origin", e.srv.URL)
-	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	res, err := c.Do(r)
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	res.Body.Close()
-	return res.StatusCode
-}
-
-// crossSitePost posts with the owner's session from another site.
+// crossSitePost posts from another site.
 func (e *env) crossSitePost(path string, form url.Values) int {
 	e.t.Helper()
 	r, _ := http.NewRequest("POST", e.srv.URL+path, strings.NewReader(form.Encode()))
@@ -72,7 +57,6 @@ func shifted(t *testing.T, fixture, id string, d time.Duration) []byte {
 
 func TestMaintenanceCard(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	if body := e.get("/settings"); !strings.Contains(body, `id="maintenance"`) {
 		t.Fatal("no Maintenance card on the Settings page")
 	}

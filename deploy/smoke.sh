@@ -1,6 +1,7 @@
 #!/bin/sh
 # Smoke test (T047, constitution gate "starts with a fresh data volume"):
-# fresh volume -> healthy -> setup -> restart -> healthy again and the password still works.
+# fresh volume -> healthy -> pages open (no login, feature 007) -> a collector is added -> restart ->
+# healthy again and the collector is still there.
 # POSIX sh; needs docker and curl. HNE_IMAGE: prebuilt image (skips the build).
 # HNE_SMOKE_HOST: where the published port is reachable (default 127.0.0.1).
 # HNE_EXPECT_VERSION: if set, /version must report exactly this version (T099).
@@ -12,7 +13,6 @@ PORT=${HNE_SMOKE_PORT:-18080}
 NAME=hne-smoke-$$
 VOL=hne-smoke-$$
 BASE=http://$HOST:$PORT
-PASSWORD=smoke-test-password
 
 if [ -z "$IMAGE" ]; then
     IMAGE=hne-server:smoke
@@ -59,14 +59,13 @@ if [ -n "${HNE_EXPECT_VERSION:-}" ]; then
     case "$version" in *"\"$HNE_EXPECT_VERSION\""*) ;; *) fail "/version is not $HNE_EXPECT_VERSION" ;; esac
 fi
 
-[ "$(status GET /setup)" = 200 ] || fail "first run should offer /setup"
-[ "$(status POST /setup "password=$PASSWORD&confirm=$PASSWORD")" = 303 ] || fail "setup failed"
-echo "smoke: owner password set"
+[ "$(status GET /)" = 200 ] || fail "the home page should open without a login"
+[ "$(status POST /collectors "name=smoke")" = 200 ] || fail "adding a collector failed"
+echo "smoke: pages open, collector added"
 
 docker restart "$NAME" >/dev/null
 wait_healthy
 echo "smoke: healthy after restart"
 
-[ "$(status GET /setup)" = 404 ] || fail "/setup should be gone after restart (data not persisted?)"
-[ "$(status POST /login "password=$PASSWORD")" = 303 ] || fail "login with the saved password failed"
+curl -s "$BASE/collectors" | grep -q ">smoke<" || fail "the collector is gone after restart (data not persisted?)"
 echo "smoke: OK"

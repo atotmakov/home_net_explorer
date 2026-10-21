@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atotmakov/home_net_explorer/internal/auth"
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/store"
@@ -25,12 +24,8 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
-// SessionCookie is the name of the owner session cookie.
-const SessionCookie = "hne_session"
-
 // Options are the server's dependencies.
 type Options struct {
-	Owner    *auth.Owner
 	Clock    clock.Clock
 	Log      *slog.Logger
 	Store    *store.Store
@@ -77,13 +72,13 @@ type Ingester interface {
 	Do(ctx context.Context, f func(tx *sql.Tx) error) error
 }
 
-// Server is the HTTP front end: owner UI and /api/v1.
+// Server is the HTTP front end: the web UI (open to the home network, no login; feature 007)
+// and /api/v1 (collector bearer tokens).
 type Server struct {
-	opts    Options
-	mux     *http.ServeMux
-	pages   map[string]*template.Template
-	limiter *auth.RateLimiter
-	cop     *http.CrossOriginProtection
+	opts  Options
+	mux   *http.ServeMux
+	pages map[string]*template.Template
+	cop   *http.CrossOriginProtection
 }
 
 // page is the data passed to every full-page template.
@@ -91,7 +86,7 @@ type page struct {
 	Version string // filled in by render
 	Commit  string
 	Title   string
-	Nav     bool   // show the navigation bar (logged in)
+	Nav     bool   // show the navigation bar
 	Active  string // highlighted nav item
 	Error   string
 	Data    any
@@ -106,10 +101,9 @@ func New(opts Options) (*Server, error) {
 		opts.Log = slog.Default()
 	}
 	s := &Server{
-		opts:    opts,
-		mux:     http.NewServeMux(),
-		limiter: auth.NewRateLimiter(5, time.Minute, opts.Clock),
-		cop:     http.NewCrossOriginProtection(),
+		opts: opts,
+		mux:  http.NewServeMux(),
+		cop:  http.NewCrossOriginProtection(),
 	}
 	// Collectors authenticate with bearer tokens, not cookies, so CSRF checks don't apply.
 	s.cop.AddInsecureBypassPattern("/api/v1/")
@@ -168,11 +162,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"version": s.opts.Version, "commit": s.opts.Commit})
 	})
-	s.mux.HandleFunc("GET /setup", s.handleSetupForm)
-	s.mux.HandleFunc("POST /setup", s.handleSetup)
-	s.mux.HandleFunc("GET /login", s.handleLoginForm)
-	s.mux.HandleFunc("POST /login", s.handleLogin)
-	s.mux.HandleFunc("POST /logout", s.handleLogout)
+	// There is no login any more (feature 007): old bookmarks of these pages lead home.
+	home := func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusSeeOther) }
+	s.mux.HandleFunc("GET /setup", home)
+	s.mux.HandleFunc("GET /login", home)
 	s.mux.HandleFunc("GET /{$}", s.handleHome)
 	s.mux.HandleFunc("GET /devices", s.handleDevices)
 	s.mux.HandleFunc("GET /devices/{id}", s.handleDevice)
@@ -201,49 +194,9 @@ func (s *Server) routes() {
 // Handler returns the full middleware chain.
 func (s *Server) Handler() http.Handler {
 	var h http.Handler = s.mux
-	h = s.authGate(h)
 	h = s.cop.Handler(h)
 	h = s.recoverPanics(h)
 	return s.logRequests(h)
-}
-
-// authGate: first run → /setup; afterwards every page needs an owner session (FR-030).
-func (s *Server) authGate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := r.URL.Path
-		if p == "/healthz" || p == "/version" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/api/v1/") {
-			next.ServeHTTP(w, r)
-			return
-		}
-		has, err := s.opts.Owner.HasPassword(r.Context())
-		if err != nil {
-			s.serverError(w, r, err)
-			return
-		}
-		switch {
-		case !has && p == "/setup":
-			next.ServeHTTP(w, r)
-		case !has:
-			http.Redirect(w, r, "/setup", http.StatusSeeOther)
-		case p == "/setup":
-			http.NotFound(w, r)
-		case p == "/login":
-			next.ServeHTTP(w, r)
-		case !s.loggedIn(r):
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-		default:
-			next.ServeHTTP(w, r)
-		}
-	})
-}
-
-func (s *Server) loggedIn(r *http.Request) bool {
-	c, err := r.Cookie(SessionCookie)
-	if err != nil {
-		return false
-	}
-	ok, err := s.opts.Owner.ValidSession(r.Context(), c.Value)
-	return err == nil && ok
 }
 
 func (s *Server) recoverPanics(next http.Handler) http.Handler {

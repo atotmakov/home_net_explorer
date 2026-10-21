@@ -1,2 +1,2 @@
-// Package auth handles the owner password, sessions, login rate limiting and collector tokens.
+// Package auth handles collector tokens. The web UI has no login (feature 007).
 package auth

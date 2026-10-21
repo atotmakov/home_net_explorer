@@ -17,11 +17,9 @@ import (
 func TestMaintPauseResume(t *testing.T) {
 	var logs bytes.Buffer
 	e := newEnv(t, envOpts{builtinScan: true, log: &logs})
-	e.login()
 	e.waitFor("the start-up scan", func() bool { return e.runCount() == 1 })
 
-	// Refused without the owner's session or from another site.
-	e.anonPost("/maintenance/pause", url.Values{})
+	// Refused from another site.
 	if code := e.crossSitePost("/maintenance/pause", url.Values{}); code != http.StatusForbidden {
 		t.Errorf("cross-site pause = %d, want 403", code)
 	}
@@ -73,7 +71,6 @@ func TestMaintPauseResume(t *testing.T) {
 
 func TestMaintPauseNeedsBuiltinCollector(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	if body := e.get("/settings"); strings.Contains(body, `action="/maintenance/pause"`) {
 		t.Error("the card offers Pause although the built-in collector is disabled")
 	}

@@ -15,7 +15,6 @@ nav.top { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; pa
 nav.top .brand { font-weight: 600; margin-right: 8px; }
 nav.top a { color: var(--muted); text-decoration: none; }
 nav.top a[aria-current] { color: var(--fg); font-weight: 600; }
-nav.top .logout { margin-left: auto; }
 a { color: var(--accent); }
 h1 { font-size: 1.4rem; margin: 8px 0 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }

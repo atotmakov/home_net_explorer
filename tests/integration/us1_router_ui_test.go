@@ -64,7 +64,6 @@ func (e *env) storedPassword(key string) string {
 
 func TestUS1RouterSettingsOnDevicePage(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	id, key, _ := routerDevice(t, e)
 	page := fmt.Sprintf("/devices/%d", id)
 
@@ -129,7 +128,6 @@ func TestUS1RouterSettingsOnDevicePage(t *testing.T) {
 
 func TestUS1RouterNeedsPasswordAndAddress(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	id, _, _ := routerDevice(t, e)
 	e.setType(id, "router")
 	if code, _ := e.saveRouter(id, url.Values{"model": {"huawei-hg8145v5"}, "username": {"root"}, "password": {""}}); code != http.StatusBadRequest {
@@ -149,9 +147,9 @@ func TestUS1RouterNeedsPasswordAndAddress(t *testing.T) {
 	}
 }
 
-func TestUS1RouterEditsNeedTheOwner(t *testing.T) {
+// Feature 007: there is no login; a cross-site request still changes nothing.
+func TestUS1RouterEditsRefuseCrossSite(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	id, key, _ := routerDevice(t, e)
 	e.setType(id, "router")
 
@@ -169,20 +167,7 @@ func TestUS1RouterEditsNeedTheOwner(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("cross-site save = %d, want 403", res.StatusCode)
 	}
-
-	// Without a session nothing changes.
-	anon := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	r, _ = http.NewRequest("POST", fmt.Sprintf("%s/devices/%d/router", e.srv.URL, id),
-		strings.NewReader(url.Values{"model": {"huawei-hg8145v5"}, "username": {"root"}, "password": {"pw"}}.Encode()))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.Header.Set("Origin", e.srv.URL)
-	if res, err := anon.Do(r); err == nil {
-		res.Body.Close()
-		if res.StatusCode == http.StatusSeeOther && strings.Contains(res.Header.Get("Location"), fmt.Sprintf("/devices/%d", id)) {
-			t.Error("an anonymous request was accepted")
-		}
-	}
 	if e.storedPassword(key) != "" {
-		t.Error("router saved without the owner's session or from another site")
+		t.Error("router saved from another site")
 	}
 }

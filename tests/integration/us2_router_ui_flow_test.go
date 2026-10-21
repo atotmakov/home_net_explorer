@@ -35,7 +35,6 @@ func (e *env) api(token, path string, out any) int {
 
 func TestUS2UIRouterReachesExistingCollector(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	id, _, token := routerDevice(t, e) // the collector exists before the router is configured
 
 	var ping contract.PingResponse

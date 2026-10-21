@@ -246,8 +246,9 @@ on) is deferred to a separate, later feature.
 
 - **FR-029**: The server (web UI and its data) MUST run as a container on the user's NAS, and its
   data MUST persist across container restarts and upgrades.
-- **FR-030**: The web UI MUST require a login (a single owner account) before showing any network
-  data.
+- **FR-030**: ~~The web UI MUST require a login (a single owner account) before showing any
+  network data.~~ Replaced by feature 007: the web UI has no login and is open to the home
+  network; cross-site posts are still refused and collectors still use tokens.
 - **FR-031**: No collected data MUST ever be sent outside the home network. The system MUST work
   with no internet access.
 - **FR-032**: Users MUST be able to export the inventory and history to a file for backup.

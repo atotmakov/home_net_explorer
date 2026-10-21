@@ -15,7 +15,6 @@ import (
 
 func TestFakedAnswersShownInUI(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	cfg := e.createCollector("desktop")
 	code, r := e.upload(cfg.Token, contracttest.Fixture(t, "valid_faked_answers.json"))
 	if code != http.StatusCreated || r.Status != contract.StatusStored {

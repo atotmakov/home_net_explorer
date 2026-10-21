@@ -11,7 +11,6 @@ import (
 // credentials (FR-007).
 func TestUS2NewCollectorConfigListsRouters(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	id, _, _ := routerDevice(t, e)
 	e.setType(id, "router")
 	if code, body := e.saveRouter(id, url.Values{"model": {"huawei-hg8145v5"}, "username": {"root"}, "password": {routerMarker}}); code != http.StatusSeeOther {

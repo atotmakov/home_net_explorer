@@ -63,7 +63,6 @@ func hasBadge(page, state, label string) bool {
 
 func TestStaleOnlineShown(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	cfg := e.createCollector("desktop")
 	if code, r := e.upload(cfg.Token, routerRun(t, "6a000000-0000-4000-8000-000000000001", 0)); code != http.StatusCreated {
 		t.Fatalf("upload = %d %s", code, r.Status)
@@ -110,7 +109,6 @@ func TestStaleOnlineShown(t *testing.T) {
 
 func TestStatusFilterAndCounts(t *testing.T) {
 	e := newEnv(t, envOpts{})
-	e.login()
 	cfg := e.createCollector("desktop")
 	if code, _ := e.upload(cfg.Token, routerRun(t, "6a000000-0000-4000-8000-000000000011", 0)); code != http.StatusCreated {
 		t.Fatalf("upload = %d", code)

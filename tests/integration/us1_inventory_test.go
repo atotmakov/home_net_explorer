@@ -16,7 +16,6 @@ import (
 // User Story 1: the NAS scans its own subnet and shows the inventory (quickstart.md §3).
 func TestUS1ScanAndInventory(t *testing.T) {
 	e := newEnv(t, envOpts{builtinScan: true})
-	e.login()
 
 	// The loop scans once at start-up; wait for it, then scan on demand.
 	e.waitFor("initial scan", func() bool { return e.runCount() == 1 })
@@ -74,7 +73,6 @@ func TestUS1ScanAndInventory(t *testing.T) {
 
 func TestUS1HomeAndSettings(t *testing.T) {
 	e := newEnv(t, envOpts{builtinScan: true})
-	e.login()
 	e.waitFor("initial scan", func() bool { return e.runCount() == 1 })
 	e.waitFor("scanner idle", func() bool { return !e.app.Scanner.Status().Running })
 
@@ -103,7 +101,6 @@ func TestUS1HomeAndSettings(t *testing.T) {
 
 func TestScanWithoutBuiltinCollector(t *testing.T) {
 	e := newEnv(t, envOpts{builtinScan: false})
-	e.login()
 	if res, _ := e.req("POST", "/scan", url.Values{}); res.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("POST /scan with the built-in collector disabled = %d, want 503", res.StatusCode)
 	}

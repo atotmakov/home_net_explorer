@@ -22,7 +22,7 @@ Maintenance
     Type "collectors" to confirm [          ]  [Remove all collectors]
 
   Drop all data
-    Deletes everything except your login: devices, history, edits, collectors, subnets and
+    Deletes everything: devices, history, edits, collectors, subnets and
     router settings; settings return to their defaults.
     Type "everything" to confirm [          ]  [Drop all data]
 ```
@@ -34,8 +34,8 @@ After a successful action, a notice at the top of the page, e.g.
 
 ## Routes
 
-All routes require the owner session and pass the cross-site checks of feature 001 (Origin /
-`Sec-Fetch-Site`); without them nothing changes.
+All routes pass the cross-site checks of feature 001 (Origin / `Sec-Fetch-Site`); without them
+nothing changes. (The owner session requirement was removed by feature 007.)
 
 | Route | Form | Success | Errors |
 |-------|------|---------|--------|

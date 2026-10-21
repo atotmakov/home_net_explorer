@@ -14,12 +14,11 @@ import (
 	"github.com/atotmakov/home_net_explorer/internal/inventory"
 )
 
-// Feature 004, US4: drop all data, keeping the owner and their login.
+// Feature 004, US4: drop all data.
 
 func TestMaintDropAllData(t *testing.T) {
 	var logs bytes.Buffer
 	e := newEnv(t, envOpts{builtinScan: true, log: &logs})
-	e.login()
 	e.waitFor("the start-up scan", func() bool { return e.runCount() == 1 })
 	_, token := configuredRouter(t, e, "pw-maint")
 	if err := e.app.Ingester.Do(context.Background(), func(tx *sql.Tx) error {
@@ -45,7 +44,6 @@ func TestMaintDropAllData(t *testing.T) {
 			t.Errorf("confirm=%q: status %d, want 400", form.Get("confirm"), res.StatusCode)
 		}
 	}
-	e.anonPost("/maintenance/everything", url.Values{"confirm": {"everything"}})
 	if code := e.crossSitePost("/maintenance/everything", url.Values{"confirm": {"everything"}}); code != http.StatusForbidden {
 		t.Errorf("cross-site = %d, want 403", code)
 	}
@@ -62,8 +60,7 @@ func TestMaintDropAllData(t *testing.T) {
 		t.Error("no maintenance log line")
 	}
 
-	// Still logged in, with the same password.
-	settings := e.get("/settings") // e.get fails on a login redirect
+	settings := e.get("/settings")
 	if !strings.Contains(settings, `value="15"`) {
 		t.Errorf("settings not back to defaults:\n%s", settings)
 	}
@@ -94,10 +91,5 @@ func TestMaintDropAllData(t *testing.T) {
 		t.Errorf("pre-drop run = %d %s, want discarded", code, r.Status)
 	}
 
-	// Log out and in again with the same password.
-	e.post("/logout", url.Values{})
-	if res, _ := e.post("/login", url.Values{"password": {password}}); res.StatusCode != http.StatusSeeOther {
-		t.Errorf("login after drop = %d", res.StatusCode)
-	}
 	e.get("/devices")
 }
