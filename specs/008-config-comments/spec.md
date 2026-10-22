@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Implemented
+**Status**: Implemented; file format superseded by [009](../009-yaml-config/spec.md) (YAML)
 
 **Input**: Owner request: "add comments for each string in config json"
 

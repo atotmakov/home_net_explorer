@@ -10,11 +10,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -33,6 +35,7 @@ import (
 	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/upload"
+	"gopkg.in/yaml.v3"
 )
 
 // version and commit are set at build time with -ldflags "-X main.version=... -X main.commit=...".
@@ -51,18 +54,23 @@ const (
 	exitFailure     = 1
 )
 
-const configFile = "hne-collector.json"
+// configFile is the collector's config (feature 009); legacyConfigFile is read only when it is
+// missing (configs downloaded before 0.10).
+const (
+	configFile       = "hne-collector.yaml"
+	legacyConfigFile = "hne-collector.json"
+)
 
-// config is hne-collector.json, overridable by HNE_SERVER_URL, HNE_TOKEN, HNE_SUBNETS and
+// config is hne-collector.yaml, overridable by HNE_SERVER_URL, HNE_TOKEN, HNE_SUBNETS and
 // HNE_EXTRA_SUBNETS.
 type config struct {
-	ServerURL       string          `json:"server_url"`
-	Name            string          `json:"name"`
-	Token           string          `json:"token"`
-	Subnets         []string        `json:"subnets"`
-	ExtraSubnets    []string        `json:"extra_subnets"` // scanned in addition to subnets/auto-discovery
-	IntervalSeconds int             `json:"interval_seconds"`
-	Routers         []router.Config `json:"routers"` // opt-in router sources (feature 002)
+	ServerURL       string          `json:"server_url" yaml:"server_url"`
+	Name            string          `json:"name" yaml:"name"`
+	Token           string          `json:"token" yaml:"token"`
+	Subnets         []string        `json:"subnets" yaml:"subnets"`
+	ExtraSubnets    []string        `json:"extra_subnets" yaml:"extra_subnets"` // scanned in addition to subnets/auto-discovery
+	IntervalSeconds int             `json:"interval_seconds" yaml:"interval_seconds"`
+	Routers         []router.Config `json:"routers" yaml:"routers"` // opt-in router sources (feature 002)
 
 	prefixes      []netip.Prefix
 	extraPrefixes []netip.Prefix
@@ -70,7 +78,7 @@ type config struct {
 
 // environment is everything run needs from the outside world (replaced in tests).
 type environment struct {
-	dir            string // directory of hne-collector.json, spool/ and the log
+	dir            string // directory of hne-collector.yaml, spool/ and the log
 	getenv         func(string) string
 	stdout, stderr io.Writer
 	newEngine      func(cfg config) (*collect.Engine, func() error, error)
@@ -91,11 +99,23 @@ func main() {
 func loadConfig(dir string, getenv func(string) string) (config, error) {
 	cfg := config{IntervalSeconds: 900} // default when the file omits it
 	b, err := os.ReadFile(filepath.Join(dir, configFile))
-	if err != nil {
-		return cfg, fmt.Errorf("read %s (download it from the server's Collectors page): %w", configFile, err)
-	}
-	if err := json.Unmarshal(contract.StripComments(b), &cfg); err != nil { // // comments allowed (feature 008)
-		return cfg, fmt.Errorf("%s: %w", configFile, err)
+	switch {
+	case err == nil:
+		dec := yaml.NewDecoder(bytes.NewReader(b))
+		dec.KnownFields(true) // a misspelt setting is an error, not silently ignored
+		if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
+			return cfg, fmt.Errorf("%s: %w", configFile, err)
+		}
+	case errors.Is(err, fs.ErrNotExist):
+		lb, lerr := os.ReadFile(filepath.Join(dir, legacyConfigFile))
+		if lerr != nil {
+			return cfg, fmt.Errorf("read %s (download it from the server's Collectors page): %w", configFile, err)
+		}
+		if err := json.Unmarshal(contract.StripComments(lb), &cfg); err != nil { // // comments allowed (feature 008)
+			return cfg, fmt.Errorf("%s: %w", legacyConfigFile, err)
+		}
+	default:
+		return cfg, fmt.Errorf("read %s: %w", configFile, err)
 	}
 	if v := strings.TrimSpace(getenv("HNE_SERVER_URL")); v != "" {
 		cfg.ServerURL = v
@@ -273,7 +293,7 @@ type collector struct {
 	client  *upload.Client
 	spool   upload.Spool
 
-	fileRouters    []router.Source      // routers with credentials in hne-collector.json
+	fileRouters    []router.Source      // routers with credentials in hne-collector.yaml
 	serverRouters  []contract.RouterRef // routers set up in the web UI (ping, else the cache)
 	haveRouterList bool                 // serverRouters came from a ping or the cache
 	markerMu       sync.Mutex           // guards the rejection marker file

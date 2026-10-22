@@ -6,22 +6,24 @@ are needed (research R3).
 
 ## Configuration
 
-The config file is `hne-collector.json`, placed next to the binary. The server generates it when a
-collector is created in the UI, and the user downloads it together with the binary.
+The config file is `hne-collector.yaml` (feature 009; `hne-collector.json` before 0.10), placed
+next to the binary. The server generates it when a collector is created in the UI, with a `#`
+comment above every setting, and the user downloads it together with the binary.
 
-```json
-{
-  "server_url": "http://192.168.1.x:8080",
-  "name": "desktop",
-  "token": "<shown once>",
-  "subnets": [],
-  "interval_seconds": 900
-}
+```yaml
+# Address of the Home Net Explorer server that this collector sends its scans to.
+server_url: http://192.168.1.x:8080
+name: desktop
+token: <shown once>
+subnets: []
+extra_subnets: []
+interval_seconds: 900
+routers: []
 ```
 
-- Feature 008: the file may contain `//` comments, and the generated file has a comment line above
-  every setting (`extra_subnets` is now always written). See
-  [008 spec](../../008-config-comments/spec.md).
+- Feature 009: an unknown setting in `hne-collector.yaml` is a config error (exit 2). When there
+  is no `hne-collector.yaml`, an older `hne-collector.json` (with or without `//` comments,
+  feature 008) is still read. See [009 spec](../../009-yaml-config/spec.md).
 - `subnets` is **empty by default**, meaning: at the start of every scan, discover every on-link
   **private (RFC 1918)** IPv4 subnet with a prefix of /22 or narrower. Wider on-link subnets are
   reported as `skipped` / `too_large`. Non-private subnets are never scanned. A subnet that

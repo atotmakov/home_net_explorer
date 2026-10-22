@@ -40,19 +40,22 @@ func (Secret) GoString() string { return masked }
 // string).
 func (Secret) MarshalJSON() ([]byte, error) { return []byte(`"` + masked + `"`), nil }
 
+// MarshalYAML keeps the secret out of any YAML output (feature 009).
+func (Secret) MarshalYAML() (any, error) { return masked, nil }
+
 // LogValue implements slog.LogValuer.
 func (Secret) LogValue() slog.Value { return slog.StringValue(masked) }
 
 // Reveal returns the credential, for the login request and the rejection-marker hash only.
 func (s Secret) Reveal() string { return string(s) }
 
-// Config is one router entry of hne-collector.json (data-model.md "RouterSource").
+// Config is one router entry of hne-collector.yaml (data-model.md "RouterSource").
 type Config struct {
-	Model    string `json:"model"`
-	URL      string `json:"url"`
-	Username string `json:"username"`
-	Password Secret `json:"password"`
-	Subnet   string `json:"subnet,omitempty"` // default: the router address with /24 (research R5)
+	Model    string `json:"model" yaml:"model"`
+	URL      string `json:"url" yaml:"url"`
+	Username string `json:"username" yaml:"username"`
+	Password Secret `json:"password" yaml:"password"`
+	Subnet   string `json:"subnet,omitempty" yaml:"subnet,omitempty"` // default: the router address with /24 (research R5)
 }
 
 // Validate checks the entry. Errors never contain the username or the password (FR-006).

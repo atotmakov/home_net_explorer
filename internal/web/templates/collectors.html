@@ -5,10 +5,10 @@
 {{with .Created}}
 <section class="card notice" role="status">
   <h2>Collector “{{.Name}}” created</h2>
-  <p>Save this file as <code>hne-collector.json</code> next to <code>hne-collector.exe</code>.
+  <p>Save this file as <code>hne-collector.yaml</code> next to <code>hne-collector.exe</code> (it replaces an older <code>hne-collector.json</code>). Lines starting with <code>#</code> explain each setting.
      <strong>The token is shown only now</strong>; if you lose it, revoke this collector and create a new one.</p>
-  <pre id="collector-config">{{.ConfigJSON}}</pre>
-  <p><a class="button" download="hne-collector.json" href="{{.ConfigHref}}">Download hne-collector.json</a></p>
+  <pre id="collector-config">{{.ConfigYAML}}</pre>
+  <p><a class="button" download="hne-collector.yaml" href="{{.ConfigHref}}">Download hne-collector.yaml</a></p>
 </section>
 {{end}}
 
@@ -56,7 +56,7 @@
   <h2>Install on Windows</h2>
   <ol>
     <li>Download {{range .Downloads}}{{if eq . "hne-collector-windows-amd64.exe"}}<a href="/downloads/{{.}}">{{.}}</a>{{end}}{{else}}<span class="muted">(collector binaries are included in the server image)</span>{{end}}
-        and save it as <code>%USERPROFILE%\hne-collector\hne-collector.exe</code>, with <code>hne-collector.json</code> beside it.</li>
+        and save it as <code>%USERPROFILE%\hne-collector\hne-collector.exe</code>, with <code>hne-collector.yaml</code> beside it.</li>
     <li>Check it: <code>hne-collector.exe check</code>, then scan once: <code>hne-collector.exe scan --once</code>.</li>
     <li>Run it at log-on (no administrator rights needed):
       <pre>{{.Schtasks}}</pre></li>
