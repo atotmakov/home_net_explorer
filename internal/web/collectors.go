@@ -65,9 +65,9 @@ var configHelp = []struct {
 	{"subnets", []string{
 		"Subnets to scan. Empty []: every private subnet this computer is connected to,",
 		"found again at each scan (subnets wider than /22 are skipped).",
-		`A list, e.g. ["192.168.1.0/24"]: scan only these subnets.`}},
+		`A list, e.g. ["192.168.x.0/24"]: scan only these subnets.`}},
 	{"extra_subnets", []string{
-		`Subnets scanned in addition to the ones above, e.g. ["192.168.0.0/24"] behind a`,
+		`Subnets scanned in addition to the ones above, e.g. ["192.168.y.0/24"] behind a`,
 		"router. Devices there are found by ping/TCP, without MAC addresses."}},
 	{"interval_seconds", []string{`Seconds between scans for "hne-collector run" (900 = 15 minutes).`}},
 	{"routers", []string{
