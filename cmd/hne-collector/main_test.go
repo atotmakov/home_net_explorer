@@ -166,6 +166,33 @@ func TestConfigLoading(t *testing.T) {
 	}
 }
 
+// Feature 008: the config the server generates has a // comment above every setting.
+func TestConfigWithComments(t *testing.T) {
+	dir := t.TempDir()
+	c := `{
+  // Address of the Home Net Explorer server.
+  "server_url": "http://192.168.1.100:8181",
+  "name": "desktop", // shown on the Collectors page
+  "token": "file-token",
+  // Empty: scan every private subnet this computer is connected to.
+  "subnets": [],
+  "extra_subnets": ["192.168.0.0/24"],
+  "interval_seconds": 600,
+  "routers": []
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "hne-collector.json"), []byte(c), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadConfig(dir, func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("config with comments: %v", err)
+	}
+	if cfg.ServerURL != "http://192.168.1.100:8181" || cfg.Name != "desktop" || cfg.IntervalSeconds != 600 || len(cfg.ExtraSubnets) != 1 {
+		t.Errorf("cfg = %+v", cfg)
+	}
+}
+
 func TestCheckExitCodes(t *testing.T) {
 	srv := newFakeServer(t)
 	h := newHarness(t, srv.srv.URL)

@@ -94,7 +94,7 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 	if err != nil {
 		return cfg, fmt.Errorf("read %s (download it from the server's Collectors page): %w", configFile, err)
 	}
-	if err := json.Unmarshal(b, &cfg); err != nil {
+	if err := json.Unmarshal(contract.StripComments(b), &cfg); err != nil { // // comments allowed (feature 008)
 		return cfg, fmt.Errorf("%s: %w", configFile, err)
 	}
 	if v := strings.TrimSpace(getenv("HNE_SERVER_URL")); v != "" {
