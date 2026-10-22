@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
+	"gopkg.in/yaml.v3"
 )
 
 const testPassword = "pw-Zq8v!marker"
@@ -124,6 +125,18 @@ func TestSecretNeverPrinted(t *testing.T) {
 	}
 	if back.Password.Reveal() != testPassword {
 		t.Error("a password read from hne-collector.json must be usable")
+	}
+
+	// Feature 009: hne-collector.yaml.
+	var fromYAML Config
+	if err := yaml.Unmarshal([]byte("model: huawei-hg8145v5\nurl: http://192.168.0.1\nusername: root\npassword: "+testPassword+"\n"), &fromYAML); err != nil {
+		t.Fatal(err)
+	}
+	if fromYAML.Password.Reveal() != testPassword || fromYAML.URL != "http://192.168.0.1" {
+		t.Errorf("a router read from hne-collector.yaml = %+v, password must be usable", fromYAML)
+	}
+	if y, _ := yaml.Marshal(fromYAML); strings.Contains(string(y), testPassword) {
+		t.Errorf("password visible in YAML output %q", y)
 	}
 }
 

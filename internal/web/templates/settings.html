@@ -31,7 +31,7 @@
   {{if .Skipped}}
   <h3>Skipped (too large to scan automatically)</h3>
   <ul>{{range .Skipped}}<li>{{.CIDR}} <span class="muted">seen by {{.Collector}}</span></li>{{end}}</ul>
-  <p class="muted">To scan part of one, list narrower subnets in HNE_SUBNETS (NAS) or in the collector's hne-collector.json.</p>
+  <p class="muted">To scan part of one, list narrower subnets in HNE_SUBNETS (NAS) or in the collector's hne-collector.yaml.</p>
   {{end}}
 </section>
 <section class="card">

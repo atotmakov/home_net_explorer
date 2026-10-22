@@ -19,6 +19,7 @@ import (
 	"github.com/atotmakov/home_net_explorer/internal/collect"
 	"github.com/atotmakov/home_net_explorer/internal/collect/collecttest"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
+	"gopkg.in/yaml.v3"
 )
 
 type fakeServer struct {
@@ -77,10 +78,14 @@ func newFakeServer(t *testing.T) *fakeServer {
 	return f
 }
 
+// writeConfig writes hne-collector.yaml (feature 009).
 func writeConfig(t *testing.T, dir string, c map[string]any) {
 	t.Helper()
-	b, _ := json.Marshal(c)
-	if err := os.WriteFile(filepath.Join(dir, "hne-collector.json"), b, 0o600); err != nil {
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "hne-collector.yaml"), b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -162,11 +167,63 @@ func TestConfigLoading(t *testing.T) {
 		t.Error("a non-private subnet must be a config error")
 	}
 	if _, err := loadConfig(t.TempDir(), func(string) string { return "" }); err == nil {
-		t.Error("missing hne-collector.json must be a config error")
+		t.Error("missing hne-collector.yaml must be a config error")
 	}
 }
 
-// Feature 008: the config the server generates has a // comment above every setting.
+// Feature 009: hne-collector.yaml with # comments, as the server generates it.
+func TestYAMLConfig(t *testing.T) {
+	dir := t.TempDir()
+	c := `# Address of the Home Net Explorer server.
+server_url: http://192.168.1.100:8181
+name: desktop   # shown on the Collectors page
+token: file-token
+
+# Empty: scan every private subnet this computer is connected to.
+subnets: []
+extra_subnets: ["192.168.0.0/24"]
+interval_seconds: 600
+routers:
+  - model: huawei-hg8145v5
+    url: http://192.168.0.1
+    username: root
+    password: "pw: #1"
+`
+	if err := os.WriteFile(filepath.Join(dir, "hne-collector.yaml"), []byte(c), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadConfig(dir, func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("hne-collector.yaml: %v", err)
+	}
+	if cfg.ServerURL != "http://192.168.1.100:8181" || cfg.Name != "desktop" || cfg.Token != "file-token" ||
+		len(cfg.Subnets) != 0 || len(cfg.ExtraSubnets) != 1 || cfg.IntervalSeconds != 600 {
+		t.Errorf("cfg = %+v", cfg)
+	}
+	if len(cfg.Routers) != 1 || cfg.Routers[0].URL != "http://192.168.0.1" || cfg.Routers[0].Password.Reveal() != "pw: #1" {
+		t.Errorf("routers = %+v (password must be usable)", cfg.Routers)
+	}
+
+	// The YAML file wins over an old hne-collector.json next to it.
+	old := `{"server_url": "http://10.0.0.9:8080", "name": "old", "token": "old-token", "subnets": []}`
+	if err := os.WriteFile(filepath.Join(dir, "hne-collector.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := loadConfig(dir, func(string) string { return "" }); err != nil || cfg.Name != "desktop" {
+		t.Errorf("with both files: name = %q, err = %v; want hne-collector.yaml used", cfg.Name, err)
+	}
+
+	// A misspelt setting is a config error rather than silently ignored.
+	if err := os.WriteFile(filepath.Join(dir, "hne-collector.yaml"), []byte(c+"intervall_seconds: 60\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadConfig(dir, func(string) string { return "" }); err == nil || !strings.Contains(err.Error(), "intervall_seconds") {
+		t.Errorf("unknown setting: err = %v, want an error naming it", err)
+	}
+}
+
+// Feature 008: an older hne-collector.json, with or without // comments, still works when there
+// is no hne-collector.yaml (feature 009).
 func TestConfigWithComments(t *testing.T) {
 	dir := t.TempDir()
 	c := `{

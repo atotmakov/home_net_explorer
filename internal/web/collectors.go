@@ -1,8 +1,8 @@
 package web
 
 import (
+	"bytes"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -17,6 +17,7 @@ import (
 	"github.com/atotmakov/home_net_explorer/internal/auth"
 	"github.com/atotmakov/home_net_explorer/internal/inventory"
 	"github.com/atotmakov/home_net_explorer/internal/store"
+	"gopkg.in/yaml.v3"
 )
 
 // ---------------------------------------------------------------- collectors (FR-008, FR-012)
@@ -31,30 +32,30 @@ type collectorsData struct {
 
 type createdCollector struct {
 	Name       string
-	ConfigJSON string
+	ConfigYAML string
 	ConfigHref template.URL
 }
 
-// collectorConfig is hne-collector.json (contracts/collector-cli.md).
+// collectorConfig is hne-collector.yaml (contracts/collector-cli.md, feature 009).
 type collectorConfig struct {
-	ServerURL       string   `json:"server_url"`
-	Name            string   `json:"name"`
-	Token           string   `json:"token"`
-	Subnets         []string `json:"subnets"`
-	ExtraSubnets    []string `json:"extra_subnets"`
-	IntervalSeconds int      `json:"interval_seconds"`
+	ServerURL       string
+	Name            string
+	Token           string
+	Subnets         []string
+	ExtraSubnets    []string
+	IntervalSeconds int
 	// Routers lists the routers configured in the web UI, without credentials (feature 003):
 	// the collector fetches their logins from the server before each read.
-	Routers []configRouter `json:"routers"`
+	Routers []configRouter
 }
 
 type configRouter struct {
-	Model string `json:"model"`
-	URL   string `json:"url"`
+	Model string `yaml:"model"`
+	URL   string `yaml:"url"`
 }
 
-// configHelp is the // comment written above each setting of hne-collector.json (feature 008),
-// one string per comment line.
+// configHelp is the # comment written above each setting of hne-collector.yaml (features 008,
+// 009), one string per comment line.
 var configHelp = []struct {
 	key  string
 	help []string
@@ -65,43 +66,48 @@ var configHelp = []struct {
 	{"subnets", []string{
 		"Subnets to scan. Empty []: every private subnet this computer is connected to,",
 		"found again at each scan (subnets wider than /22 are skipped).",
-		`A list, e.g. ["192.168.x.0/24"]: scan only these subnets.`}},
+		"A list, e.g. [192.168.x.0/24]: scan only these subnets."}},
 	{"extra_subnets", []string{
-		`Subnets scanned in addition to the ones above, e.g. ["192.168.y.0/24"] behind a`,
+		"Subnets scanned in addition to the ones above, e.g. [192.168.y.0/24] behind a",
 		"router. Devices there are found by ping/TCP, without MAC addresses."}},
 	{"interval_seconds", []string{`Seconds between scans for "hne-collector run" (900 = 15 minutes).`}},
 	{"routers", []string{
 		"Routers whose device lists are read at each scan, as set up on the server's Routers",
-		"page (their logins stay on the server). A router can also be added here with",
-		`"model", "url", "username", "password" and an optional "subnet".`}},
+		"page (their logins stay on the server). A router can also be added here, e.g.",
+		"  - model: huawei-hg8145v5",
+		"    url: http://192.168.y.1",
+		"    username: root",
+		"    password: <router password>",
+		"    subnet: 192.168.y.0/24   # optional; default: the router address with /24"}},
 }
 
-// commented renders the config as indented JSON with a // comment line above each setting.
-// The collector strips the comments before parsing (contract.StripComments).
+// commented renders the config as YAML with a # comment line above each setting.
 func (c collectorConfig) commented() []byte {
+	if c.Subnets == nil {
+		c.Subnets = []string{}
+	}
 	if c.ExtraSubnets == nil {
 		c.ExtraSubnets = []string{}
 	}
+	if c.Routers == nil {
+		c.Routers = []configRouter{}
+	}
 	values := map[string]any{"server_url": c.ServerURL, "name": c.Name, "token": c.Token, "subnets": c.Subnets,
 		"extra_subnets": c.ExtraSubnets, "interval_seconds": c.IntervalSeconds, "routers": c.Routers}
-	var b strings.Builder
-	b.WriteString("{\n")
+	var b bytes.Buffer
 	for i, h := range configHelp {
 		if i > 0 {
 			b.WriteString("\n")
 		}
 		for _, line := range h.help {
-			b.WriteString("  // " + line + "\n")
+			b.WriteString("# " + line + "\n")
 		}
-		v, _ := json.MarshalIndent(values[h.key], "  ", "  ")
-		b.WriteString(`  "` + h.key + `": ` + string(v))
-		if i < len(configHelp)-1 {
-			b.WriteString(",")
-		}
-		b.WriteString("\n")
+		enc := yaml.NewEncoder(&b)
+		enc.SetIndent(2)
+		enc.Encode(map[string]any{h.key: values[h.key]}) // one key: quoted and indented by yaml
+		enc.Close()
 	}
-	b.WriteString("}\n")
-	return []byte(b.String())
+	return b.Bytes()
 }
 
 // schtasks registers the collector to run at log-on (contracts/collector-cli.md "Scheduling").
@@ -123,7 +129,7 @@ func (s *Server) handleCollectors(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleCollectorCreate registers a remote collector and shows its token once, inside a
-// ready-to-save hne-collector.json.
+// ready-to-save hne-collector.yaml.
 func (s *Server) handleCollectorCreate(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	token, _, err := auth.CreateCollector(r.Context(), s.opts.Store.DB(), name, s.opts.Clock.Now())
@@ -155,8 +161,8 @@ func (s *Server) handleCollectorCreate(w http.ResponseWriter, r *http.Request) {
 	b := cfg.commented()
 	created := &createdCollector{
 		Name:       name,
-		ConfigJSON: string(b),
-		ConfigHref: template.URL("data:application/json;charset=utf-8," + url.PathEscape(string(b))),
+		ConfigYAML: string(b),
+		ConfigHref: template.URL("data:application/yaml;charset=utf-8," + url.PathEscape(string(b))),
 	}
 	s.renderCollectors(w, r, http.StatusOK, "", created)
 }

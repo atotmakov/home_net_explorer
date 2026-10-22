@@ -2,6 +2,9 @@
 
 Extends `specs/001-lan-inventory-topology/contracts/collector-cli.md`.
 
+> Feature 009: the file is now `hne-collector.yaml`; the settings below are the same, written as
+> YAML (`extra_subnets: [192.168.0.0/24]`, `routers:` as a list of `- model: ...` entries).
+
 ## Configuration (`hne-collector.json`)
 
 ```json
