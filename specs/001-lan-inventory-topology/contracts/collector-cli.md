@@ -19,6 +19,9 @@ collector is created in the UI, and the user downloads it together with the bina
 }
 ```
 
+- Feature 008: the file may contain `//` comments, and the generated file has a comment line above
+  every setting (`extra_subnets` is now always written). See
+  [008 spec](../../008-config-comments/spec.md).
 - `subnets` is **empty by default**, meaning: at the start of every scan, discover every on-link
   **private (RFC 1918)** IPv4 subnet with a prefix of /22 or narrower. Wider on-link subnets are
   reported as `skipped` / `too_large`. Non-private subnets are never scanned. A subnet that

@@ -41,6 +41,7 @@ type collectorConfig struct {
 	Name            string   `json:"name"`
 	Token           string   `json:"token"`
 	Subnets         []string `json:"subnets"`
+	ExtraSubnets    []string `json:"extra_subnets"`
 	IntervalSeconds int      `json:"interval_seconds"`
 	// Routers lists the routers configured in the web UI, without credentials (feature 003):
 	// the collector fetches their logins from the server before each read.
@@ -50,6 +51,57 @@ type collectorConfig struct {
 type configRouter struct {
 	Model string `json:"model"`
 	URL   string `json:"url"`
+}
+
+// configHelp is the // comment written above each setting of hne-collector.json (feature 008),
+// one string per comment line.
+var configHelp = []struct {
+	key  string
+	help []string
+}{
+	{"server_url", []string{"Address of the Home Net Explorer server that this collector sends its scans to."}},
+	{"name", []string{"This collector's name on the server's Collectors page."}},
+	{"token", []string{"Secret key that lets this collector upload. Shown only once; keep this file private."}},
+	{"subnets", []string{
+		"Subnets to scan. Empty []: every private subnet this computer is connected to,",
+		"found again at each scan (subnets wider than /22 are skipped).",
+		`A list, e.g. ["192.168.1.0/24"]: scan only these subnets.`}},
+	{"extra_subnets", []string{
+		`Subnets scanned in addition to the ones above, e.g. ["192.168.0.0/24"] behind a`,
+		"router. Devices there are found by ping/TCP, without MAC addresses."}},
+	{"interval_seconds", []string{`Seconds between scans for "hne-collector run" (900 = 15 minutes).`}},
+	{"routers", []string{
+		"Routers whose device lists are read at each scan, as set up on the server's Routers",
+		"page (their logins stay on the server). A router can also be added here with",
+		`"model", "url", "username", "password" and an optional "subnet".`}},
+}
+
+// commented renders the config as indented JSON with a // comment line above each setting.
+// The collector strips the comments before parsing (contract.StripComments).
+func (c collectorConfig) commented() []byte {
+	if c.ExtraSubnets == nil {
+		c.ExtraSubnets = []string{}
+	}
+	values := map[string]any{"server_url": c.ServerURL, "name": c.Name, "token": c.Token, "subnets": c.Subnets,
+		"extra_subnets": c.ExtraSubnets, "interval_seconds": c.IntervalSeconds, "routers": c.Routers}
+	var b strings.Builder
+	b.WriteString("{\n")
+	for i, h := range configHelp {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		for _, line := range h.help {
+			b.WriteString("  // " + line + "\n")
+		}
+		v, _ := json.MarshalIndent(values[h.key], "  ", "  ")
+		b.WriteString(`  "` + h.key + `": ` + string(v))
+		if i < len(configHelp)-1 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("}\n")
+	return []byte(b.String())
 }
 
 // schtasks registers the collector to run at log-on (contracts/collector-cli.md "Scheduling").
@@ -100,7 +152,7 @@ func (s *Server) handleCollectorCreate(w http.ResponseWriter, r *http.Request) {
 	for _, rt := range routers {
 		cfg.Routers = append(cfg.Routers, configRouter{Model: rt.Model, URL: "http://" + rt.Address})
 	}
-	b, _ := json.MarshalIndent(cfg, "", "  ")
+	b := cfg.commented()
 	created := &createdCollector{
 		Name:       name,
 		ConfigJSON: string(b),
