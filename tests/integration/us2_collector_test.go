@@ -58,22 +58,19 @@ func TestCollectorConfigComments(t *testing.T) {
 	if m == nil {
 		t.Fatal("no config shown")
 	}
-	lines := strings.Split(html.UnescapeString(m[1]), "
-")
+	lines := strings.Split(html.UnescapeString(m[1]), "\n")
 	for _, key := range []string{"server_url", "name", "token", "subnets", "extra_subnets", "interval_seconds", "routers"} {
 		found := false
 		for i, l := range lines {
 			if strings.HasPrefix(strings.TrimSpace(l), `"`+key+`":`) {
 				found = true
 				if i == 0 || !strings.HasPrefix(strings.TrimSpace(lines[i-1]), "// ") {
-					t.Errorf("%s has no // comment line above it:
-%s", key, m[1])
+					t.Errorf("%s has no // comment line above it:\n%s", key, m[1])
 				}
 			}
 		}
 		if !found {
-			t.Errorf("config has no %s setting:
-%s", key, m[1])
+			t.Errorf("config has no %s setting:\n%s", key, m[1])
 		}
 	}
 }
