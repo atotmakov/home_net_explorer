@@ -38,13 +38,44 @@ func (e *env) createCollector(name string) collectorConfig {
 		e.t.Fatalf("no hne-collector.json shown after creating the collector:\n%s", body)
 	}
 	var cfg collectorConfig
-	if err := json.Unmarshal([]byte(html.UnescapeString(m[1])), &cfg); err != nil {
+	if err := json.Unmarshal(contract.StripComments([]byte(html.UnescapeString(m[1]))), &cfg); err != nil {
 		e.t.Fatalf("collector config is not JSON: %v\n%s", err, m[1])
 	}
 	if !strings.Contains(body, `download="hne-collector.json"`) {
 		e.t.Error("no hne-collector.json download link")
 	}
 	return cfg
+}
+
+// Feature 008: every setting in the generated hne-collector.json has a // comment line above it.
+func TestCollectorConfigComments(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	res, body := e.req("POST", "/collectors", url.Values{"name": {"desktop"}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /collectors = %d", res.StatusCode)
+	}
+	m := configRe.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatal("no config shown")
+	}
+	lines := strings.Split(html.UnescapeString(m[1]), "
+")
+	for _, key := range []string{"server_url", "name", "token", "subnets", "extra_subnets", "interval_seconds", "routers"} {
+		found := false
+		for i, l := range lines {
+			if strings.HasPrefix(strings.TrimSpace(l), `"`+key+`":`) {
+				found = true
+				if i == 0 || !strings.HasPrefix(strings.TrimSpace(lines[i-1]), "// ") {
+					t.Errorf("%s has no // comment line above it:
+%s", key, m[1])
+				}
+			}
+		}
+		if !found {
+			t.Errorf("config has no %s setting:
+%s", key, m[1])
+		}
+	}
 }
 
 func (e *env) upload(token string, body []byte) (int, contract.UploadResult) {
