@@ -14,19 +14,22 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/contract/contracttest"
+	"gopkg.in/yaml.v3"
 )
 
 type collectorConfig struct {
-	ServerURL       string           `json:"server_url"`
-	Name            string           `json:"name"`
-	Token           string           `json:"token"`
-	Subnets         []string         `json:"subnets"`
-	IntervalSeconds int              `json:"interval_seconds"`
-	Routers         []map[string]any `json:"routers"` // feature 003: UI routers, no credentials
+	ServerURL       string           `yaml:"server_url"`
+	Name            string           `yaml:"name"`
+	Token           string           `yaml:"token"`
+	Subnets         []string         `yaml:"subnets"`
+	ExtraSubnets    []string         `yaml:"extra_subnets"`
+	IntervalSeconds int              `yaml:"interval_seconds"`
+	Routers         []map[string]any `yaml:"routers"` // feature 003: UI routers, no credentials
 }
 
 var configRe = regexp.MustCompile(`(?s)<pre id="collector-config">(.*?)</pre>`)
 
+// createCollector creates a collector and returns its hne-collector.yaml (feature 009).
 func (e *env) createCollector(name string) collectorConfig {
 	e.t.Helper()
 	res, body := e.req("POST", "/collectors", url.Values{"name": {name}})
@@ -35,19 +38,22 @@ func (e *env) createCollector(name string) collectorConfig {
 	}
 	m := configRe.FindStringSubmatch(body)
 	if m == nil {
-		e.t.Fatalf("no hne-collector.json shown after creating the collector:\n%s", body)
+		e.t.Fatalf("no hne-collector.yaml shown after creating the collector:\n%s", body)
 	}
 	var cfg collectorConfig
-	if err := json.Unmarshal(contract.StripComments([]byte(html.UnescapeString(m[1]))), &cfg); err != nil {
-		e.t.Fatalf("collector config is not JSON: %v\n%s", err, m[1])
+	dec := yaml.NewDecoder(strings.NewReader(html.UnescapeString(m[1])))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		e.t.Fatalf("collector config is not YAML: %v\n%s", err, m[1])
 	}
-	if !strings.Contains(body, `download="hne-collector.json"`) {
-		e.t.Error("no hne-collector.json download link")
+	if !strings.Contains(body, `download="hne-collector.yaml"`) {
+		e.t.Error("no hne-collector.yaml download link")
 	}
 	return cfg
 }
 
-// Feature 008: every setting in the generated hne-collector.json has a // comment line above it.
+// Features 008/009: every setting in the generated hne-collector.yaml has a # comment line
+// above it.
 func TestCollectorConfigComments(t *testing.T) {
 	e := newEnv(t, envOpts{})
 	res, body := e.req("POST", "/collectors", url.Values{"name": {"desktop"}})
@@ -62,10 +68,10 @@ func TestCollectorConfigComments(t *testing.T) {
 	for _, key := range []string{"server_url", "name", "token", "subnets", "extra_subnets", "interval_seconds", "routers"} {
 		found := false
 		for i, l := range lines {
-			if strings.HasPrefix(strings.TrimSpace(l), `"`+key+`":`) {
+			if strings.HasPrefix(l, key+":") {
 				found = true
-				if i == 0 || !strings.HasPrefix(strings.TrimSpace(lines[i-1]), "// ") {
-					t.Errorf("%s has no // comment line above it:\n%s", key, m[1])
+				if i == 0 || !strings.HasPrefix(lines[i-1], "# ") {
+					t.Errorf("%s has no # comment line above it:\n%s", key, m[1])
 				}
 			}
 		}

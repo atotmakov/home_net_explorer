@@ -84,7 +84,7 @@ func TestRouterCredentialsNeverLeak(t *testing.T) {
 	}
 	files := 0
 	filepath.WalkDir(h.dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || filepath.Base(path) == "hne-collector.json" {
+		if err != nil || d.IsDir() || filepath.Base(path) == "hne-collector.yaml" {
 			return err
 		}
 		b, err := os.ReadFile(path)
