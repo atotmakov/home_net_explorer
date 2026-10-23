@@ -95,3 +95,6 @@ export function details(topo, id) {
     rows,
   };
 }
+
+// layout returns node positions. Not implemented yet.
+export function layout(topo) { return {}; }

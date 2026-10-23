@@ -213,6 +213,17 @@ once, right group, right state; `/map` page loads and draws them.
 - [ ] T027 Real network: run quickstart.md §1–§7 on ocean (including the 2 s draw and 1 s toggle
   timings); record the counts, timings and observations in this task
 
+## Revision 2026-10-24 (real network)
+
+- [ ] T028 [US1] The force layout (`cose`) drew the real map unreadable: subnet boxes stacked on
+  each other, stretched, devices as dots. Test in `internal/web/jstest/map-model.test.mjs`
+  `layout`: every node gets a position, no two share one, groups side by side without overlap,
+  the gateway on its group's top row, each port below its router with its devices in the port's
+  column below it, empty topology → `{}`. Implement `layout(topo)` in
+  `internal/web/static/map-model.js` (groups left to right; per group: gateways on the top row,
+  one column per port with its devices stacked under it, other devices in a grid) and draw with
+  Cytoscape's `preset` layout in `map.js`, with labels truncated to the column width
+
 ## Dependencies
 
 T001, T002 (with T007) → T003/T004 (foundational) → US1 (T005–T009) → US2 (T010–T013) → US3
