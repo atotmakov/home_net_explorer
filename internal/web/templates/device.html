@@ -29,6 +29,19 @@
     <button type="submit">Save</button>
   </form>
 </section>
+<section class="card" id="link">
+  <h2>Connected via</h2>
+  <p class="muted">The device this one connects through, when scans can't tell (shown on the <a href="/map">Map</a>).</p>
+  <form method="post" action="/devices/{{.ID}}/link">
+    <label>Connected via
+      <select name="via">
+        <option value="">— not set —</option>
+        {{range $.Data.Links}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <button type="submit">Save</button>
+  </form>
+</section>
 {{with $.Data.Router}}
 <section class="card" id="router">
   <h2>Router</h2>

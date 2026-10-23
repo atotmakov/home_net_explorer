@@ -146,7 +146,8 @@ type deviceData struct {
 	Device store.DeviceRow
 	Types  []string
 	Saved  bool
-	Router *routerData // Router card (feature 003); nil unless the type is "router"
+	Router *routerData        // Router card (feature 003); nil unless the type is "router"
+	Links  []store.LinkOption // "Connected via" choices (feature 010)
 }
 
 func (s *Server) loadDevice(w http.ResponseWriter, r *http.Request) (store.DeviceRow, bool) {
@@ -181,7 +182,12 @@ func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderDevice(w http.ResponseWriter, r *http.Request, status int, d store.DeviceRow, rd *routerData) {
-	data := deviceData{Device: d, Types: inventory.DeviceTypes, Saved: r.URL.Query().Get("saved") == "1", Router: rd}
+	links, err := s.opts.Store.DeviceLinkOptions(r.Context(), d.ID, s.opts.Clock.Now())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data := deviceData{Device: d, Types: inventory.DeviceTypes, Saved: r.URL.Query().Get("saved") == "1", Router: rd, Links: links}
 	s.render(w, r, status, "device.html", page{Title: d.DisplayName, Nav: true, Active: "devices", Data: data})
 }
 

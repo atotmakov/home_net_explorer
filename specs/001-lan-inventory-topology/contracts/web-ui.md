@@ -19,8 +19,8 @@ collector's bearer token.
 | `POST /devices/{id}/merge` (`into={id}`) / `POST /devices/{id}/split` | Manual identity merge and split | FR-015 |
 | `POST /devices/{id}/link` (`via={id}`) / `DELETE /devices/{id}/link` | Manual "connected via" link | FR-026 |
 | `GET /timeline` | Event timeline. Query params: `from`, `to`, `type` (repeatable), `device`, `subnet` | FR-021, US3-5 |
-| `GET /map` | Topology page | FR-025, US4 |
-| `GET /ui/map.json?scope=online\|all` | Graph data for the map: compound subnet nodes, device nodes, and edges labeled by link kind and source | FR-025, US4-4 |
+| `GET /map` | Topology page. Built by feature 010: see `specs/010-device-topology-map/contracts/web-ui-changes.md` (all devices by default, client-side "Online only") | FR-025, US4 |
+| `GET /ui/map.json` | Graph data for the map. Replaced by feature 010 (no `scope` parameter; groups, device and port nodes, gateway / bridge / port / manual edges): see `specs/010-device-topology-map/contracts/web-ui-changes.md` | FR-025, US4-4 |
 | `GET /collectors` | Collector list with subnets, last report, skew, and status. Shows a create form and download links. A collector whose latest run skipped a subnet for `faked_answers` shows status `scan error` and the subnet with the reason (feature 005); the home page then shows a "Scan problems" notice | FR-012 |
 | `POST /collectors` | Create a remote collector. Responds **once** with the token and a downloadable `hne-collector.yaml` with a `#` comment above each setting (features 008, 009), which also lists the routers set up in the UI without credentials (feature 003) | FR-008 |
 | `POST /collectors/{id}/revoke` | Revoke a token | FR-008 |
@@ -33,6 +33,9 @@ collector's bearer token.
 | `GET /healthz` | No auth. Returns `200 ok` once the database is open (used by the container healthcheck) | Deployment |
 
 ## Map JSON shape (`/ui/map.json`)
+
+> Superseded by feature 010: the shape below is the original 001 plan; the implemented shape is in
+> `specs/010-device-topology-map/contracts/web-ui-changes.md`.
 
 ```json
 {

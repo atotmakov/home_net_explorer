@@ -662,7 +662,7 @@ subnet, the gateways and the desktop bridge are visible, and a manual link persi
 
 ### Tests for User Story 4 ⚠️ write first, see them fail
 
-- [ ] T084 [P] [US4] Write `internal/inventory/links_test.go`. Using the vantage from
+- [X] T084 (replaced by feature 010, specs/010-device-topology-map) [P] [US4] Write `internal/inventory/links_test.go`. Using the vantage from
   `valid_full.json`, cover:
   - Each route `next_hop` becomes a `gateway` link (device ↔ subnet), e.g. 192.168.1.100 ↔
     192.168.1.0/24 and 192.168.8.1 ↔ 192.168.8.0/24.
@@ -672,31 +672,31 @@ subnet, the gateways and the desktop bridge are visible, and a manual link persi
     override inferred links that point at the same device".
   - A removed user link (`removed` true) disappears.
   - Links survive `store.Rebuild`.
-- [ ] T085 [P] [US4] Write `internal/web/map_test.go`. `GET /ui/map.json?scope=online|all`
+- [X] T085 (replaced by feature 010, specs/010-device-topology-map) [P] [US4] Write `internal/web/map_test.go`. `GET /ui/map.json?scope=online|all`
   returns JSON exactly in the shape from contracts/web-ui.md "Map JSON shape". Cover:
   - Subnet nodes have `stale`. Device nodes have `parent`, `status`, `type`, and `is_gateway`.
     Edges have `kind` ∈ {gateway, bridge, manual} and `origin` ∈ {inferred, user}.
   - `scope=online` excludes offline and new_offline devices, and drops their edges.
   - A multi-subnet device appears once, in its first subnet, with `bridge` edges to the others.
   - `merged_away` devices never appear.
-- [ ] T086 [P] [US4] Write `tests/integration/us4_map_test.go`. Ingest NAS and desktop fixtures,
+- [X] T086 (replaced by feature 010, specs/010-device-topology-map) [P] [US4] Write `tests/integration/us4_map_test.go`. Ingest NAS and desktop fixtures,
   `POST /devices/{id}/link via={ap}`, ingest another run, and `GET /ui/map.json` still contains the
   manual edge. `DELETE /devices/{id}/link` removes it
 
 ### Implementation for User Story 4
 
-- [ ] T087 [US4] Write `internal/inventory/links.go`. Recompute inferred links in `Apply` from the
+- [X] T087 (replaced by feature 010, specs/010-device-topology-map) [US4] Write `internal/inventory/links.go`. Recompute inferred links in `Apply` from the
   run's vantage and the current `device_addresses`, and apply `user_links`. Write
   `internal/store/userfacts.go` `AddUserLink` and `RemoveUserLink` (append-only rows keyed by
   `from_identity_key`/`to_identity_key`, with the `removed` flag). Make T084 pass
-- [ ] T088 [US4] Write `internal/web/map.go`: `GET /ui/map.json` and `GET /map`, plus
+- [X] T088 (replaced by feature 010, specs/010-device-topology-map) [US4] Write `internal/web/map.go`: `GET /ui/map.json` and `GET /map`, plus
   `POST /devices/{id}/link` (`via={id}`) and `DELETE /devices/{id}/link`. Make T085 pass
-- [ ] T089 [US4] Write `internal/web/templates/map.html` and `internal/web/static/map.js`. Draw
+- [X] T089 (replaced by feature 010, specs/010-device-topology-map) [US4] Write `internal/web/templates/map.html` and `internal/web/static/map.js`. Draw
   Cytoscape compound nodes (subnet = parent), style gateways distinctly, dash `bridge` edges, and
   color `manual` edges separately. Add an **Online only / All** toggle that refetches
   `map.json?scope=...`. Clicking a device loads `/devices/{id}?partial=1` into a side panel via
   htmx, showing details and recent history (FR-027)
-- [ ] T090 [US4] Add a "Connected via" picker to `device.html` (any device; `access_point`/`switch`/
+- [X] T090 (replaced by feature 010, specs/010-device-topology-map) [US4] Add a "Connected via" picker to `device.html` (any device; `access_point`/`switch`/
   `router` types listed first). Make T086 pass
 
 **Checkpoint**: all four stories work on their own. Run quickstart.md §6.

@@ -1,0 +1,27 @@
+{{define "content"}}
+<h1>Map</h1>
+{{if .Data.Empty}}<p class="card">No devices yet — run a scan from the <a href="/">home page</a>.</p>{{end}}
+<div class="map-bar">
+  <div class="map-scope" role="radiogroup" aria-label="Devices shown">
+    <label class="inline"><input type="radio" name="map-scope" value="all" checked> All devices</label>
+    <label class="inline"><input type="radio" name="map-scope" value="online"> Online only</label>
+  </div>
+  <ul class="map-legend" aria-label="Legend">
+    <li><span class="dot s-online"></span> online</li>
+    <li><span class="dot s-stale"></span> online, not seen recently</li>
+    <li><span class="dot s-offline"></span> offline</li>
+    <li><span class="dot gw"></span> gateway</li>
+    <li><span class="line bridge"></span> two subnets</li>
+    <li><span class="line port"></span> port / Wi-Fi</li>
+    <li><span class="line last"></span> last known</li>
+    <li><span class="line manual"></span> manual</li>
+  </ul>
+</div>
+<div class="map-wrap">
+  <div id="map" aria-label="Network map"></div>
+  <aside id="map-details" class="card" hidden></aside>
+</div>
+<div id="map-tip" class="map-tip" hidden></div>
+<script src="/static/vendor/cytoscape.min.js"></script>
+<script type="module" src="/static/map.js"></script>
+{{end}}

@@ -172,6 +172,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
 	s.mux.HandleFunc("POST /devices/{id}/router", s.handleRouterSave)
 	s.mux.HandleFunc("POST /devices/{id}/router/remove", s.handleRouterRemove)
+	s.mux.HandleFunc("POST /devices/{id}/link", s.handleDeviceLink)
+	s.mux.HandleFunc("GET /map", s.handleMap)
+	s.mux.HandleFunc("GET /ui/map.json", s.handleMapJSON)
 	s.mux.HandleFunc("POST /scan", s.handleScan)
 	s.mux.HandleFunc("GET /ui/scan-status", s.handleScanStatus)
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
@@ -327,26 +330,5 @@ func badgeLabel(state string) string {
 	return "online"
 }
 
-// ago formats an age as "less than a minute", "45 mins", "3 hours, 5 mins" or
-// "2 days, 4 hours, 1 min".
-func ago(d time.Duration) string {
-	if d < time.Minute {
-		return "less than a minute"
-	}
-	unit := func(n int, name string) string {
-		if n == 1 {
-			return "1 " + name
-		}
-		return fmt.Sprintf("%d %ss", n, name)
-	}
-	m := int(d.Minutes())
-	days, hours, mins := m/(24*60), m/60%24, m%60
-	switch {
-	case days > 0:
-		return unit(days, "day") + ", " + unit(hours, "hour") + ", " + unit(mins, "min")
-	case hours > 0:
-		return unit(hours, "hour") + ", " + unit(mins, "min")
-	default:
-		return unit(mins, "min")
-	}
-}
+// ago formats an age for the "last seen … ago" tooltips (shared with the map, store.Ago).
+func ago(d time.Duration) string { return store.Ago(d) }
