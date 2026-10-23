@@ -327,26 +327,5 @@ func badgeLabel(state string) string {
 	return "online"
 }
 
-// ago formats an age as "less than a minute", "45 mins", "3 hours, 5 mins" or
-// "2 days, 4 hours, 1 min".
-func ago(d time.Duration) string {
-	if d < time.Minute {
-		return "less than a minute"
-	}
-	unit := func(n int, name string) string {
-		if n == 1 {
-			return "1 " + name
-		}
-		return fmt.Sprintf("%d %ss", n, name)
-	}
-	m := int(d.Minutes())
-	days, hours, mins := m/(24*60), m/60%24, m%60
-	switch {
-	case days > 0:
-		return unit(days, "day") + ", " + unit(hours, "hour") + ", " + unit(mins, "min")
-	case hours > 0:
-		return unit(hours, "hour") + ", " + unit(mins, "min")
-	default:
-		return unit(mins, "min")
-	}
-}
+// ago formats an age for the "last seen … ago" tooltips (shared with the map, store.Ago).
+func ago(d time.Duration) string { return store.Ago(d) }

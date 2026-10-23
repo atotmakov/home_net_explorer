@@ -153,6 +153,8 @@ jobs:
           go-version-file: go.mod
       # -short skips the SC-007 perf test on shared runners.
       - run: go run $GOTESTSUM --junitfile report.xml --format testname -- -short -coverprofile=coverage.out ${{ matrix.pkgs }}
+        env:
+          HNE_MAP_RUN_OUT: ${{ github.workspace }}/map-250-run.json # feature 010, quickstart.md §7
       - if: always()
         run: |
           echo "### ${{ matrix.name }} coverage" >> "$GITHUB_STEP_SUMMARY"
@@ -163,6 +165,27 @@ jobs:
           name: junit-${{ matrix.name }}
           path: report.xml
           if-no-files-found: ignore
+      - if: matrix.name == 'integration'
+        uses: actions/upload-artifact@v7
+        with:
+          name: map-250-run.json
+          path: map-250-run.json
+          if-no-files-found: ignore
+
+  # Map page logic (feature 010): node --test on the pure module static/map-model.js.
+  test-js:
+    needs: [detect, autofix]
+    if: ${{ !cancelled() && needs.autofix.result != 'failure' }}
+    runs-on: ubuntu-latest
+    name: test (js)
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.autofix.outputs.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node --version && node --test "internal/web/jstest/*.test.mjs"
 
   # The desktop collector runs on Windows: run its packages there too, not just cross-compile.
   test-windows:
@@ -180,7 +203,7 @@ jobs:
       - run: go test -short ./internal/collect/... ./internal/upload/... ./internal/contract/... ./cmd/hne-collector/...
 
   build:
-    needs: [detect, autofix, lint, test, test-windows]
+    needs: [detect, autofix, lint, test, test-windows, test-js]
     if: ${{ !cancelled() && needs.detect.outputs.cmd == 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     strategy:
@@ -216,7 +239,7 @@ jobs:
   # Pull requests build without pushing. The Dockerfile cross-compiles via $BUILDPLATFORM
   # (no QEMU needed), and deploy/smoke.sh is POSIX sh honouring HNE_IMAGE / HNE_SMOKE_HOST (T047).
   image:
-    needs: [detect, autofix, test]
+    needs: [detect, autofix, test, test-js]
     if: ${{ !cancelled() && needs.detect.outputs.image == 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
