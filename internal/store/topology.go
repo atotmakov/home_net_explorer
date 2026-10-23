@@ -80,7 +80,7 @@ type TopoEdge struct {
 	Current bool   `json:"current"`
 }
 
-func devNodeID(id int64) string { return "dev-" + strconv.FormatInt(id, 10) }
+func devNodeID(id int64) string   { return "dev-" + strconv.FormatInt(id, 10) }
 func groupID(subnet int64) string { return "subnet-" + strconv.FormatInt(subnet, 10) }
 
 // Topology builds the map at time now: every device of the unfiltered Devices list (R2), grouped
