@@ -51,15 +51,6 @@ func (m mapDoc) has(kind, source, target string) bool {
 	return false
 }
 
-func (e *env) count(q string) int {
-	e.t.Helper()
-	var n int
-	if err := e.app.Store.DB().QueryRow(q).Scan(&n); err != nil {
-		e.t.Fatal(err)
-	}
-	return n
-}
-
 func TestMapEndToEnd(t *testing.T) {
 	e := newEnv(t, envOpts{})
 	cfg := e.createCollector("desktop")
