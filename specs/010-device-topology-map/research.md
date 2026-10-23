@@ -67,7 +67,14 @@ All questions are resolved from the existing code and data; no NEEDS CLARIFICATI
 
 ## R8 Front end
 
-- **Decision**: `GET /map` renders `map.html`; `static/map.js` fetches `/ui/map.json` once and
+- **Decision**: page logic lives in a pure ES module `static/map-model.js` with no DOM or
+  Cytoscape access: `toElements(topology)` (groups, nodes, edges → Cytoscape element data with
+  status, gateway, edge-kind and last-known classes), `visibleIds(topology, onlineOnly)` (ids to
+  show: offline devices, their edges, ports left without a visible device and empty groups are
+  hidden when `onlineOnly`) and `details(topology, nodeId)` (panel rows: label/value pairs and the
+  device-page link, with "(last known)" for non-current ports and the manual target).
+  `static/map.js` (`<script type="module">`) only wires these to the DOM and Cytoscape.
+  `GET /map` renders `map.html`; `map.js` fetches `/ui/map.json` once and
   draws it with the vendored Cytoscape 3.34.3 (already in `static/vendor`, served locally), using
   compound nodes for groups and the built-in `cose` layout. The "All devices / Online only" switch
   hides offline nodes and their edges client-side (no refetch; SC-003). Hover shows a tooltip
@@ -90,7 +97,13 @@ All questions are resolved from the existing code and data; no NEEDS CLARIFICATI
 - Integration: `tests/integration/us_map_test.go` ingests fixtures (NAS run, desktop run with two
   interfaces, router_table run with ports), checks the map, sets a manual link, ingests another
   run, link still there.
-- Performance: 250 seeded devices, `/ui/map.json` under 500 ms in CI (SC-002 budget includes
-  drawing).
-- JavaScript is kept thin (fetch, map JSON to Cytoscape elements, toggle, panel); it is checked
-  by hand in quickstart.md (the project has no JS test runner; adding one is not justified).
+- Performance: 250 seeded devices. The timing assertion (`/ui/map.json` < 500 ms) is skipped
+  under `-short`, which CI always uses (noisy shared runners, as for the existing SC-007 test);
+  in `-short` mode the test still checks the 250-device map is complete. SC-002 (drawn < 2 s) and
+  SC-003 (toggle < 1 s) are measured in the browser on the real network (quickstart §7).
+- Page logic: `internal/web/jstest/map-model.test.mjs` imports `../static/map-model.js` and runs
+  with `node --test` (built-in runner, no packages) in a CI job `test-js` on `ubuntu-latest`,
+  whose preinstalled Node (22+) detects ES module syntax in `.js` files. The test file is outside
+  `static/`, so it is neither embedded nor served. `build` needs `test-js`.
+- Only the Cytoscape/DOM glue in `map.js` is checked by hand in quickstart.md; it makes no
+  decisions of its own.

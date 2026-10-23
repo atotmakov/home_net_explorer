@@ -43,3 +43,15 @@ Click a device: the side panel shows its details and a link that opens `/devices
 ## 6. Offline browser
 
 Disconnect the viewing PC from the internet (LAN only) and reload **Map**: it still draws.
+
+## 7. Timing (SC-002, SC-003)
+
+1. With the real inventory, open **Map** with the browser's developer tools (Performance or
+   Network): the map is drawn within 2 seconds of opening the tab.
+2. 250-device check: the CI job of `TestMapPerformance` uploads its generated 250-device run as
+   the artifact `map-250-run.json` (collector name `perf`; late uploads are accepted, as for
+   spooled runs). Start a test server (`docker run` of the same image with a scratch volume),
+   create a collector named `perf` on its Collectors page, upload the file with its token
+   (`curl -H "Authorization: Bearer <token>" --data-binary @map-250-run.json
+   http://<test-server>/api/v1/collections`), open **Map**: drawn within 2 seconds.
+3. Toggle **Online only** / **All devices**: each change shows within 1 second.

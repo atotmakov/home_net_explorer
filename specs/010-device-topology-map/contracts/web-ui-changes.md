@@ -4,7 +4,7 @@ Extends and replaces the Map rows of `specs/001-lan-inventory-topology/contracts
 
 | Route | Behavior |
 |-------|----------|
-| `GET /map` | Map page: the graph, an "All devices / Online only" switch (starts on All devices), a legend (status colors; gateway, two-subnet, port/Wi-Fi, last known, manual links) and a details panel. Loads `/static/vendor/cytoscape.min.js` and `/static/map.js` (local only). With no devices: "No devices yet — run a scan from the home page." |
+| `GET /map` | Map page: the graph, an "All devices / Online only" switch (starts on All devices), a legend (status colors; gateway, two-subnet, port/Wi-Fi, last known, manual links) and a details panel. Loads `/static/vendor/cytoscape.min.js` and the ES module `/static/map.js` (which imports `/static/map-model.js`), local only. With no devices: "No devices yet — run a scan from the home page." |
 | `GET /ui/map.json` | The topology as JSON (below). No query parameters (the 001 `scope` parameter is dropped; filtering is client-side). `Cache-Control: no-store` |
 | `POST /devices/{id}/link` | Form field `via`: a device id sets "connected via", empty removes it. 303 to the `Referer` if same-origin, else `/devices/{id}`. 400 for an unknown target or a link to itself; 404 for an unknown device. Cross-site posts 403 |
 | `GET /devices/{id}` | Adds a "Connected via" select (all other devices by name; routers and access points first) with Save, showing the current manual link |
@@ -36,4 +36,7 @@ Extends and replaces the Map rows of `specs/001-lan-inventory-topology/contracts
 
 - `state` ∈ `online`, `stale`, `offline` (feature 006); colors as on the Devices list.
 - `current: false` only on port edges of offline devices ("last known").
+- `bridge` is the spec's "two-subnet" link: a device with current addresses in more than one
+  subnet, linked to each other subnet's group.
+- `port` labels are what the router reports (Huawei: `LAN1`–`LAN4`, `SSID1`, `SSID2`, …).
 - Every device of `GET /devices` (no filter) is exactly one `device` node.

@@ -70,8 +70,9 @@ per-Wi-Fi grouping.
    device is marked as the gateway of that subnet.
 2. **Given** a device with addresses in two subnets, **When** the map is shown, **Then** it appears
    once, and a link shows that it also belongs to the other subnet.
-3. **Given** a router that reports the port or Wi-Fi interface of its devices (for example LAN1,
-   LAN2, 2.4 GHz, 5 GHz), **When** the map is shown, **Then** the devices behind that router are
+3. **Given** a router that reports the port or Wi-Fi interface of its devices (the Huawei router
+   reports its LAN ports as LAN1–LAN4 and its Wi-Fi networks as SSID1, SSID2, …; shown as the
+   router reports them), **When** the map is shown, **Then** the devices behind that router are
    linked to it through their reported port or Wi-Fi interface.
 4. **Given** an offline device whose last report came from a router port, **When** the map is shown,
    **Then** it is linked through that last known port, and the link is drawn as "last known"
@@ -149,8 +150,8 @@ the map; remove it and check it is gone.
 - Address entries that are not real devices (for example a broadcast MAC address) are shown like
   any other device on the Devices list; whether to keep them out is a separate inventory question,
   not a map question.
-- A large network (250 devices) stays readable: offline devices are visually quieter than online
-  ones, and the owner can zoom and pan.
+- A large network (250 devices) stays usable: it is drawn within the SC-002 time, offline devices
+  are dimmed relative to online ones, and the owner can zoom and pan.
 - With no devices at all, the map shows a short message pointing to "Scan now" on the home page.
 - The page works with no internet connection (constitution, Principle I).
 
@@ -169,7 +170,7 @@ the map; remove it and check it is gone.
   devices" and "online only" (online and stale) that does not reload the page.
 - **FR-005**: The gateway of each subnet, when known, MUST be marked as such.
 - **FR-006**: A device with current addresses in more than one subnet MUST appear once, with a
-  link to each other subnet it belongs to.
+  "two-subnet" link (called `bridge` in the map data) to each other subnet it belongs to.
 - **FR-007**: When a router reports the port or Wi-Fi interface of a device, the device MUST be
   linked to that router through the reported port or interface; for an offline device the last
   reported one is used and drawn as "last known".
