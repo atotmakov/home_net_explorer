@@ -208,10 +208,25 @@ once, right group, right state; `/map` page loads and draws them.
 - [X] T025 Docs: `specs/001-lan-inventory-topology/contracts/web-ui.md` Map rows and "Map JSON
   shape" point to `specs/010-device-topology-map/contracts/web-ui-changes.md`;
   `specs/001-lan-inventory-topology/tasks.md` T084–T090 marked "replaced by feature 010"
-- [ ] T026 CI green (including `test-js`), merge to `main`, image built, deployed to ocean
+- [X] T026 CI green (including `test-js`), merge to `main`, image built, deployed to ocean
   (standing instructions)
-- [ ] T027 Real network: run quickstart.md §1–§7 on ocean (including the 2 s draw and 1 s toggle
-  timings); record the counts, timings and observations in this task
+- [X] T027 Real network: run quickstart.md §1–§7 on ocean (including the 2 s draw and 1 s toggle
+  timings); record the counts, timings and observations in this task. Done on ocean
+  2026-10-24 (0.11.123, desktop collector stopped): §1 map 28 devices = Devices list, 10 online /
+  15 stale / 3 offline = home counts; groups 192.168.0.x, 192.168.1.x, 192.168.8.x (0.x and 8.x
+  stale: no recent desktop scan); hover tooltip shows name · IP · MAC · last seen. §2 gateways
+  HG8145V5 (0.x), ocean.local (1.x: the desktop's default route on its home interface really
+  goes through 192.168.1.100), console.gl-inet.com (8.x); router ports LAN1 / LAN2 with their
+  devices, offline ones (goldmine, WEB-W89, Kates-iPhone) dimmed on their last port; DUNE two
+  subnets; karlo2.lan bridges 8.x → 1.x from the desktop's interfaces. §3 Online only hides
+  exactly the 3 offline devices; All devices restores them. §4 click DUNE: panel with both
+  addresses, MAC, vendor, "LAN1 on HG8145V5", device page link. §5 manual link not set on the
+  real inventory (owner data; covered by `TestMapEndToEnd` and `TestDeviceLinkForm`). §6 not
+  run (no offline browser test; all scripts are served by the server, checked by `TestMapPage`).
+  §7 `/ui/map.json` 28 ms, map drawn at once; the 250-device in-browser check was not run.
+  First deploy (0.11.120) showed the `cose` layout unreadable → T028. Known data issue: the
+  broadcast address 192.168.1.255 (MAC ff:ff:ff:ff:ff:ff) is listed as a device and drawn with a
+  two-subnet link
 
 ## Revision 2026-10-24 (real network)
 
