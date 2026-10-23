@@ -1,6 +1,6 @@
 // Map page (feature 010): draws /ui/map.json with the vendored Cytoscape. All decisions are in
 // map-model.js (tested); this file only wires them to the page.
-import { toElements, visibleIds, details } from './map-model.js';
+import { toElements, visibleIds, details, layout } from './map-model.js';
 
 const box = document.getElementById('map');
 const panel = document.getElementById('map-details');
@@ -14,19 +14,20 @@ function styles() {
   const fg = color('--fg'), muted = color('--muted'), line = color('--line'), card = color('--card');
   const accent = color('--accent'), ok = color('--ok'), manual = color('--new');
   return [
-    { selector: 'node', style: { label: 'data(label)', 'font-size': 10, color: fg, 'text-valign': 'bottom',
-      'text-margin-y': 3, width: 14, height: 14, 'background-color': muted } },
+    { selector: 'node', style: { label: 'data(label)', 'font-size': 11, color: fg, 'text-valign': 'bottom',
+      'text-margin-y': 4, 'text-wrap': 'ellipsis', 'text-max-width': '120px', width: 16, height: 16,
+      'background-color': muted } },
     { selector: 'node.group', style: { shape: 'round-rectangle', 'background-color': card, 'background-opacity': 1,
       'border-width': 1, 'border-color': line, 'text-valign': 'top', 'text-margin-y': -4, 'font-size': 12,
-      'font-weight': 'bold', padding: 14 } },
+      'font-weight': 'bold', padding: 24, 'text-max-width': '400px' } },
     { selector: 'node.group.stale', style: { 'border-style': 'dashed' } },
     { selector: 'node.state-online', style: { 'background-color': ok } },
     { selector: 'node.state-stale', style: { 'background-color': fg } },
     { selector: 'node.state-offline', style: { 'background-color': muted } },
     { selector: 'node.dim', style: { opacity: 0.45 } },
     { selector: 'node.gateway', style: { shape: 'diamond', width: 22, height: 22, 'border-width': 3, 'border-color': accent } },
-    { selector: 'node.port', style: { shape: 'ellipse', width: 8, height: 8, 'background-color': line,
-      'font-size': 8, color: muted } },
+    { selector: 'node.port', style: { shape: 'round-rectangle', width: 10, height: 10, 'background-color': line,
+      'font-size': 10, color: muted } },
     { selector: 'edge', style: { width: 1, 'curve-style': 'bezier', 'line-color': line } },
     { selector: 'edge.kind-gateway', style: { width: 3, 'line-color': accent } },
     { selector: 'edge.kind-bridge', style: { width: 2, 'line-style': 'dashed', 'line-color': accent } },
@@ -80,7 +81,9 @@ async function main() {
     container: box,
     elements: toElements(topo),
     style: styles(),
-    layout: { name: 'cose', animate: false, nodeDimensionsIncludeLabels: true, padding: 20 },
+    layout: { name: 'preset', positions: layout(topo), fit: true, padding: 30 },
+    minZoom: 0.2,
+    maxZoom: 3,
   });
 
   const apply = (onlineOnly) => {

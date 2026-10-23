@@ -2,7 +2,7 @@
 // node --test "internal/web/jstest/*.test.mjs" (research R9).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toElements, tooltip, visibleIds, details } from '../static/map-model.js';
+import { toElements, tooltip, visibleIds, details, layout } from '../static/map-model.js';
 
 // Two subnets: the router .1 (gateway of LAN, also gateway of the home subnet), a phone on LAN1,
 // an offline TV on LAN1 (last known), a stale printer, DUNE in both subnets, a tablet linked
@@ -136,6 +136,41 @@ test('details', () => {
   assert.equal(rows(details(t, 'dev-1'))['Gateway of'], '192.168.0.0/24, home (192.168.1.0/24)');
   assert.equal(details(t, 'port-1-LAN1'), null);
   assert.equal(details(t, 'nope'), null);
+});
+
+// Revision 2026-10-24: a force layout made the real map unreadable (overlapping, oversized
+// boxes); positions are computed here instead and drawn with Cytoscape's preset layout.
+test('layout', () => {
+  const t = fixture();
+  const pos = layout(t);
+  const nodes = t.nodes;
+  for (const n of nodes) assert.ok(pos[n.id] && Number.isFinite(pos[n.id].x) && Number.isFinite(pos[n.id].y), n.id);
+  const keys = new Set(nodes.map((n) => pos[n.id].x + ',' + pos[n.id].y));
+  assert.equal(keys.size, nodes.length, 'no two nodes share a position');
+
+  // Groups do not overlap: the x ranges of their nodes are disjoint (plus a gap).
+  const range = (g) => {
+    const xs = nodes.filter((n) => n.parent === g).map((n) => pos[n.id].x);
+    return [Math.min(...xs), Math.max(...xs)];
+  };
+  const groups = t.groups.map((g) => g.id).filter((g) => nodes.some((n) => n.parent === g));
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      const [a0, a1] = range(groups[i]);
+      const [b0, b1] = range(groups[j]);
+      assert.ok(a1 + 100 <= b0 || b1 + 100 <= a0, `${groups[i]} and ${groups[j]} overlap`);
+    }
+  }
+  // The gateway is on the top row of its group; a port is below its router; the devices behind
+  // a port are in its column, below it.
+  const top = Math.min(...nodes.filter((n) => n.parent === 'subnet-2').map((n) => pos[n.id].y));
+  assert.equal(pos['dev-1'].y, top);
+  assert.ok(pos['port-1-LAN1'].y > pos['dev-1'].y);
+  for (const d of ['dev-4', 'dev-5']) {
+    assert.equal(pos[d].x, pos['port-1-LAN1'].x, d + ' under its port');
+    assert.ok(pos[d].y > pos['port-1-LAN1'].y);
+  }
+  assert.deepEqual(layout({ groups: [], nodes: [], edges: [] }), {});
 });
 
 test('manual links', () => {
