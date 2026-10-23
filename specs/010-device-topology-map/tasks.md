@@ -215,7 +215,7 @@ once, right group, right state; `/map` page loads and draws them.
 
 ## Revision 2026-10-24 (real network)
 
-- [ ] T028 [US1] The force layout (`cose`) drew the real map unreadable: subnet boxes stacked on
+- [X] T028 [US1] The force layout (`cose`) drew the real map unreadable: subnet boxes stacked on
   each other, stretched, devices as dots. Test in `internal/web/jstest/map-model.test.mjs`
   `layout`: every node gets a position, no two share one, groups side by side without overlap,
   the gateway on its group's top row, each port below its router with its devices in the port's
