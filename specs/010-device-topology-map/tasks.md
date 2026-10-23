@@ -20,9 +20,9 @@ the Cytoscape/DOM glue in `map.js` is checked by hand (quickstart.md).
 
 - [ ] T001 Set `VERSION` to `0.11`
 - [ ] T002 Add CI job `test-js` to `.github/workflows/ci.yml`: `runs-on: ubuntu-latest`, checkout
-  at `needs.autofix.outputs.sha || github.sha` like the other test jobs, `node --version`, then
-  `node --test internal/web/jstest/`; no `setup-node`, no npm install; add `test-js` to `build`'s
-  `needs`. Push it together with the first JS test (T007) so the job has a test to run
+  at `needs.autofix.outputs.sha || github.sha` like the other test jobs, `actions/setup-node`
+  with `node-version: 22` (CI only; no npm install, no `package.json`), then
+  `node --test "internal/web/jstest/*.test.mjs"`; add `test-js` to `build`'s `needs`. Push it together with the first JS test (T007) so the job has a test to run
 
 ## Phase 2: Foundational (topology view and JSON endpoint)
 
@@ -88,8 +88,7 @@ once, right group, right state; `/map` page loads and draws them.
   creates Cytoscape with `toElements`, styles classes `state-online` (`--ok`), `state-stale`
   (`--fg`), `state-offline` (`--muted`) read with `getComputedStyle`, `dim` at lower opacity,
   `cose` layout, zoom/pan, hover tooltip; map area, legend and panel CSS in
-  `internal/web/static/app.css` (map height `calc(100vh - 12rem)`, min 480px). If Go's MIME table
-  lacks `.js` → JavaScript on the runner, set the type explicitly for static files. Make T006 and
+  `internal/web/static/app.css` (map height `calc(100vh - 12rem)`, min 480px). Make T006 and
   T007 pass
 
 **Checkpoint**: the Map tab shows every device in its subnet with the right status (US1).

@@ -102,8 +102,9 @@ All questions are resolved from the existing code and data; no NEEDS CLARIFICATI
   in `-short` mode the test still checks the 250-device map is complete. SC-002 (drawn < 2 s) and
   SC-003 (toggle < 1 s) are measured in the browser on the real network (quickstart §7).
 - Page logic: `internal/web/jstest/map-model.test.mjs` imports `../static/map-model.js` and runs
-  with `node --test` (built-in runner, no packages) in a CI job `test-js` on `ubuntu-latest`,
-  whose preinstalled Node (22+) detects ES module syntax in `.js` files. The test file is outside
+  with `node --test "internal/web/jstest/*.test.mjs"` (built-in runner, no packages) in a CI job
+  `test-js` on `ubuntu-latest` with `actions/setup-node` pinned to Node 22, which detects ES module
+  syntax in `.js` files (no `package.json` needed). The test file is outside
   `static/`, so it is neither embedded nor served. `build` needs `test-js`.
 - Only the Cytoscape/DOM glue in `map.js` is checked by hand in quickstart.md; it makes no
   decisions of its own.

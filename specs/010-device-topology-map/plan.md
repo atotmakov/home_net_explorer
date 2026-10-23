@@ -96,6 +96,6 @@ the Devices list. No new packages.
 
 | Addition | Why needed | Simpler alternative rejected because |
 |----------|------------|--------------------------------------|
-| CI job `test-js` running `node --test` (Node preinstalled on `ubuntu-latest`; no npm packages, no `package.json`, no lockfile; nothing added to the image) | Principle II: the Online-only filter, element building and details panel are decisions that need red-first tests | Manual checks only would violate Principle II; testing the JS through Go (an embedded JS engine) would add a runtime dependency |
+| CI job `test-js` running `node --test` (Node 22 via `actions/setup-node`, CI only; no npm packages, no `package.json`, no lockfile; nothing added to the image) | Principle II: the Online-only filter, element building and details panel are decisions that need red-first tests | Manual checks only would violate Principle II; testing the JS through Go (an embedded JS engine) would add a runtime dependency |
 
 No new runtime dependency, component or schema change.

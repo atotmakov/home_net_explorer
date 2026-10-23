@@ -53,5 +53,7 @@ Disconnect the viewing PC from the internet (LAN only) and reload **Map**: it st
    spooled runs). Start a test server (`docker run` of the same image with a scratch volume),
    create a collector named `perf` on its Collectors page, upload the file with its token
    (`curl -H "Authorization: Bearer <token>" --data-binary @map-250-run.json
-   http://<test-server>/api/v1/collections`), open **Map**: drawn within 2 seconds.
+   http://<test-server>/api/v1/collections`), open **Map**: drawn within 2 seconds. The run keeps
+   its generation-time timestamps, so its devices show as stale or offline and the collector is
+   flagged for clock skew; that is expected and does not affect the timing.
 3. Toggle **Online only** / **All devices**: each change shows within 1 second.
