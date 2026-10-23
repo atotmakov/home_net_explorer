@@ -146,7 +146,9 @@ func TestTopologyGroups(t *testing.T) {
 	// The desktop's latest run scanned 192.168.9.0/24 and found nothing: still shown.
 	h.Ingest(it.Run{Collector: "desktop", Start: it.T0.Add(5 * time.Minute),
 		Subnets: []contract.SubnetScan{it.Scan("192.168.9.0/24")}, Obs: []contract.Observation{}})
-	h.Fact(func(tx *sql.Tx) error { return inventory.SetSubnetAttr(ctx, tx, "192.168.1.0/24", "name", "home", it.T0) })
+	h.Fact(func(tx *sql.Tx) error {
+		return inventory.SetSubnetAttr(ctx, tx, "192.168.1.0/24", "name", "home", it.T0)
+	})
 
 	now := it.T0.Add(10 * time.Minute)
 	tp := topo(t, h, now)
@@ -389,7 +391,9 @@ func TestTopologyManualLinks(t *testing.T) {
 	}
 
 	// A link to a device that is not on the map is dropped.
-	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, phone, "mac:00:00:5e:99:99:99", it.T0.Add(52*time.Minute)) })
+	h.Fact(func(tx *sql.Tx) error {
+		return store.SetUserLink(ctx, tx, phone, "mac:00:00:5e:99:99:99", it.T0.Add(52*time.Minute))
+	})
 	tp := topo(t, h, it.T0.Add(53*time.Minute))
 	for _, e := range tp.Edges {
 		if e.Kind == "manual" {
