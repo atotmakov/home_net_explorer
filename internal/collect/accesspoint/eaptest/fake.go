@@ -63,6 +63,7 @@ type AP struct {
 	mu        sync.Mutex
 	managed   bool
 	locked    bool
+	postOnly  bool // the list answers only POST operation=load, as the web page asks
 	clients   []Entry
 	list      []byte // raw list body override
 	delay     time.Duration
@@ -99,6 +100,9 @@ func (ap *AP) SetList(b []byte) { ap.mu.Lock(); ap.list = b; ap.mu.Unlock() }
 
 // SetManaged makes the access point report that a controller manages it.
 func (ap *AP) SetManaged(m bool) { ap.mu.Lock(); ap.managed = m; ap.mu.Unlock() }
+
+// SetPostOnly makes the list answer only a POST with operation=load (a GET gets "not logged in").
+func (ap *AP) SetPostOnly(p bool) { ap.mu.Lock(); ap.postOnly = p; ap.mu.Unlock() }
 
 // SetLocked makes every login fail with a lockout.
 func (ap *AP) SetLocked(l bool) { ap.mu.Lock(); ap.locked = l; ap.mu.Unlock() }
@@ -210,7 +214,7 @@ func (ap *AP) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"success": true})
 	case (ap.Firmware == New && r.URL.Path == PathNew) || (ap.Firmware == Old && r.URL.Path == PathOld):
-		if !req.Session {
+		if !req.Session || (ap.postOnly && (r.Method != http.MethodPost || r.PostForm.Get("operation") != "load")) {
 			writeJSON(w, notLoggedIn)
 			return
 		}

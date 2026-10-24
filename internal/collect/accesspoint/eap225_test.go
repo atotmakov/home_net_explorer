@@ -200,3 +200,52 @@ func TestNoCredentialsInOutput(t *testing.T) {
 		t.Errorf("log shows the password: %s", logs.String())
 	}
 }
+
+// Gate G1 (2026-10-24): the owner's older-firmware unit answered "page not understood". Its web
+// page asks for lists with POST operation=load (js/su/data/store.js), so the reader does too
+// when the GET answer is not a list.
+func TestReadPostOnlyFirmware(t *testing.T) {
+	ap := eaptest.Start(t, eaptest.Old, testUser, testPassword)
+	ap.SetPostOnly(true)
+	ap.SetClients(clients()...)
+	res := source(t, ap, testPassword).Read(context.Background())
+	if res.Outcome != contract.OutcomeOK || len(res.Clients) != 3 || res.Path != "monitor.client.client" {
+		t.Fatalf("POST-only list = %s, %d clients, path %q, detail %q", res.Outcome, len(res.Clients), res.Path, res.Detail)
+	}
+	if ap.Logins() != 1 || ap.Logouts() != 1 {
+		t.Errorf("%d logins, %d logouts; want one of each", ap.Logins(), ap.Logouts())
+	}
+}
+
+// When a list still can't be read, Detail says what came back (key names and flags only, never
+// a value), so check can show it.
+func TestPageNotUnderstoodDetail(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		want []string
+	}{
+		{`<html>secret-page-text</html>`, []string{"not JSON", "bytes"}},
+		{`{"success":true,"timeout":true,"ip":"192.168.1.33","username":"admin"}`,
+			[]string{"JSON with keys ip, success, timeout, username", "success=true", "timeout=true"}},
+		{`{"success":true,"timeout":false,"rows":[{"MAC":"00-00-5E-00-53-13"}]}`,
+			[]string{"JSON with keys rows, success, timeout", "no client list"}},
+	} {
+		ap := eaptest.Start(t, eaptest.New, testUser, testPassword)
+		ap.SetList([]byte(tc.body))
+		res := source(t, ap, testPassword).Read(context.Background())
+		if res.Outcome != contract.OutcomePageNotUnderstood {
+			t.Errorf("%s: outcome %s", tc.body, res.Outcome)
+			continue
+		}
+		for _, w := range tc.want {
+			if !strings.Contains(res.Detail, w) {
+				t.Errorf("%s: detail %q lacks %q", tc.body, res.Detail, w)
+			}
+		}
+		for _, secret := range []string{"secret-page-text", "192.168.1.33", "admin", "00-00-5E"} {
+			if strings.Contains(res.Detail, secret) {
+				t.Errorf("detail %q shows a value (%s)", res.Detail, secret)
+			}
+		}
+	}
+}
