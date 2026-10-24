@@ -96,7 +96,9 @@ func TestLinkOptionsAndLoops(t *testing.T) {
 	at := it.T0.Add(2 * time.Minute)
 	sw := manualKey(t, h, "zz switch", at)
 	setType := func(mac, typ string) {
-		h.Fact(func(tx *sql.Tx) error { return inventory.SetDeviceAttr(ctx, tx, inventory.MACKey(mac), "type", typ, at) })
+		h.Fact(func(tx *sql.Tx) error {
+			return inventory.SetDeviceAttr(ctx, tx, inventory.MACKey(mac), "type", typ, at)
+		})
 	}
 	setType("e0:00:5e:10:00:01", "router")
 	setType("00:00:5e:10:00:09", "access_point")
@@ -118,8 +120,12 @@ func TestLinkOptionsAndLoops(t *testing.T) {
 
 	id := func(ip string) int64 { return devNode(t, tp, ip).DeviceID }
 	swID := manualNode(t, tp, "zz switch").DeviceID
-	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, sw, inventory.MACKey("e0:00:5e:10:00:01"), at) })
-	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, inventory.MACKey("00:00:5e:10:00:04"), sw, at) })
+	h.Fact(func(tx *sql.Tx) error {
+		return store.SetUserLink(ctx, tx, sw, inventory.MACKey("e0:00:5e:10:00:01"), at)
+	})
+	h.Fact(func(tx *sql.Tx) error {
+		return store.SetUserLink(ctx, tx, inventory.MACKey("00:00:5e:10:00:04"), sw, at)
+	})
 	for _, c := range []struct {
 		from, to int64
 		loop     bool
