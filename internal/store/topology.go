@@ -358,10 +358,11 @@ func (s *Store) latestVantages(ctx context.Context) ([]contract.Vantage, error) 
 	return out, nil
 }
 
-// routerAddressesBySubnet returns, per subnet CIDR, the addresses of routers read there (run
-// sources with outcome ok) and of routers set up in the UI (feature 003).
+// routerAddressesBySubnet returns, per subnet CIDR, the addresses of routers read there (router
+// run sources with outcome ok; access point reads are not gateways, feature 012) and of routers
+// set up in the UI (feature 003).
 func (s *Store) routerAddressesBySubnet(ctx context.Context) (map[string][]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT subnet, address FROM run_sources WHERE outcome = 'ok'
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT subnet, address FROM run_sources WHERE outcome = 'ok' AND type = 'router'
 		ORDER BY subnet, address`)
 	if err != nil {
 		return nil, err

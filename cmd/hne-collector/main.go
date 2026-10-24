@@ -85,7 +85,8 @@ type environment struct {
 	// routerTransport carries router traffic (nil: direct connections). Tests send it to a
 	// routertest.Fake while configs keep private router addresses.
 	routerTransport http.RoundTripper
-	ctx             context.Context // parent of the command's context (nil: background)
+	apTransport     http.RoundTripper // access point traffic (feature 012), like routerTransport
+	ctx             context.Context   // parent of the command's context (nil: background)
 }
 
 func main() {
@@ -160,8 +161,8 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 		}
 		cfg.extraPrefixes = append(cfg.extraPrefixes, p)
 	}
-	if len(cfg.Routers) > contract.MaxSources {
-		return cfg, fmt.Errorf("routers: at most %d entries", contract.MaxSources)
+	if len(cfg.Routers) > contract.MaxRouters {
+		return cfg, fmt.Errorf("routers: at most %d entries", contract.MaxRouters)
 	}
 	for i, r := range cfg.Routers {
 		if err := r.Validate(); err != nil { // never contains credentials (FR-006)
@@ -333,6 +334,7 @@ func (c *collector) check(ctx context.Context) int {
 		}
 	}
 	c.checkRouters(ctx, w)
+	c.checkAccessPoints(ctx, w)
 	ping, err := c.client.Ping(ctx)
 	if code := c.pingExit(err); code != exitOK {
 		return code
@@ -360,11 +362,14 @@ func (c *collector) ignored(ctx context.Context) ([]netip.Prefix, error) {
 	if err != nil {
 		c.serverRouters, c.haveRouterList = c.cachedRouters()
 		c.buildRouters()
+		c.buildAccessPoints(c.cachedAPs())
 		return c.lastIgnored(), err
 	}
 	c.serverRouters, c.haveRouterList = ping.Routers, true
 	c.saveRouterCache(ping.Routers)
 	c.buildRouters()
+	c.saveAPCache(ping.AccessPoints)
+	c.buildAccessPoints(ping.AccessPoints)
 	var out []netip.Prefix
 	for _, s := range ping.IgnoredSubnets {
 		if p, err := netip.ParsePrefix(s); err == nil {

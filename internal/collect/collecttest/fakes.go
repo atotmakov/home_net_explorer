@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/collect"
+	"github.com/atotmakov/home_net_explorer/internal/collect/accesspoint"
 	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
@@ -229,6 +230,55 @@ func (r *FakeRouter) Read(ctx context.Context) router.Result {
 		case <-time.After(delay):
 		case <-ctx.Done():
 			return router.Result{Outcome: contract.OutcomeUnreachable}
+		}
+	}
+	return res
+}
+
+// FakeAccessPoint implements accesspoint.Source with a scripted result (feature 012). A positive
+// Delay makes Read wait (until the context ends, in which case it reports unreachable).
+type FakeAccessPoint struct {
+	mu     sync.Mutex
+	addr   netip.Addr
+	prefix netip.Prefix
+	Result accesspoint.Result
+	Delay  time.Duration
+	calls  int
+}
+
+// NewFakeAccessPoint returns a fake tplink-eap225 at addr in subnet.
+func NewFakeAccessPoint(addr, subnet string, res accesspoint.Result) *FakeAccessPoint {
+	return &FakeAccessPoint{addr: netip.MustParseAddr(addr), prefix: netip.MustParsePrefix(subnet), Result: res}
+}
+
+// Model implements accesspoint.Source.
+func (a *FakeAccessPoint) Model() string { return accesspoint.ModelEAP225 }
+
+// Address implements accesspoint.Source.
+func (a *FakeAccessPoint) Address() netip.Addr { return a.addr }
+
+// Prefix implements accesspoint.Source.
+func (a *FakeAccessPoint) Prefix() netip.Prefix { return a.prefix }
+
+// Calls is the number of reads.
+func (a *FakeAccessPoint) Calls() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.calls
+}
+
+// Read implements accesspoint.Source.
+func (a *FakeAccessPoint) Read(ctx context.Context) accesspoint.Result {
+	a.mu.Lock()
+	a.calls++
+	res, delay := a.Result, a.Delay
+	res.Clients = append([]accesspoint.Client(nil), a.Result.Clients...)
+	a.mu.Unlock()
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return accesspoint.Result{Outcome: contract.OutcomeUnreachable}
 		}
 	}
 	return res

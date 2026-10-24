@@ -50,6 +50,7 @@ var fixtureCodes = map[string]string{
 	"invalid_router_without_mac.json":      contract.CodeValidation,
 	"invalid_via_on_arp.json":              contract.CodeValidation,
 	"invalid_router_public_address.json":   contract.CodeValidation,
+	"valid_access_point.json":              "", // feature 012
 }
 
 func decodeAndValidate(data []byte) error {
@@ -93,7 +94,8 @@ func TestValidateFixtures(t *testing.T) {
 func TestValidateLimits(t *testing.T) {
 	checkCode(t, "4097 observations", decodeAndValidate(contracttest.TooManyObservations(t)), contract.CodeValidation)
 	checkCode(t, "17 subnets", decodeAndValidate(contracttest.TooManySubnets(t)), contract.CodeValidation)
-	checkCode(t, "9 sources", decodeAndValidate(contracttest.TooManySources(t)), contract.CodeValidation)
+	checkCode(t, "17 sources", decodeAndValidate(contracttest.TooManySources(t)), contract.CodeValidation)
+	checkCode(t, "16 sources", decodeAndValidate(contracttest.Sources(t, 16)), "")
 }
 
 func TestValidateRouterRules(t *testing.T) {
@@ -134,6 +136,55 @@ func TestValidateRouterRules(t *testing.T) {
 	}
 	for label, f := range good {
 		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_router.json", f)), "")
+	}
+}
+
+// Feature 012: access point client lists (contracts/upload-api-changes.md).
+func TestValidateAccessPointRules(t *testing.T) {
+	obs := func(m map[string]any, i int) map[string]any { return m["observations"].([]any)[i].(map[string]any) }
+	src := func(m map[string]any, i int) map[string]any { return m["sources"].([]any)[i].(map[string]any) }
+	const ap = 4 // first ap_client observation of valid_access_point.json
+	bad := map[string]func(m map[string]any){
+		"ap_client without mac":                      func(m map[string]any) { delete(obs(m, ap), "mac") },
+		"ap_client without via":                      func(m map[string]any) { delete(obs(m, ap), "via") },
+		"ap_client without access_point":             func(m map[string]any) { delete(obs(m, ap), "access_point") },
+		"public access_point":                        func(m map[string]any) { obs(m, ap)["access_point"] = "8.8.8.8" },
+		"malformed access_point":                     func(m map[string]any) { obs(m, ap)["access_point"] = "eap.lan" },
+		"ap_client via of 33 characters":             func(m map[string]any) { obs(m, ap)["via"] = strings.Repeat("x", 33) },
+		"ap_client outside every scanned subnet":     func(m map[string]any) { obs(m, ap)["ip"] = "192.168.5.4" },
+		"access_point on a router_table observation": func(m map[string]any) { obs(m, 1)["access_point"] = "192.168.0.5" },
+		"access_point on an arp observation":         func(m map[string]any) { obs(m, 0)["access_point"] = "192.168.0.5" },
+		"unknown source type":                        func(m map[string]any) { src(m, 1)["type"] = "switch" },
+		"counts with controller_managed":             func(m map[string]any) { src(m, 1)["outcome"] = "controller_managed" },
+	}
+	for label, f := range bad {
+		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_access_point.json", f)), contract.CodeValidation)
+	}
+	good := map[string]func(m map[string]any){
+		"ap_client via of 32 characters": func(m map[string]any) { obs(m, ap)["via"] = strings.Repeat("x", 32) },
+		"controller_managed with zero counts": func(m map[string]any) {
+			src(m, 1)["outcome"], src(m, 1)["online"], src(m, 1)["offline"] = "controller_managed", 0, 0
+		},
+		"controller_managed on a router source": func(m map[string]any) {
+			src(m, 0)["outcome"], src(m, 0)["online"], src(m, 0)["offline"] = "controller_managed", 0, 0
+		},
+	}
+	for _, o := range []string{"unreachable", "login_rejected", "locked", "session_busy", "page_not_understood",
+		"skipped_after_rejection", "login_unavailable"} {
+		good["access point "+o] = func(m map[string]any) {
+			src(m, 1)["outcome"], src(m, 1)["online"], src(m, 1)["offline"] = o, 0, 0
+		}
+	}
+	for label, f := range good {
+		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_access_point.json", f)), "")
+	}
+	if contract.ObsAPClient != "ap_client" || contract.SourceTypeAccessPoint != "access_point" ||
+		contract.OutcomeControllerManaged != "controller_managed" || !contract.ValidOutcome("controller_managed") {
+		t.Error("feature 012 constants")
+	}
+	if len(contract.RouterModels) != 1 || contract.RouterModels[0] != "huawei-hg8145v5" ||
+		len(contract.AccessPointModels) != 1 || contract.AccessPointModels[0] != "tplink-eap225" {
+		t.Errorf("models: %v / %v", contract.RouterModels, contract.AccessPointModels)
 	}
 }
 

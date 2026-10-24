@@ -215,3 +215,37 @@ func TestSaveRouterClearsBuiltinRejections(t *testing.T) {
 		}
 	}
 }
+
+// Feature 012 (research R4): access point settings are router_settings rows with an access point
+// model; ListRouters and ListAccessPoints tell them apart by model.
+func TestAccessPointSettings(t *testing.T) {
+	ctx := context.Background()
+	h := it.New(t)
+	const apKey = "mac:00:00:5e:10:00:05"
+	h.Ingest(it.Run{Subnets: []contract.SubnetScan{routerScan("192.168.0.0/24")},
+		Obs: []contract.Observation{seen("192.168.0.1", "00:00:5e:10:00:01"), seen("192.168.0.5", "00:00:5e:10:00:05")}})
+	if err := save(t, h, routerKey, store.RouterSettings{Model: "huawei-hg8145v5", Username: "root", Password: "pw"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := save(t, h, apKey, store.RouterSettings{Model: "tplink-eap225", Username: "admin", Password: "ap-pw"}); err != nil {
+		t.Fatal(err)
+	}
+	routers, err := h.Store.ListRouters(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routers) != 1 || routers[0].Model != "huawei-hg8145v5" || routers[0].Address != "192.168.0.1" {
+		t.Errorf("ListRouters = %+v, want only the router", routers)
+	}
+	aps, err := h.Store.ListAccessPoints(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aps) != 1 || aps[0].Model != "tplink-eap225" || aps[0].Address != "192.168.0.5" ||
+		aps[0].Subnet != "192.168.0.0/24" || aps[0].ID == 0 {
+		t.Fatalf("ListAccessPoints = %+v, want only the access point", aps)
+	}
+	if l, err := h.Store.RouterLogin(ctx, aps[0].ID); err != nil || l.Username != "admin" || l.Password != "ap-pw" {
+		t.Errorf("access point login = %+v, %v", l, err)
+	}
+}

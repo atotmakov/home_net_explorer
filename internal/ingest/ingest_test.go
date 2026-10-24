@@ -325,3 +325,50 @@ func TestIngestDiscardsRunsBeforeReset(t *testing.T) {
 		t.Errorf("run started after the reset: status %s, want stored", res.Status)
 	}
 }
+
+// Feature 012: access point reads are stored in run_sources with their type, including the new
+// controller_managed outcome (migration 0008 widens the CHECK constraints).
+func TestIngestStoresAccessPointSources(t *testing.T) {
+	ctx := context.Background()
+	s := storetest.New(t)
+	cid, err := s.EnsureCollector(ctx, "desktop", store.KindRemote, 900)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := ingest.New(s, &fakeApplier{})
+	raw := contracttest.Modify(t, "valid_access_point.json", func(m map[string]any) {
+		src := m["sources"].([]any)[2].(map[string]any)
+		src["outcome"], src["online"], src["offline"] = "controller_managed", 0, 0
+	})
+	run := decode(t, raw)
+	res, err := in.Ingest(ctx, cid, raw, run, time.Date(2026, 10, 9, 10, 1, 32, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != contract.StatusStored {
+		t.Fatalf("status = %s, want stored", res.Status)
+	}
+	rows, err := s.DB().Query(`SELECT type, address, outcome, online, offline FROM run_sources
+		WHERE collection_id = ? ORDER BY idx`, run.CollectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var typ, addr, outcome string
+		var online, offline int
+		if err := rows.Scan(&typ, &addr, &outcome, &online, &offline); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, fmt.Sprintf("%s %s %s %d %d", typ, addr, outcome, online, offline))
+	}
+	rows.Close()
+	want := []string{
+		"router 192.168.0.1 ok 14 16",
+		"access_point 192.168.0.5 ok 1 1",
+		"access_point 192.168.0.10 controller_managed 0 0",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("run_sources = %q\nwant %q", got, want)
+	}
+}

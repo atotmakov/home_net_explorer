@@ -13,6 +13,7 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
+	"github.com/atotmakov/home_net_explorer/internal/collect/accesspoint"
 	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/ingest"
@@ -32,6 +33,7 @@ type Scanner struct {
 	subnets         []netip.Prefix
 	defaultInterval time.Duration
 	routerRT        http.RoundTripper
+	apRT            http.RoundTripper // access point traffic (feature 012)
 
 	trigger chan struct{}
 	wake    chan struct{} // pause state changed (feature 004)
@@ -185,6 +187,9 @@ func (s *Scanner) scan(ctx context.Context) (int, error) {
 	if s.engine.Routers, err = s.routers(ctx); err != nil {
 		return 0, err
 	}
+	if s.engine.AccessPoints, err = s.accessPoints(ctx); err != nil {
+		return 0, err
+	}
 	run, err := s.engine.Scan(ctx, collect.ScanOptions{Targets: s.subnets, Ignored: ignored})
 	if err != nil {
 		return 0, err
@@ -205,6 +210,37 @@ func (s *Scanner) scan(ctx context.Context) (int, error) {
 	s.log.Info("built-in scan", "subnets", len(run.Subnets), "found", len(run.Observations),
 		"duration", run.FinishedAt.Sub(run.StartedAt).Round(time.Millisecond))
 	return len(run.Observations), nil
+}
+
+// accessPoints returns the access points set up in the web UI as sources for the built-in
+// collector (feature 012), like routers: logins from the store before each read, rejections in
+// router_rejected_builtin.
+func (s *Scanner) accessPoints(ctx context.Context) ([]accesspoint.Source, error) {
+	list, err := s.store.ListAccessPoints(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []accesspoint.Source
+	for _, ref := range list {
+		addr, err := netip.ParseAddr(ref.Address)
+		if err != nil {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(ref.Subnet)
+		if err != nil {
+			continue
+		}
+		id := ref.ID
+		login := func(ctx context.Context) (string, router.Secret, error) {
+			l, err := s.store.RouterLogin(ctx, id)
+			if err != nil {
+				return "", "", err
+			}
+			return l.Username, router.Secret(l.Password), nil
+		}
+		out = append(out, accesspoint.NewRemote(ref.Model, addr, prefix, login, builtinRejections{s}, s.apRT))
+	}
+	return out, nil
 }
 
 // routers returns the routers set up in the web UI as sources for the built-in collector

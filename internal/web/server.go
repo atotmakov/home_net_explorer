@@ -142,7 +142,7 @@ var funcs = template.FuncMap{
 	"routerOutcome": routerOutcome,
 	"scanProblem":   scanProblem,
 	"readOutcome": func(r store.RouterRead) string {
-		return routerOutcome(store.RouterStatus{Outcome: r.Outcome, Online: r.Online, Offline: r.Offline})
+		return routerOutcome(store.RouterStatus{Type: r.Type, Outcome: r.Outcome, Online: r.Online, Offline: r.Offline})
 	},
 	"fmtTime": func(t time.Time) string {
 		if t.IsZero() {
@@ -172,6 +172,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
 	s.mux.HandleFunc("POST /devices/{id}/router", s.handleRouterSave)
 	s.mux.HandleFunc("POST /devices/{id}/router/remove", s.handleRouterRemove)
+	s.mux.HandleFunc("POST /devices/{id}/access-point", s.handleAccessPointSave)     // feature 012
+	s.mux.HandleFunc("POST /devices/{id}/access-point/remove", s.handleRouterRemove) // same settings row
 	s.mux.HandleFunc("POST /devices/{id}/link", s.handleDeviceLink)
 	s.mux.HandleFunc("GET /map", s.handleMap)
 	s.mux.HandleFunc("GET /ui/map.json", s.handleMapJSON)
@@ -282,16 +284,24 @@ func (s *Server) renderPartialStatus(w http.ResponseWriter, r *http.Request, sta
 	buf.WriteTo(w)
 }
 
-// routerOutcome is the owner-facing text of a router read (Collectors page, FR-013).
+// routerOutcome is the owner-facing text of a router or access point read (Collectors page,
+// FR-013; access points: feature 012).
 func routerOutcome(r store.RouterStatus) string {
+	ap := r.Type == contract.SourceTypeAccessPoint
 	switch r.Outcome {
 	case contract.OutcomeOK:
+		if ap {
+			return fmt.Sprintf("OK, %d clients, %d left out", r.Online, r.Offline)
+		}
 		return fmt.Sprintf("OK, %d online / %d offline", r.Online, r.Offline)
 	case contract.OutcomeUnreachable:
 		return "unreachable"
 	case contract.OutcomeLoginRejected:
 		return "login rejected"
 	case contract.OutcomeLocked:
+		if ap {
+			return "locked by the access point (too many failed logins)"
+		}
 		return "locked by the router"
 	case contract.OutcomeSessionBusy:
 		return "busy (someone is logged into the router)"
@@ -301,6 +311,8 @@ func routerOutcome(r store.RouterStatus) string {
 		return "skipped: login was rejected, fix the password and run check"
 	case contract.OutcomeLoginUnavailable:
 		return "login unavailable from the server"
+	case contract.OutcomeControllerManaged:
+		return "managed by a controller (Omada): no client list of its own"
 	}
 	return r.Outcome
 }

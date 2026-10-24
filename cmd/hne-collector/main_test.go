@@ -32,6 +32,7 @@ type fakeServer struct {
 
 	// Feature 003: routers configured in the web UI and their logins.
 	routers       []contract.RouterRef
+	accessPoints  []contract.RouterRef // feature 012
 	logins        map[int64]contract.RouterLogin
 	loginRequests int
 }
@@ -49,7 +50,7 @@ func newFakeServer(t *testing.T) *fakeServer {
 		case "/api/v1/ping":
 			w.WriteHeader(f.pingStatus)
 			json.NewEncoder(w).Encode(contract.PingResponse{Collector: "desktop", ServerTime: time.Now(),
-				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}, Routers: f.routers})
+				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}, Routers: f.routers, AccessPoints: f.accessPoints})
 		case "/api/v1/collections":
 			f.uploads++
 			b, _ := io.ReadAll(r.Body)
@@ -95,6 +96,7 @@ type harness struct {
 	env            map[string]string
 	stdout, stderr bytes.Buffer
 	routerRT       http.RoundTripper // sends router requests to a routertest.Fake
+	apRT           http.RoundTripper // sends access point requests to an eaptest.AP (feature 012)
 	ctx            context.Context   // parent context of the command (nil: background)
 	answerAll      bool              // the network path answers every address (a VPN, feature 005)
 }
@@ -116,6 +118,7 @@ func (h *harness) run(args ...string) int {
 		stdout:          &h.stdout,
 		stderr:          &h.stderr,
 		routerTransport: h.routerRT,
+		apTransport:     h.apRT,
 		ctx:             h.ctx,
 		newEngine: func(cfg config) (*collect.Engine, func() error, error) {
 			return &collect.Engine{

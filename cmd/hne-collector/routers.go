@@ -49,7 +49,7 @@ func loadRejected(dir string) map[string]bool {
 // Routers set up in the web UI record their own rejections through markerRejections (feature 003).
 func (c *collector) recordRejections(sources []contract.RunSource) {
 	for _, s := range sources {
-		if s.Outcome != contract.OutcomeLoginRejected && s.Outcome != contract.OutcomeLocked {
+		if s.Type != contract.SourceTypeRouter || (s.Outcome != contract.OutcomeLoginRejected && s.Outcome != contract.OutcomeLocked) {
 			continue
 		}
 		for _, rc := range c.cfg.Routers {

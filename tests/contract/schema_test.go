@@ -44,7 +44,10 @@ func TestSchemaDetectableInvalidFixtures(t *testing.T) {
 		t.Error("schema accepted 17 subnets")
 	}
 	if err := contracttest.Validate(s, contracttest.TooManySources(t)); err == nil {
-		t.Error("schema accepted 9 sources")
+		t.Error("schema accepted 17 sources")
+	}
+	if err := contracttest.Validate(s, contracttest.Sources(t, 16)); err != nil {
+		t.Errorf("schema rejected 16 sources: %v", err)
 	}
 }
 
@@ -84,6 +87,16 @@ func TestPingAndLoginSchemas(t *testing.T) {
 	old := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],"ignored_subnets":[]}`)
 	if err := contracttest.Validate(ping, old); err != nil {
 		t.Errorf("ping without routers (old server): %v", err)
+	}
+	aps := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],
+		"ignored_subnets":[],"access_points":[{"id":2,"model":"tplink-eap225","address":"192.168.0.5","subnet":"192.168.0.0/24"}]}`)
+	if err := contracttest.Validate(ping, aps); err != nil {
+		t.Errorf("ping with access points (feature 012): %v", err)
+	}
+	apLeak := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],
+		"ignored_subnets":[],"access_points":[{"id":2,"model":"tplink-eap225","address":"192.168.0.5","subnet":"192.168.0.0/24","password":"x"}]}`)
+	if err := contracttest.Validate(ping, apLeak); err == nil {
+		t.Error("ping schema accepted an access point entry with a password")
 	}
 	login := contracttest.Schema(t, "RouterLogin")
 	if err := contracttest.Validate(login, []byte(`{"username":"root","password":"x"}`)); err != nil {

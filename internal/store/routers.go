@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
@@ -49,6 +50,7 @@ type RouterView struct {
 // RouterRead is the latest read of a router by one collector (from run_sources).
 type RouterRead struct {
 	Collector string
+	Type      string // router or access_point (feature 012)
 	Outcome   string
 	Online    int
 	Offline   int
@@ -198,8 +200,19 @@ func cidrLess(a, b string) bool {
 }
 
 // ListRouters returns every configured router with a resolved address (research R3), by id.
-// Routers without a current private address are left out. Never includes credentials.
+// Routers without a current private address are left out. Never includes credentials. Access
+// points (feature 012) share the settings table and are left out by model.
 func (s *Store) ListRouters(ctx context.Context) ([]contract.RouterRef, error) {
+	return s.listSources(ctx, contract.RouterModels)
+}
+
+// ListAccessPoints returns every configured access point (feature 012), like ListRouters.
+func (s *Store) ListAccessPoints(ctx context.Context) ([]contract.RouterRef, error) {
+	return s.listSources(ctx, contract.AccessPointModels)
+}
+
+// listSources returns the configured devices whose model is in models, with resolved addresses.
+func (s *Store) listSources(ctx context.Context, models []string) ([]contract.RouterRef, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, identity_key, model, subnet FROM router_settings ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -215,7 +228,9 @@ func (s *Store) ListRouters(ctx context.Context) ([]contract.RouterRef, error) {
 			rows.Close()
 			return nil, err
 		}
-		rs = append(rs, r)
+		if slices.Contains(models, r.model) {
+			rs = append(rs, r)
+		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -236,7 +251,7 @@ func (s *Store) ListRouters(ctx context.Context) ([]contract.RouterRef, error) {
 
 // RouterStatus returns, per collector (by name), the latest read of the router at address.
 func (s *Store) RouterStatus(ctx context.Context, address string) ([]RouterRead, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+collectorName+`, rs.outcome, rs.online, rs.offline, r.finished_at
+	rows, err := s.db.QueryContext(ctx, `SELECT `+collectorName+`, rs.type, rs.outcome, rs.online, rs.offline, r.finished_at
 		FROM run_sources rs
 		JOIN collection_runs r ON r.collection_id = rs.collection_id
 		JOIN collectors c ON c.id = r.collector_id
@@ -252,7 +267,7 @@ func (s *Store) RouterStatus(ctx context.Context, address string) ([]RouterRead,
 	for rows.Next() {
 		var rd RouterRead
 		var at string
-		if err := rows.Scan(&rd.Collector, &rd.Outcome, &rd.Online, &rd.Offline, &at); err != nil {
+		if err := rows.Scan(&rd.Collector, &rd.Type, &rd.Outcome, &rd.Online, &rd.Offline, &at); err != nil {
 			return nil, err
 		}
 		rd.At = MustParseTime(at)

@@ -353,3 +353,52 @@ func TestMigration0007(t *testing.T) {
 		t.Error("another setting was deleted")
 	}
 }
+
+// TestMigration0008 (feature 012): seeded router sources and sightings survive; run_sources
+// accepts access point reads and the outcome controller_managed (and still rejects unknown
+// values); sightings gain via_source.
+func TestMigration0008(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seed, err := os.ReadFile(filepath.Join("testdata", "seed_5.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	db := s.DB()
+	var before int
+	db.QueryRow(`SELECT count(*) FROM run_sources`).Scan(&before)
+	if err := s.MigrateTo(ctx, 8); err != nil {
+		t.Fatal(err)
+	}
+	var after int
+	db.QueryRow(`SELECT count(*) FROM run_sources WHERE type = 'router'`).Scan(&after)
+	if before == 0 || after != before {
+		t.Errorf("router sources: %d before, %d after", before, after)
+	}
+	var src string
+	if err := db.QueryRow(`SELECT via_source FROM sightings LIMIT 1`).Scan(&src); err != nil || src != "" {
+		t.Errorf("seeded sighting via_source = %q, %v; want ''", src, err)
+	}
+	const id = "3f2b8c1e-5d4a-4c3b-9a1f-0e2d4c6b8a01"
+	ins := `INSERT INTO run_sources (collection_id, idx, type, model, address, subnet, outcome, online, offline)
+		VALUES (?, ?, ?, 'tplink-eap225', '192.168.0.5', '192.168.0.0/24', ?, 0, 0)`
+	if _, err := db.Exec(ins, id, 50, "access_point", "ok"); err != nil {
+		t.Errorf("run_sources rejects an access point: %v", err)
+	}
+	if _, err := db.Exec(ins, id, 51, "access_point", "controller_managed"); err != nil {
+		t.Errorf("run_sources rejects controller_managed: %v", err)
+	}
+	if _, err := db.Exec(ins, id, 52, "switch", "ok"); err == nil {
+		t.Error("run_sources accepted an unknown type")
+	}
+	if _, err := db.Exec(ins, id, 53, "access_point", "rebooted"); err == nil {
+		t.Error("run_sources accepted an unknown outcome")
+	}
+}

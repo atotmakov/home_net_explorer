@@ -140,8 +140,8 @@ components:
           items: { $ref: "#/components/schemas/Observation" }
         sources:
           type: array
-          maxItems: 8
-          description: One entry per router source configured on the collector (feature 002). Never carries credentials.
+          maxItems: 16
+          description: One entry per router (feature 002) or access point (feature 012) read by the collector. Never carries credentials.
           items: { $ref: "#/components/schemas/RunSource" }
     Vantage:
       type: object
@@ -211,23 +211,27 @@ components:
         mac: { $ref: "#/components/schemas/Mac" }
         hostname: { type: string, maxLength: 253 }
         hostname_source: { type: string, enum: [dns, mdns, router] }
-        method: { type: string, enum: [arp, neighbor_cache, icmp, tcp, router_table] }
+        method: { type: string, enum: [arp, neighbor_cache, icmp, tcp, router_table, ap_client] }
         via:
           type: string
           maxLength: 32
-          description: Router port or Wi-Fi interface (e.g. LAN1, SSID2). Only on router_table observations.
+          description: Router port or Wi-Fi interface (e.g. LAN1, SSID2) on router_table observations; "<SSID> (<band>)" on ap_client observations (required there, feature 012).
+        access_point:
+          type: string
+          format: ipv4
+          description: Feature 012. The private address of the access point that listed the client; required on ap_client observations, forbidden otherwise.
     RunSource:
       type: object
       additionalProperties: false
       required: [type, model, address, subnet, outcome, online, offline]
       properties:
-        type: { type: string, enum: [router] }
+        type: { type: string, enum: [router, access_point] }
         model: { type: string, maxLength: 64, description: "e.g. huawei-hg8145v5" }
         address: { type: string, format: ipv4, description: "The router's private IPv4 address" }
         subnet: { type: string, description: "The subnet the router serves (private, /16 to /30)" }
         outcome:
           type: string
-          enum: [ok, unreachable, login_rejected, locked, session_busy, page_not_understood, skipped_after_rejection, login_unavailable]
+          enum: [ok, unreachable, login_rejected, locked, session_busy, page_not_understood, skipped_after_rejection, login_unavailable, controller_managed]
         online: { type: integer, minimum: 0, description: "Online entries inside the subnet; 0 unless outcome = ok" }
         offline: { type: integer, minimum: 0, description: "Offline entries inside the subnet; 0 unless outcome = ok" }
     PingResponse:
@@ -246,6 +250,10 @@ components:
         routers:
           type: array
           description: Routers configured in the web UI (feature 003). Never carries credentials.
+          items: { $ref: "#/components/schemas/RouterRef" }
+        access_points:
+          type: array
+          description: Access points configured in the web UI (feature 012), same shape as routers. Never carries credentials; logins come from /api/v1/routers/{id}/login.
           items: { $ref: "#/components/schemas/RouterRef" }
     RouterRef:
       type: object

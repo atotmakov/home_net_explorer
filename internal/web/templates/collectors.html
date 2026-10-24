@@ -24,7 +24,7 @@
         <td>{{or .LastVersion "—"}}</td>
         <td>{{range $i, $c := .Subnets}}{{if $i}}, {{end}}{{$c}}{{else}}<span class="muted">—</span>{{end}}
           {{range .Problems}}<br><span class="badge warn">{{.CIDR}}: {{scanProblem .Reason}}</span>{{end}}</td>
-        <td>{{range $i, $r := .Routers}}{{if $i}}<br>{{end}}<span{{if ne $r.Outcome "ok"}} class="badge warn"{{end}}>{{$r.Model}} at {{$r.Address}}: {{routerOutcome $r}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+        <td>{{range $i, $r := .Routers}}{{if $i}}<br>{{end}}<span{{if ne $r.Outcome "ok"}} class="badge warn"{{end}}>{{if eq $r.Type "access_point"}}access point{{else}}router{{end}} {{$r.Model}} at {{$r.Address}}: {{routerOutcome $r}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
         <td>{{fmtTime .LastReportAt}}</td>
         <td>
           {{if and (eq .Kind "builtin") $paused}}<span class="badge warn">paused</span>
