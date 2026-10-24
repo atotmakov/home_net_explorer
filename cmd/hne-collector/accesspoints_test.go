@@ -143,3 +143,14 @@ func TestCheckShowsWhyNotUnderstood(t *testing.T) {
 		t.Errorf("check lacks %q:\n%s", want, h.stderr.String())
 	}
 }
+
+// check says which request of an unreachable access point failed.
+func TestCheckShowsWhyUnreachable(t *testing.T) {
+	h, _, ap := apHarness(t)
+	ap.SetResetOn("POST", "/")
+	h.run("check")
+	want := "tplink-eap225 at 192.168.1.5 (login from server): unreachable (POST /: connection closed without an answer)"
+	if !strings.Contains(h.stderr.String(), want) {
+		t.Errorf("check lacks %q:\n%s", want, h.stderr.String())
+	}
+}

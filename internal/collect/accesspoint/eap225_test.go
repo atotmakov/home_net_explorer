@@ -287,3 +287,32 @@ func TestSessionNotAccepted(t *testing.T) {
 		}
 	}
 }
+
+// Gate G1, run 3: 192.168.0.10 was still "unreachable" although it answers HTTP at once. Detail
+// names the request that failed and how (method, path and error kind only).
+func TestUnreachableDetail(t *testing.T) {
+	gone := eaptest.Start(t, eaptest.New, testUser, testPassword)
+	gone.Srv.Close()
+	res := source(t, gone, testPassword).Read(context.Background())
+	if res.Outcome != contract.OutcomeUnreachable || res.Detail != "GET /data/managedMode.json: connection refused" {
+		t.Errorf("closed access point = %s, detail %q", res.Outcome, res.Detail)
+	}
+
+	reset := eaptest.Start(t, eaptest.Old, testUser, testPassword)
+	reset.SetResetOn("POST", "/")
+	res = source(t, reset, testPassword).Read(context.Background())
+	if res.Outcome != contract.OutcomeUnreachable || res.Detail != "POST /: connection closed without an answer" {
+		t.Errorf("connection dropped at login = %s, detail %q", res.Outcome, res.Detail)
+	}
+	if strings.Contains(res.Detail, testPassword) || strings.Contains(res.Detail, testUser) {
+		t.Errorf("detail shows a credential: %q", res.Detail)
+	}
+
+	slow := eaptest.Start(t, eaptest.New, testUser, testPassword)
+	slow.SetDelay(300 * time.Millisecond)
+	src := source(t, slow, testPassword).(*eap225)
+	src.timeout = 100 * time.Millisecond
+	if res := src.Read(context.Background()); res.Outcome != contract.OutcomeUnreachable || res.Detail != "GET /data/managedMode.json: timed out" {
+		t.Errorf("slow access point = %s, detail %q", res.Outcome, res.Detail)
+	}
+}
