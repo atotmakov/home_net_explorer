@@ -369,7 +369,6 @@ func TestIngestStoresAccessPointSources(t *testing.T) {
 		"access_point 192.168.0.10 controller_managed 0 0",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("run_sources = %q
-want %q", got, want)
+		t.Errorf("run_sources = %q\nwant %q", got, want)
 	}
 }
