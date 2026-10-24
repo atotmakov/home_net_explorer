@@ -79,6 +79,7 @@ type AP struct {
 	managed   bool
 	locked    bool
 	postOnly  bool // the list answers only POST operation=load, as the web page asks
+	resetOn   string // "METHOD /path": that request gets its connection closed without an answer
 	clients   []Entry
 	list      []byte // raw list body override
 	delay     time.Duration
@@ -118,6 +119,13 @@ func (ap *AP) SetManaged(m bool) { ap.mu.Lock(); ap.managed = m; ap.mu.Unlock() 
 
 // SetPostOnly makes the list answer only a POST with operation=load (a GET gets no list).
 func (ap *AP) SetPostOnly(p bool) { ap.mu.Lock(); ap.postOnly = p; ap.mu.Unlock() }
+
+// SetResetOn closes the connection without an answer on requests with this method and path.
+func (ap *AP) SetResetOn(method, path string) {
+	ap.mu.Lock()
+	ap.resetOn = method + " " + path
+	ap.mu.Unlock()
+}
 
 // SetLocked makes every login fail with a lockout.
 func (ap *AP) SetLocked(l bool) { ap.mu.Lock(); ap.locked = l; ap.mu.Unlock() }
@@ -179,6 +187,12 @@ func (ap *AP) serve(w http.ResponseWriter, r *http.Request) {
 	login := r.URL.Path == "/" && r.Method == http.MethodPost && r.PostForm.Get("username") != ""
 	req.Login = login
 	ap.requests = append(ap.requests, req)
+	if ap.resetOn == r.Method+" "+r.URL.Path {
+		if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+			conn.Close()
+		}
+		return
+	}
 
 	notLoggedIn := map[string]any{"success": true, "timeout": true, "version": "1.00", "mode": "accessPoint", "status": -1}
 	switch {
