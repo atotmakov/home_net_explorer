@@ -55,7 +55,7 @@ type DeviceRow struct {
 	UserName      string
 	Notes         string
 	Type          string
-	Manual        bool          // added by hand (feature 011)
+	Manual        bool // added by hand (feature 011)
 	FirstSeen     time.Time
 	LastSeen      time.Time
 	Addresses     []Address // current addresses on visible (not ignored) subnets

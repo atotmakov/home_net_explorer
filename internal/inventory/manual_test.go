@@ -30,7 +30,7 @@ func addManual(t *testing.T, h *it.Harness, m inventory.ManualDevice, at time.Ti
 
 type manualRow struct {
 	Manual, Strength, Status, MAC, Vendor, Name, Type, Notes, Display, First, Last string
-	Addresses                                                                     int
+	Addresses                                                                      int
 }
 
 func manualDevice(t *testing.T, h *it.Harness, key string) (manualRow, bool) {
@@ -176,8 +176,12 @@ func TestManualDeviceSurvivesRebuild(t *testing.T) {
 	h.Ingest(it.Run{Subnets: []contract.SubnetScan{it.Scan("192.168.0.0/24")}, Obs: []contract.Observation{
 		it.ARP("192.168.0.20", "00:00:5e:00:53:20", "nas.lan")}})
 	sw := addManual(t, h, inventory.ManualDevice{Name: "switch", Type: "switch", Notes: "n"}, it.T0.Add(2*time.Minute))
-	h.Fact(func(tx *sql.Tx) error { return inventory.SetDeviceAttr(ctx, tx, sw, "name", "TL-SL1218P", it.T0.Add(3*time.Minute)) })
-	h.Fact(func(tx *sql.Tx) error { return inventory.SetManualMAC(ctx, tx, sw, "00:00:5e:00:53:77", it.T0.Add(3*time.Minute)) })
+	h.Fact(func(tx *sql.Tx) error {
+		return inventory.SetDeviceAttr(ctx, tx, sw, "name", "TL-SL1218P", it.T0.Add(3*time.Minute))
+	})
+	h.Fact(func(tx *sql.Tx) error {
+		return inventory.SetManualMAC(ctx, tx, sw, "00:00:5e:00:53:77", it.T0.Add(3*time.Minute))
+	})
 	h.Ingest(it.Run{Start: it.T0.Add(15 * time.Minute), Subnets: []contract.SubnetScan{it.Scan("192.168.0.0/24")}, Obs: []contract.Observation{
 		it.ARP("192.168.0.20", "00:00:5e:00:53:20", "nas.lan")}})
 
