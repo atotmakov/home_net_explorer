@@ -120,6 +120,9 @@ func apCheckPhrase(res accesspoint.Result) string {
 	case contract.OutcomeLocked:
 		return "locked by the access point (too many failed logins)"
 	case contract.OutcomePageNotUnderstood:
+		if res.Detail != "" {
+			return "page not understood (firmware?): " + res.Detail
+		}
 		return "page not understood (firmware?)"
 	case contract.OutcomeSkippedAfterRejection:
 		return "skipped after a rejected login"

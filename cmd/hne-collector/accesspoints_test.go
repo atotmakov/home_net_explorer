@@ -132,3 +132,14 @@ func TestAccessPointRejectionAndCheck(t *testing.T) {
 		t.Errorf("check output:\n%s", h.stderr.String())
 	}
 }
+
+// Gate G1: check shows why a client list was not understood (key names and flags only).
+func TestCheckShowsWhyNotUnderstood(t *testing.T) {
+	h, _, ap := apHarness(t)
+	ap.SetList([]byte(`{"success":true,"timeout":true}`))
+	h.run("check")
+	want := "page not understood (firmware?): status.client.user answered JSON with keys success, timeout; success=true, timeout=true"
+	if !strings.Contains(h.stderr.String(), want) {
+		t.Errorf("check lacks %q:\n%s", want, h.stderr.String())
+	}
+}

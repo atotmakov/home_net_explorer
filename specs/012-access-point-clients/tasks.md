@@ -21,19 +21,19 @@ with the fixtures (T019) before Phase 5 starts.
 
 ## Phase 1: Setup
 
-- [ ] T001 Set `VERSION` to `0.12`
+- [X] T001 Set `VERSION` to `0.12`
 
 ## Phase 2: Foundational (contract and storage)
 
 **Purpose**: the additive v1 contract (both sides use it) and the `via_source` column.
 
-- [ ] T002 [P] Tests in `internal/contract/validate_test.go` `TestAPClientObservation`: an
+- [X] T002 [P] Tests in `internal/contract/validate_test.go` `TestAPClientObservation`: an
   `ap_client` observation is valid with `mac`, `via` and `access_point` (private IPv4) inside a
   scanned subnet; invalid without `mac`, without `via`, without `access_point`, with a public or
   malformed `access_point`, with `via` longer than 32; `access_point` on any other method is
   invalid; `TestAccessPointSource`: `type: "access_point"` valid with every existing outcome and
   the new `controller_managed`; unknown type still invalid; 16 sources valid, 17 invalid
-- [ ] T003 Implement in `internal/contract/v1.go` and `validate.go`: `ObsAPClient = "ap_client"`,
+- [X] T003 Implement in `internal/contract/v1.go` and `validate.go`: `ObsAPClient = "ap_client"`,
   `SourceTypeAccessPoint = "access_point"`, `OutcomeControllerManaged = "controller_managed"`
   (in `ValidOutcome`), `Observation.AccessPoint string \`json:"access_point,omitempty"\``,
   `MaxSources = 16`, `PingResponse.AccessPoints []RouterRef \`json:"access_points,omitempty"\``;
@@ -41,17 +41,17 @@ with the fixtures (T019) before Phase 5 starts.
   for `ap_client`", "`access_point` required for `ap_client`, forbidden otherwise"). Update the
   comments on `Via` and `RunSource`; add `RouterModels = []string{"huawei-hg8145v5"}` and
   `AccessPointModels = []string{"tplink-eap225"}` (research R4). Make T002 pass
-- [ ] T004 [P] Test in `internal/inventory/apply_ap_test.go` `TestAPClientSighting`: ingest a run
+- [X] T004 [P] Test in `internal/inventory/apply_ap_test.go` `TestAPClientSighting`: ingest a run
   with an `ap_client` observation (via `Home (5 GHz)`, access_point 192.168.0.5): the device
   exists, its sighting has `via = "Home (5 GHz)"` and `via_source = "192.168.0.5"`; a second run with
   the same tuple extends the same sighting row (`seen_count` 2); a run from the other AP
   (192.168.0.10) starts a new row; the run adds no complete scan of the subnet (a device missing
   from the next AP-only run is not offline); `TestRebuildKeepsViaSource` in
-  `internal/app/rebuild_test.go`: after a rebuild the sighting has the same `via_source`;
+  the same test (written there): after a rebuild the sighting has the same `via_source`;
   `TestAPSourceStored`: a run with a `RunSource{Type: "access_point", Outcome:
   "controller_managed"}` and one with `ok, 3/1` are stored (`status: stored`) and read back with
   their type; existing router rows survive the migration unchanged
-- [ ] T005 Add `internal/store/migrations/0008_access_points.sql` (the `sightings.via_source`
+- [X] T005 Add `internal/store/migrations/0008_access_points.sql` (the `sightings.via_source`
   column and the `run_sources` rebuild of data-model.md) and include `via_source` in the sighting
   tuple of `upsertSighting` in `internal/inventory/apply.go` (compare and insert
   `o.AccessPoint`). Make T004 pass
@@ -62,14 +62,14 @@ with the fixtures (T019) before Phase 5 starts.
 **Independent test**: device of type `access_point` → card offered; save → model, address,
 username shown, password only "set"; other types → no card.
 
-- [ ] T006 [P] [US1] Tests in `internal/store/routers_test.go` `TestAccessPointSettings`:
+- [X] T006 [P] [US1] Tests in `internal/store/routers_test.go` `TestAccessPointSettings`:
   `SaveRouter` with model `tplink-eap225` stores a row; `ListRouters` does not return it;
   `ListAccessPoints` returns `{id, model, address, subnet}` with the address picked like routers;
   a router row is not in `ListAccessPoints`; `RouterLogin(id)` returns the AP's login
-- [ ] T007 [US1] Implement in `internal/store/routers.go`: `ListAccessPoints(ctx)` (shared query
+- [X] T007 [US1] Implement in `internal/store/routers.go`: `ListAccessPoints(ctx)` (shared query
   helper with `ListRouters`, filtered by model set) and model filtering in `ListRouters`
   (model sets from `contract.RouterModels` / `contract.AccessPointModels`). Make T006 pass
-- [ ] T008 [P] [US1] Tests in `tests/integration/us_ap_ui_test.go` (where the router card's tests live): `GET /devices/{id}` of a device
+- [X] T008 [P] [US1] Tests in `tests/integration/us_ap_ui_test.go` (where the router card's tests live): `GET /devices/{id}` of a device
   with type `access_point` shows an "Access point" card with the model select (`tplink-eap225`),
   username, password field and the device's current address; no card for `router` or untyped
   devices (and no Router card for `access_point`); `POST /devices/{id}/access-point` saves (303 to
@@ -77,7 +77,7 @@ username shown, password only "set"; other types → no card.
   without password → 400 with the form error; an unknown model → 400; a device not of type
   `access_point` → 400; `POST /devices/{id}/access-point/remove` deletes; changing the type away
   via `POST /devices/{id}/attrs` deletes the settings; a cross-site post → 403
-- [ ] T009 [US1] Implement in `internal/web/routers.go` (shared code with the router card where
+- [X] T009 [US1] Implement in `internal/web/routers.go` (shared code with the router card where
   the rules are identical), `internal/web/server.go` (routes `POST /devices/{id}/access-point`,
   `POST /devices/{id}/access-point/remove`), `internal/web/pages.go` and
   `internal/web/templates/device.html` (the card, with the latest reads per collector from
@@ -89,7 +89,7 @@ username shown, password only "set"; other types → no card.
 **Independent test**: fake EAP225 with three clients → a run with three `ap_client` observations
 and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (<band>)".
 
-- [ ] T010 [P] [US2] Fake EAP225 in `internal/collect/accesspoint/eaptest/fake.go`:
+- [X] T010 [P] [US2] Fake EAP225 in `internal/collect/accesspoint/eaptest/fake.go`:
   `httptest.Server` with options `Firmware` (`New` = `/data/status.client.user.json`, `Old` =
   `/data/monitor.client.client.json`, the other path 404), `Managed` (managedMode `errCode: 403`),
   `Username`/`Password` (checks `password` = upper-case hex MD5), `Locked`, `Clients []Entry`,
@@ -97,7 +97,7 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   sent) so tests can count login attempts; `JSESSIONID` cookie for `New`, `COOKIE=` for `Old`.
   Client entries built by `eaptest.Client` with keys `MAC` (`00-00-5E-00-53-13` form), `IP`,
   `SSID`, `Radio`, `hostname` (research R2); `Transport()` routes private addresses to the fake
-- [ ] T011 [P] [US2] Tests in `internal/collect/accesspoint/eap225_test.go` (contracts/
+- [X] T011 [P] [US2] Tests in `internal/collect/accesspoint/eap225_test.go` (contracts/
   access-point-eap225.md): both firmwares read OK with MACs normalized to `00:00:5e:00:53:13`,
   `Radio 0/1` → `2.4 GHz`/`5 GHz`, hostname kept, `Result.Path` names the endpoint, `Result.Keys`
   lists the first entry's keys; wrong password → `login_rejected`; locked → `locked`;
@@ -105,18 +105,18 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   → `page_not_understood`; connection refused / slow server beyond 10 s → `unreachable`; logout is
   requested after a read; an entry without IP is returned with a zero IP; no error string or log
   line contains the username or password (as `router/security_test.go`)
-- [ ] T012 [US2] Implement `internal/collect/accesspoint/accesspoint.go` (`ModelEAP225 =
+- [X] T012 [US2] Implement `internal/collect/accesspoint/accesspoint.go` (`ModelEAP225 =
   "tplink-eap225"`, `Models()`, `Client`, `Result{Outcome, Clients, Path, Keys}`, `Source`
   interface, `DefaultTimeout = 10 * time.Second`, reuse `router.Secret`) and `eap225.go`
   (cookie jar, `Referer`, MD5 login, endpoint fallback on 404, tolerant case-insensitive parse,
   outcomes of research R3). Make T011 pass
-- [ ] T013 [P] [US2] Tests in `internal/collect/accesspoint/remote_test.go`: `NewRemote` fetches the
+- [X] T013 [P] [US2] Tests in `internal/collect/accesspoint/remote_test.go`: `NewRemote` fetches the
   login before each read; a login fetch error → `login_unavailable`; after `login_rejected` the
   same login hash is skipped (`skipped_after_rejection`, zero requests to the fake); a new
   password is tried again
-- [ ] T014 [US2] Implement `internal/collect/accesspoint/remote.go` reusing `router.LoginFunc`,
+- [X] T014 [US2] Implement `internal/collect/accesspoint/remote.go` reusing `router.LoginFunc`,
   `router.Rejections` and `router.LoginHash`. Make T013 pass
-- [ ] T015 [P] [US2] Tests in `internal/collect/engine_ap_test.go`: an engine with a fake router
+- [X] T015 [P] [US2] Tests in `internal/collect/engine_ap_test.go`: an engine with a fake router
   (192.168.0.0/24, LAN1 for every device) and two fake APs: clients with an IP in a scanned subnet
   become `ap_client` observations (`via` "SSID (5 GHz)", cut so the whole is ≤ 32, `access_point`
   = AP address) that **replace** the router observation of the same IP, keeping the router's
@@ -127,14 +127,14 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   leaves the rest of the run unchanged; the run passes `contract.Validate`; with the router fake
   and both AP fakes each delaying their answer by 300 ms, the whole read phase takes under 600 ms
   (the reads overlap, SC-003)
-- [ ] T016 [US2] Implement in `internal/collect/engine.go`: `Engine.AccessPoints
+- [X] T016 [US2] Implement in `internal/collect/engine.go`: `Engine.AccessPoints
   []accesspoint.Source`, read in the same parallel group as the routers (one goroutine per
   source, each bounded by its 10 s timeout), merge per research R7. Make T015 pass
-- [ ] T016a [US2] Test in `internal/store/topology_test.go` `TestAccessPointNotGateway` (an `ok`
+- [X] T016a [US2] Test in `internal/store/topology_test.go` `TestAccessPointNotGateway` (an `ok`
   access point read of 192.168.0.0/24 does not make the AP a gateway; the router stays the
   gateway) and restrict the gateway query in `internal/store/topology.go` (`run_sources … WHERE
   outcome = 'ok'`) to `type = 'router'`. In PR 1, so the first live AP read cannot change the map
-- [ ] T017 [P] [US2] Tests: in `tests/integration/us_ap_ui_test.go` ping
+- [X] T017 [P] [US2] Tests: in `tests/integration/us_ap_ui_test.go` ping
   answers `access_points` with the configured APs and no credentials, and `routers` without them;
   in `cmd/hne-collector/accesspoints_test.go` the collector builds AP sources from the ping list,
   caches it in `hne-collector.access-points` (no credentials in the file) and uses the cache when
@@ -142,7 +142,7 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   OK, N clients (endpoint status.client.user, keys: …)" with no MAC, IP, name or credential in the
   output; a rejected login in `check` is recorded and cleared as for routers; in
   `internal/app/scanner_ap_test.go` the built-in collector reads configured APs too
-- [ ] T018 [US2] Implement: `internal/web/api.go` (`resp.AccessPoints, err =
+- [X] T018 [US2] Implement: `internal/web/api.go` (`resp.AccessPoints, err =
   Store.ListAccessPoints`), `cmd/hne-collector/accesspoints.go` (build, cache, `checkAccessPoints`
   next to `checkRouters`, phrases for every outcome incl. `controller_managed`),
   `internal/app/scanner.go` (built-in collector). Make T017 pass
@@ -150,6 +150,19 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   the owner runs `hne-collector.exe check` (needs T016a deployed); record in this file the endpoint and key names
   reported for 192.168.0.5 and 192.168.0.10; if they differ from T010's fixtures, update the
   fixtures and the parser (red test first) before Phase 5
+  - Run 1 (2026-10-24, collector 0.13 on the desktop, PR #24 deployed as 0.12.131):
+    - 192.168.0.5 (newer firmware): OK, endpoint `status.client.user`, keys `ActiveTime, Down,
+      IP, MAC, RSSI, Radio, Rate, SSID, Up, hostname, key, limit, limit_download,
+      limit_download_unit, limit_upload, limit_upload_unit`. The parsed keys (`MAC`, `IP`,
+      `SSID`, `Radio`, `hostname`) are as assumed; the rest is ignored. No parser change.
+    - 192.168.0.10 (older firmware): `page not understood`, login not rejected. The unit's own
+      scripts (`js/su/data/proxy.js`, `store.js`, readable without a login) ask for lists with
+      POST `operation=load`, not GET. Fix: the reader falls back to that POST, and `check` now
+      says what an unreadable answer looked like (key names and flags only). Tests
+      `TestReadPostOnlyFirmware`, `TestPageNotUnderstoodDetail`, `TestCheckShowsWhyNotUnderstood`.
+    - Side finding: the desktop's own `home` interface is 3c:52:a1:29:75:20 (192.168.1.10), so
+      the "TP-Link Systems" device at 192.168.1.10 is the desktop, not a router.
+  - Run 2: pending (after this fix is deployed and the collector downloaded again)
 - [ ] T020 [P] [US2] Tests in `internal/store/devices_query_test.go` and
   `internal/web/access_point_test.go`: a device whose latest sighting has `via_source` shows
   "via <AP display name> · Home (5 GHz)" on its device page (FR-013); an unknown AP address shows

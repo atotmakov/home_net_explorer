@@ -36,12 +36,14 @@ type Client struct {
 
 // Result is the outcome of one read. Clients is empty unless Outcome is ok. Path names the
 // endpoint that answered and Keys the key names of the first entry, for the check command
-// (gate G1: confirmed on the owner's units without printing any value).
+// (gate G1: confirmed on the owner's units without printing any value). Detail says, for
+// page_not_understood, what the access point answered: key names and flags only, never a value.
 type Result struct {
 	Outcome string
 	Clients []Client
 	Path    string
 	Keys    []string
+	Detail  string
 }
 
 // Source reads the client list of one access point.
