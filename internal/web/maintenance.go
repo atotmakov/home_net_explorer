@@ -27,12 +27,19 @@ func maintenanceNotice(q url.Values) string {
 		v, err := strconv.Atoi(q.Get(key))
 		return v, err == nil && v >= 0
 	}
+	// manual names the devices added by hand among them (feature 011); absent means none.
+	byHand := func() string {
+		if m, ok := n("manual"); ok && m > 0 {
+			return fmt.Sprintf(" (%d added by hand)", m)
+		}
+		return ""
+	}
 	switch q.Get("done") {
 	case "devices":
 		d, ok1 := n("devices")
 		r, ok2 := n("runs")
 		if ok1 && ok2 {
-			return fmt.Sprintf("Removed %d devices and %d scan records.", d, r)
+			return fmt.Sprintf("Removed %d devices%s and %d scan records.", d, byHand(), r)
 		}
 	case "collectors":
 		if c, ok := n("collectors"); ok {
@@ -43,7 +50,7 @@ func maintenanceNotice(q url.Values) string {
 		r, ok2 := n("runs")
 		c, ok3 := n("collectors")
 		if ok1 && ok2 && ok3 {
-			return fmt.Sprintf("Dropped all data: %d devices, %d scan records, %d collectors.", d, r, c)
+			return fmt.Sprintf("Dropped all data: %d devices%s, %d scan records, %d collectors.", d, byHand(), r, c)
 		}
 	case "paused":
 		return "Built-in scanner paused."
@@ -83,14 +90,20 @@ func (s *Server) removal(w http.ResponseWriter, r *http.Request, action, word st
 	case "devices":
 		q.Set("devices", strconv.Itoa(c.Devices))
 		q.Set("runs", strconv.Itoa(c.Runs))
+		if c.Manual > 0 {
+			q.Set("manual", strconv.Itoa(c.Manual))
+		}
 	case "collectors":
 		q.Set("collectors", strconv.Itoa(c.Collectors))
 	case "everything":
 		q.Set("devices", strconv.Itoa(c.Devices))
 		q.Set("runs", strconv.Itoa(c.Runs))
 		q.Set("collectors", strconv.Itoa(c.Collectors))
+		if c.Manual > 0 {
+			q.Set("manual", strconv.Itoa(c.Manual))
+		}
 	}
-	http.Redirect(w, r, "/settings?"+encodeOrdered(q, "done", "devices", "runs", "collectors"), http.StatusSeeOther)
+	http.Redirect(w, r, "/settings?"+encodeOrdered(q, "done", "devices", "manual", "runs", "collectors"), http.StatusSeeOther)
 }
 
 // encodeOrdered encodes q with keys in the given order (url.Values.Encode sorts them).

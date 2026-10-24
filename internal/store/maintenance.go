@@ -21,18 +21,20 @@ const (
 // RemovalCounts is what a maintenance action removed.
 type RemovalCounts struct {
 	Devices    int // devices not merged away
+	Manual     int // of which added by hand (feature 011)
 	Runs       int // stored collection runs
 	Collectors int // remote collectors
 }
 
 // RemoveAllDevices deletes every device with all scan history and all owner edits about devices
-// (names, types, notes, links, acknowledgements, merges, router settings), facts and projections
+// (names, types, notes, links, acknowledgements, merges, router settings, devices added by hand), facts and projections
 // together, so a rebuild stays empty (Principle V). Subnet facts, collectors and settings are
 // kept. Runs that started before at are discarded when they arrive later. Callers
 // run it inside the ingest lock.
 func RemoveAllDevices(ctx context.Context, tx *sql.Tx, at time.Time) (RemovalCounts, error) {
 	var c RemovalCounts
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM devices WHERE status != 'merged_away'`).Scan(&c.Devices); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*), COALESCE(sum(manual), 0) FROM devices WHERE status != 'merged_away'`).
+		Scan(&c.Devices, &c.Manual); err != nil {
 		return c, err
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM collection_runs`).Scan(&c.Runs); err != nil {
@@ -49,6 +51,7 @@ func RemoveAllDevices(ctx context.Context, tx *sql.Tx, at time.Time) (RemovalCou
 		`DELETE FROM user_identity_alias`,
 		`DELETE FROM user_links`,
 		`DELETE FROM user_acks`,
+		`DELETE FROM user_manual_devices`, // feature 011
 		`DELETE FROM router_settings`,
 		`DELETE FROM collectors WHERE deleted_at IS NOT NULL`, // removed collectors had only history left
 	} {

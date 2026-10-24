@@ -144,18 +144,18 @@ lose the link and are drawn from scan data again.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T018 [P] Tests in `internal/store/maintenance_test.go` and the existing maintenance
+- [X] T018 [P] Tests in `internal/store/maintenance_test.go` and the existing maintenance
   integration tests: "Remove all devices" and "Drop all data" delete `user_manual_devices`; a
   rebuild afterwards is empty; the result message counts the manual devices ("…, 1 added by hand")
-- [ ] T019 Implement in `internal/store/maintenance.go` (`DELETE FROM user_manual_devices`,
+- [X] T019 Implement in `internal/store/maintenance.go` (`DELETE FROM user_manual_devices`,
   `RemovalCounts.Manual`) and the message in `internal/web/maintenance.go`; update the "Remove all
   devices" text in `settings.html` to name "devices added by hand". Make T018 pass
-- [ ] T020 Integration test `TestManualDeviceSurvives` in `tests/integration/us_manual_test.go`:
+- [X] T020 Integration test `TestManualDeviceSurvives` in `tests/integration/us_manual_test.go`:
   after three scans and `app.Rebuild` the manual device, its links and the Map are unchanged
   (SC-003); `TestMapPerformance` stays green
 - [ ] T021 Real-network validation, quickstart §1–§7 after deploying 0.14: record the results here
   (counts only, no MACs); time the steps of §1 and §3 (SC-001: under 2 minutes)
-- [ ] T022 [P] Docs: in the feature 001 identity rules (`specs/001-lan-inventory-topology/
+- [X] T022 [P] Docs: in the feature 001 identity rules (`specs/001-lan-inventory-topology/
   data-model.md`, the `identity_key` row) add the `manual:<uuid>` key: set once when the owner adds
   a device, never derived from observations; a scan that sees the manual device's MAC merges it into
   the `mac:` device (011 research R3)

@@ -150,7 +150,7 @@ is created, and a change event fires.
 | Field | Type | Rules |
 |-------|------|-------|
 | id | int | PK. Assigned in **ingest order**. A rebuild reproduces it exactly, because replay follows ingest order |
-| identity_key | text | unique. `mac:<mac>`, `host:<subnet>:<hostname>`, or `ip:<subnet>:<ip>` |
+| identity_key | text | unique. `mac:<mac>`, `host:<subnet>:<hostname>`, or `ip:<subnet>:<ip>`; `manual:<uuid>` for a device the owner added by hand (feature 011): set once at add, never derived from observations; a scan that sees its MAC merges it into the `mac:` device (011 research R3) |
 | identity_strength | enum | `strong` (MAC) \| `weak` |
 | mac_randomized | bool | locally-administered bit set |
 | manufacturer | text? | OUI lookup (R11). Null for randomized or unknown MACs |
