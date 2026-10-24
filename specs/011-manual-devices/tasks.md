@@ -18,8 +18,7 @@ contract are unchanged.
 
 ## Phase 1: Setup
 
-- [ ] T001 Set `VERSION` to `0.14`; set `.specify/feature.json` to `specs/011-manual-devices`
-  (done at planning)
+- [ ] T001 Set `VERSION` to `0.14`
 
 ## Phase 2: Foundational (storage and facts)
 
@@ -41,7 +40,7 @@ contract are unchanged.
     every device whose current link points to it
   - Rebuild (`inventory.Rebuild`) after add, rename, MAC change and a link reproduces the same
     rows; after remove the device stays gone
-- [ ] T003 [P] Test in `internal/store/migrate_internal_test.go` (or the existing migration test):
+- [ ] T003 [P] Test in `internal/store/migrate_internal_test.go`:
   schema version 9 has `user_manual_devices` (`field IN ('add', 'mac', 'remove')`) and
   `devices.manual` defaulting to 0
 - [ ] T004 Implement `internal/store/migrations/0009_manual_devices.sql` exactly as in
@@ -112,7 +111,8 @@ in 192.168.0.0/24, no LAN1 edge for the two devices.
 - [ ] T013 [US2] Implement the topology in `internal/store/topology.go` (manual state, group by link
   chain with a visited set) and `LinkLoop` plus the ranking in `internal/store/userlinks.go`; the
   400 loop message in `internal/web/map.go` `handleDeviceLink` ("this would make a loop: <target>
-  connects via <this device>"). Make T010 and T011 pass
+  connects via <this device>"); the loop check and the link write run in one `Ingester.Do` call,
+  so a concurrent edit cannot create a loop between check and write. Make T010 and T011 pass
 - [ ] T014 [US2] Implement `internal/web/static/map-model.js` (class, details text, "Online only"
   rule) and the dashed outline in `internal/web/static/map.js`. Make T012 pass
 
@@ -133,9 +133,12 @@ lose the link and are drawn from scan data again.
   - A scanned device's page has no Remove section and `POST …/remove` → 404 (FR-012)
 - [ ] T016 [P] [US3] Test in `internal/inventory/manual_test.go` `TestScanSeesManualMAC` (FR-010):
   a manual device with MAC m, then a scan sees m at 192.168.0.30 → one device with the owner's name,
-  type, notes and link, a normal state, and the manual row merged away
+  type, notes and link, a normal state, and the manual row merged away; a device whose "Connected
+  via" pointed at the manual device now points at the merged device (its `mu-` edge on the Map
+  targets it), and the merged device keeps the manual device's own link
 - [ ] T017 [US3] Implement `POST /devices/{id}/mac` and `POST /devices/{id}/remove` in
-  `internal/web/manual.go`, the MAC field and Remove section in `device.html` (manual devices only),
+  `internal/web/manual.go`, each inside `Ingester.Do` (owner facts and projections change
+  together, serialized with ingest and rebuild), the MAC field and Remove section in `device.html` (manual devices only),
   and the merge by MAC in `internal/inventory/apply.go` (after the scanned device is resolved: a row
   with `manual = 1 AND mac = ?` → `mergeInto`). Make T015 and T016 pass
 
@@ -151,7 +154,11 @@ lose the link and are drawn from scan data again.
   after three scans and `app.Rebuild` the manual device, its links and the Map are unchanged
   (SC-003); `TestMapPerformance` stays green
 - [ ] T021 Real-network validation, quickstart §1–§7 after deploying 0.14: record the results here
-  (counts only, no MACs)
+  (counts only, no MACs); time the steps of §1 and §3 (SC-001: under 2 minutes)
+- [ ] T022 [P] Docs: in the feature 001 identity rules (`specs/001-lan-inventory-topology/
+  data-model.md`, the `identity_key` row) add the `manual:<uuid>` key: set once when the owner adds
+  a device, never derived from observations; a scan that sees the manual device's MAC merges it into
+  the `mac:` device (011 research R3)
 
 ## Dependencies & Execution Order
 
@@ -159,7 +166,7 @@ lose the link and are drawn from scan data again.
 - US1 (T006–T009) needs Phase 2.
 - US2 (T010–T014) needs Phase 2 and T008 (`StateManual`); independent of the US1 web pages.
 - US3 (T015–T017) needs US1 (the pages) and T005.
-- Polish after US3; T021 after deployment.
+- Polish after US3; T021 after deployment; T022 any time.
 
 ## Parallel Opportunities
 

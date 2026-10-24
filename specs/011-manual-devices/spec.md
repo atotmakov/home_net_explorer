@@ -121,7 +121,8 @@ name; remove it and check it disappears and devices that were connected via it l
 - **Home page counts** (online / stale / offline): manual devices are not counted in any of them;
   the total device count does include them and says how many are manual.
 - **A MAC address in an unusual form** (dashes, upper case, no separators): it is accepted and
-  stored in the same form as scanned MAC addresses; anything that is not a MAC address is refused.
+  stored in the same form as scanned MAC addresses; anything that is not a MAC address, and a
+  broadcast or multicast MAC, is refused.
 
 ## Requirements *(mandatory)*
 

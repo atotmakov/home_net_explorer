@@ -46,7 +46,9 @@ No data migration: existing devices are not manual.
 - **Remove** (FR-007, R5): only when `manual = 1`; `remove` fact plus `ClearUserLink` for each
   device linked to it; the projection row is deleted.
 - **Merge by MAC** (FR-010, R3): when the applier sees MAC m on a scanned device and a manual row
-  with `mac = m` exists, `mergeInto(manual, scanned)`.
+  with `mac = m` exists, `mergeInto(manual, scanned)`. The manual row becomes `merged_away`
+  (keeping `manual = 1`, hidden like any merged row); links from and to it resolve to the scanned
+  device through `merged_into`.
 - **Loops** (FR-009, R6): a link from A to B is refused when B's chain reaches A.
 - **Shown state**: `manual` before any other rule; never online, stale or offline (FR-003).
 

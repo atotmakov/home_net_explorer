@@ -47,6 +47,12 @@ state evaluation before anything else, so filters, counts and the Map treat it a
 FR-003). `evaluateOffline` only touches devices with addresses on the scanned subnet, so it never
 changes a manual row.
 
+**History** (Principle V): a manual device has no scan events. Its history is its owner facts in
+`user_manual_devices` and `user_device_attrs`, each with its time (added, MAC changed, renamed,
+removed); they are kept and replayed by a rebuild. Once a scan sees its MAC, the merged device has
+normal events from then on. No `new_device` event is invented for an add, because nothing was
+observed.
+
 **Alternatives rejected**: a new `status` value (rebuilding the `devices` table to change its
 CHECK, for no gain since display goes through the shown state).
 
