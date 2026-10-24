@@ -59,7 +59,7 @@
   {{end}}
   {{end}}
   <h3>Remove all devices</h3>
-  <p class="muted">Deletes every device, all scan history from every collector and all your edits (names, types, notes, connections, merges, router settings). Collectors, settings and subnet names stay. Devices come back at the next scan.</p>
+  <p class="muted">Deletes every device, all scan history from every collector and all your edits (names, types, notes, connections, merges, router settings, devices added by hand). Collectors, settings and subnet names stay. Devices come back at the next scan.</p>
   <form method="post" action="/maintenance/devices" class="inline-form">
     <label>Type <code>devices</code> to confirm <input type="text" name="confirm" autocomplete="off" required></label>
     <button type="submit">Remove all devices</button>
