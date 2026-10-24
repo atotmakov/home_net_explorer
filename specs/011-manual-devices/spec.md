@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Paused (2026-10-24, owner: 012 first)
+**Status**: Planning (resumed 2026-10-24 after 012)
 
 **Input**: User description: "I have tp link sl1218p router, it is unmanaged device so there is no
 ip on it, network scanner does not see it. Lets add ability to create device without ip and
@@ -111,7 +111,7 @@ name; remove it and check it disappears and devices that were connected via it l
 - **A scan later sees the manual device's MAC** (for example the owner replaces the unmanaged
   switch with a managed one, or entered the MAC of a device that was simply offline): the manual
   device and the scanned one become one device, keeping the owner's name, type, notes and links;
-  from then on it has a normal status. The owner can still undo it like any merge.
+  from then on it has a normal status. (Merges cannot be undone; see research R3.)
 - **"Connected via" loops** (the switch via a device that is itself connected via the switch): the
   page refuses the link that would close the loop and says why.
 - **Rebuild of the inventory from stored history** (Principle V): manual devices and their links
