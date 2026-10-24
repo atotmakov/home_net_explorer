@@ -20,6 +20,23 @@ type Address struct {
 	Current  bool
 	AsOf     time.Time
 	Via      string // router port or Wi-Fi interface of the latest sighting there (feature 002)
+	// ViaSource is the access point that reported that sighting ('' for a router's, feature 012),
+	// and ViaName the name of the device holding that address on the subnet ('' if none).
+	ViaSource string
+	ViaName   string
+}
+
+// ViaText is the "via" of the device page's address row: "LAN1", or for an access point's
+// report "<AP name> · Home (5 GHz)", with the AP's address when no device holds it (FR-013).
+func (a Address) ViaText() string {
+	if a.Via == "" || a.ViaSource == "" {
+		return a.Via
+	}
+	name := a.ViaName
+	if name == "" {
+		name = a.ViaSource
+	}
+	return name + " · " + a.Via
 }
 
 // DeviceRow is a device as listed in the inventory.
@@ -210,22 +227,32 @@ func sortDevices(ds []DeviceRow, key string, desc bool) {
 func (s *Store) currentAddresses(ctx context.Context) (map[int64][]Address, map[int64]bool, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT a.device_id, a.ip, sn.cidr, a.subnet_id, a.as_of, sn.ignored,
 		COALESCE((SELECT g.via FROM sightings g WHERE g.device_id = a.device_id AND g.subnet_id = a.subnet_id
-			ORDER BY g.last_seen DESC, g.id DESC LIMIT 1), '')
-		FROM device_addresses a JOIN subnets sn ON sn.id = a.subnet_id WHERE a.current = 1`)
+			ORDER BY g.last_seen DESC, g.id DESC LIMIT 1), ''),
+		COALESCE((SELECT g.via_source FROM sightings g WHERE g.device_id = a.device_id AND g.subnet_id = a.subnet_id
+			ORDER BY g.last_seen DESC, g.id DESC LIMIT 1), ''),
+		d.display_name
+		FROM device_addresses a JOIN subnets sn ON sn.id = a.subnet_id JOIN devices d ON d.id = a.device_id
+		WHERE a.current = 1`)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 	addrs := map[int64][]Address{}
 	hidden := map[int64]bool{}
+	type at struct {
+		subnet int64
+		ip     string
+	}
+	names := map[at]string{} // who holds each address, to name the access point of a sighting
 	for rows.Next() {
 		var devID int64
 		var a Address
-		var asOf string
+		var asOf, name string
 		var ignored bool
-		if err := rows.Scan(&devID, &a.IP, &a.CIDR, &a.SubnetID, &asOf, &ignored, &a.Via); err != nil {
+		if err := rows.Scan(&devID, &a.IP, &a.CIDR, &a.SubnetID, &asOf, &ignored, &a.Via, &a.ViaSource, &name); err != nil {
 			return nil, nil, err
 		}
+		names[at{a.SubnetID, a.IP}] = name
 		if ignored {
 			hidden[devID] = true
 			continue
@@ -233,7 +260,15 @@ func (s *Store) currentAddresses(ctx context.Context) (map[int64][]Address, map[
 		a.Current, a.AsOf = true, MustParseTime(asOf)
 		addrs[devID] = append(addrs[devID], a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
 	for id := range addrs {
+		for i, a := range addrs[id] {
+			if a.ViaSource != "" {
+				addrs[id][i].ViaName = names[at{a.SubnetID, a.ViaSource}]
+			}
+		}
 		slices.SortFunc(addrs[id], func(x, y Address) int {
 			ax, _ := netip.ParseAddr(x.IP)
 			ay, _ := netip.ParseAddr(y.IP)
