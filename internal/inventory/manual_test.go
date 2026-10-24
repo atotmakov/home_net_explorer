@@ -196,3 +196,68 @@ func TestManualDeviceSurvivesRebuild(t *testing.T) {
 		t.Errorf("after rebuild: %+v, %v", r, ok)
 	}
 }
+
+// FR-010 (research R3): a scan that sees the manual device's MAC merges it into the scanned
+// device, which keeps the owner's name, type, notes and links.
+func TestScanSeesManualMAC(t *testing.T) {
+	h := it.New(t)
+	ctx := context.Background()
+	scan := []contract.SubnetScan{it.Scan("192.168.0.0/24")}
+	h.Ingest(it.Run{Subnets: scan, Obs: []contract.Observation{
+		it.ARP("192.168.0.1", "00:00:5e:00:53:01", "router.lan"), it.ARP("192.168.0.4", "00:00:5e:00:53:04", "pc.lan")}})
+	sw := addManual(t, h, inventory.ManualDevice{Name: "TL-SG108E", Type: "switch", MAC: "00:00:5e:00:53:30", Notes: "office"},
+		it.T0.Add(2*time.Minute))
+	router, pc := inventory.MACKey("00:00:5e:00:53:01"), inventory.MACKey("00:00:5e:00:53:04")
+	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, sw, router, it.T0.Add(3*time.Minute)) })
+	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, pc, sw, it.T0.Add(3*time.Minute)) })
+
+	// The owner replaced the switch with a managed one: it now answers at 192.168.0.30.
+	h.Ingest(it.Run{Start: it.T0.Add(15 * time.Minute), Subnets: scan, Obs: []contract.Observation{
+		it.ARP("192.168.0.1", "00:00:5e:00:53:01", "router.lan"), it.ARP("192.168.0.4", "00:00:5e:00:53:04", "pc.lan"),
+		it.ARP("192.168.0.30", "00:00:5e:00:53:30", "")}})
+
+	var n int
+	h.Store.DB().QueryRow(`SELECT count(*) FROM devices WHERE mac = '00:00:5e:00:53:30' AND status != 'merged_away'`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("%d live devices with the switch's MAC, want 1", n)
+	}
+	var name, typ, notes, status string
+	var manual bool
+	if err := h.Store.DB().QueryRow(`SELECT user_name, type, notes, status, manual FROM devices
+		WHERE mac = '00:00:5e:00:53:30' AND status != 'merged_away'`).Scan(&name, &typ, &notes, &status, &manual); err != nil {
+		t.Fatal(err)
+	}
+	if name != "TL-SG108E" || typ != "switch" || notes != "office" || manual || status == "merged_away" {
+		t.Errorf("merged device = %q %q %q %s manual=%v; want the owner's name, type, notes, scanned", name, typ, notes, status, manual)
+	}
+	var away string
+	if err := h.Store.DB().QueryRow(`SELECT status FROM devices WHERE identity_key = ?`, sw).Scan(&away); err != nil || away != "merged_away" {
+		t.Errorf("manual row status = %q, %v; want merged_away", away, err)
+	}
+
+	now := it.T0.Add(20 * time.Minute)
+	tp, err := h.Store.Topology(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]string{}
+	for _, nd := range tp.Nodes {
+		if nd.Kind == "device" {
+			ids[nd.IP] = nd.ID
+		}
+	}
+	has := func(from, to string) bool {
+		for _, e := range tp.Edges {
+			if e.Kind == "manual" && e.Source == from && e.Target == to {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(ids["192.168.0.4"], ids["192.168.0.30"]) {
+		t.Error("the pc's link does not follow the switch into the merged device")
+	}
+	if !has(ids["192.168.0.30"], ids["192.168.0.1"]) {
+		t.Error("the merged device lost the switch's own link to the router")
+	}
+}

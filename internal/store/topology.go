@@ -117,6 +117,30 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 		return tp, err
 	}
 
+	// A manual device (feature 011, research R7) sits in the group of the device it connects via,
+	// following other manual devices; "other" when the chain ends nowhere.
+	byID := map[int64]*DeviceRow{}
+	for i := range devs {
+		byID[devs[i].ID] = &devs[i]
+	}
+	manualGroup := func(id int64) string {
+		seen := map[int64]bool{id: true}
+		for cur := links[id]; cur != 0 && !seen[cur]; cur = links[cur] {
+			seen[cur] = true
+			d, ok := byID[cur]
+			if !ok {
+				break
+			}
+			if !d.Manual {
+				if len(d.Addresses) > 0 {
+					return groupID(d.Addresses[0].SubnetID)
+				}
+				break
+			}
+		}
+		return "other"
+	}
+
 	// Device nodes.
 	type holder struct{ dev, subnet int64 }
 	byIP := map[string]holder{}
@@ -129,6 +153,9 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 			LastSeenAgo: Ago(d.Age), GatewayOf: []string{}}
 		if len(d.Addresses) > 0 {
 			n.Parent = groupID(d.Addresses[0].SubnetID)
+		}
+		if d.Manual {
+			n.Parent, n.LastSeenAgo = manualGroup(d.ID), ""
 		}
 		for _, a := range d.Addresses {
 			n.IPs = append(n.IPs, a.IP)

@@ -182,3 +182,57 @@ test('manual links', () => {
   assert.equal(rows['Connected via'], 'AP');
   assert.equal(rows['Connected through'], undefined);
 });
+
+// Feature 011: a switch added by hand (manual), a hub behind it, wired devices behind both.
+function manualFixture() {
+  const dev = (id, label, state, extra = {}) => ({
+    id, kind: 'device', parent: 'subnet-2', device_id: Number(id.slice(4)), label, ip: '', ips: [],
+    mac: '', vendor: '', type: 'switch', state, last_seen_ago: state === 'manual' ? '' : '3 mins', gateway_of: [], ...extra,
+  });
+  return {
+    groups: [{ id: 'subnet-2', label: '192.168.0.0/24', cidr: '192.168.0.0/24', stale: false }],
+    nodes: [
+      dev('dev-1', 'HG8145V5', 'online', { type: 'router', ip: '192.168.0.1', ips: ['192.168.0.1'] }),
+      dev('dev-20', 'TL-SL1218P', 'manual'),
+      dev('dev-21', 'hub', 'manual'),
+      dev('dev-22', 'empty switch', 'manual'),
+      dev('dev-4', 'pc', 'offline', { type: 'computer', ip: '192.168.0.4', ips: ['192.168.0.4'] }),
+      dev('dev-5', 'nas', 'stale', { type: 'nas', ip: '192.168.0.5', ips: ['192.168.0.5'] }),
+    ],
+    edges: [
+      { id: 'mu-20', kind: 'manual', source: 'dev-20', target: 'dev-1', current: true },
+      { id: 'mu-21', kind: 'manual', source: 'dev-21', target: 'dev-20', current: true },
+      { id: 'mu-4', kind: 'manual', source: 'dev-4', target: 'dev-20', current: true },
+      { id: 'mu-5', kind: 'manual', source: 'dev-5', target: 'dev-21', current: true },
+    ],
+  };
+}
+
+test('a manual device is drawn as manual and says so', () => {
+  const topo = manualFixture();
+  const el = toElements(topo).find((e) => e.data.id === 'dev-20');
+  assert.ok(el.classes.split(' ').includes('manual'), el.classes);
+  assert.ok(!el.classes.split(' ').includes('dim'));
+  assert.match(el.data.tip, /manual \(added by hand\)/);
+  assert.doesNotMatch(el.data.tip, /last seen/);
+  const d = details(topo, 'dev-20');
+  assert.equal(d.statusText, 'manual (added by hand)');
+  assert.ok(!d.rows.some((r) => r.label === 'Last seen'));
+  assert.deepEqual(d.rows.find((r) => r.label === 'Connected via'), { label: 'Connected via', value: 'HG8145V5' });
+});
+
+test('Online only keeps a manual device that an online or stale device connects through', () => {
+  const topo = manualFixture();
+  const show = visibleIds(topo, true);
+  // nas (stale) → hub → switch: both manual devices stay; the empty switch has no one behind it.
+  assert.ok(show.has('dev-21') && show.has('dev-20'));
+  assert.ok(!show.has('dev-22'));
+  assert.ok(show.has('mu-21') && show.has('mu-20') && show.has('mu-5'));
+  assert.ok(!show.has('dev-4') && !show.has('mu-4'));
+
+  // With only the offline pc behind them, both are hidden.
+  topo.nodes.find((n) => n.id === 'dev-5').state = 'offline';
+  const off = visibleIds(topo, true);
+  assert.ok(!off.has('dev-20') && !off.has('dev-21'));
+  assert.ok(visibleIds(topo, false).has('dev-22'));
+});
