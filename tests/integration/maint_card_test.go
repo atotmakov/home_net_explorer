@@ -67,6 +67,8 @@ func TestMaintenanceCard(t *testing.T) {
 		"done=paused":  "Built-in scanner paused.",
 		"done=resumed": "Built-in scanner resumed.",
 		"done=devices&devices=4&runs=7&extra=%3Cscript%3E": "Removed 4 devices and 7 scan records.",
+		"done=devices&devices=4&manual=1&runs=7":                 "Removed 4 devices (1 added by hand) and 7 scan records.",
+		"done=everything&devices=1&manual=1&runs=2&collectors=3": "Dropped all data: 1 devices (1 added by hand), 2 scan records, 3 collectors.",
 	} {
 		if body := e.get("/settings?" + q); !strings.Contains(body, want) {
 			t.Errorf("?%s: notice %q missing", q, want)

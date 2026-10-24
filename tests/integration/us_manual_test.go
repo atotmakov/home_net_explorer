@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -164,5 +165,47 @@ func TestLinkLoopRefused(t *testing.T) {
 	res, body := e.post(loc+"/link", url.Values{"via": {nas}})
 	if res.StatusCode != http.StatusBadRequest || !strings.Contains(body, "this would make a loop") {
 		t.Errorf("loop link = %d %s, want 400 with the loop message", res.StatusCode, body)
+	}
+}
+
+// SC-003: the manual device and its links survive later scans and a rebuild of the inventory.
+func TestManualDeviceSurvives(t *testing.T) {
+	e := newEnv(t, envOpts{builtinScan: true})
+	e.waitFor("initial scan", func() bool { return e.runCount() == 1 })
+	e.waitFor("scanner idle", func() bool { return !e.app.Scanner.Status().Running })
+	_, loc, _ := e.addManual(url.Values{"name": {"TL-SL1218P"}, "type": {"switch"}})
+	sw := strings.TrimPrefix(loc, "/devices/")
+	nas := deviceID(t, e, "nas.lan")
+	if res, _ := e.post("/devices/"+nas+"/link", url.Values{"via": {sw}}); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("link = %d", res.StatusCode)
+	}
+	edgeTo := func() bool {
+		m := e.mapDoc()
+		for _, n := range m.Nodes {
+			if n.Label == "TL-SL1218P" && n.State == "manual" {
+				return m.has("manual", "dev-"+nas, n.ID)
+			}
+		}
+		return false
+	}
+	if !edgeTo() {
+		t.Fatal("no manual edge from the NAS to the switch")
+	}
+	for i := 0; i < 3; i++ {
+		n := e.runCount()
+		if res, _ := e.req("POST", "/scan", url.Values{}); res.StatusCode != http.StatusAccepted {
+			t.Fatalf("POST /scan = %d", res.StatusCode)
+		}
+		e.waitFor("scan", func() bool { return e.runCount() == n+1 })
+		e.waitFor("scanner idle", func() bool { return !e.app.Scanner.Status().Running })
+	}
+	if !edgeTo() || !strings.Contains(e.get(loc), "Added by hand") {
+		t.Error("the switch or its link is gone after three scans")
+	}
+	if err := e.app.Rebuild(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !edgeTo() || !strings.Contains(e.get(loc), "TL-SL1218P") {
+		t.Error("the switch or its link is gone after a rebuild")
 	}
 }

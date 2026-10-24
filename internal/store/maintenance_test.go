@@ -326,3 +326,28 @@ func TestDropAllData(t *testing.T) {
 	}
 	assertRebuildInvariant(t, h)
 }
+
+// Feature 011 (FR-011): devices added by hand are owner edits; both removals delete them, facts
+// and projections together, and count them.
+func TestRemovalsIncludeManualDevices(t *testing.T) {
+	for name, f := range map[string]func(ctx context.Context, tx *sql.Tx) (store.RemovalCounts, error){
+		"remove all devices": removeDevices, "drop all data": dropAll} {
+		h := usedStore(t)
+		h.Fact(func(tx *sql.Tx) error {
+			_, err := inventory.AddManualDevice(context.Background(), tx, inventory.ManualDevice{Name: "switch", Type: "switch"}, it.T0.Add(13*time.Minute))
+			return err
+		})
+		devices := scalarQ(t, h, `SELECT count(*) FROM devices WHERE status != 'merged_away'`)
+		c := maintain(t, h, f)
+		if c.Devices != devices || c.Manual != 1 {
+			t.Errorf("%s: counts = %+v, want devices %d (manual 1)", name, c, devices)
+		}
+		if n := rows(t, h, "user_manual_devices"); n != 0 {
+			t.Errorf("%s: %d manual device facts left", name, n)
+		}
+		assertRebuildInvariant(t, h)
+		if n := rows(t, h, "devices"); n != 0 {
+			t.Errorf("%s: rebuild brought back %d devices", name, n)
+		}
+	}
+}
