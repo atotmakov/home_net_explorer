@@ -20,14 +20,11 @@ const markerFile = "hne-collector.router-rejected"
 
 var sha256Line = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
+// routerHarness: the router is set up in the web UI (feature 013: the only way).
 func routerHarness(t *testing.T, mode routertest.Mode) (*harness, *fakeServer, *routertest.Fake) {
 	t.Helper()
-	srv := newFakeServer(t)
-	f := routertest.New(t, "root", routerPassword)
+	h, srv, f := serverRouterHarness(t)
 	f.SetMode(mode)
-	h := newHarness(t, srv.srv.URL)
-	h.routerRT = f.Transport()
-	h.withRouters(t, srv.srv.URL, routerEntry())
 	return h, srv, f
 }
 
@@ -65,17 +62,11 @@ func TestRejectedLoginIsNotRetried(t *testing.T) {
 			t.Errorf("mode %d: sources = %+v, want skipped_after_rejection", mode, run.Sources)
 		}
 
-		// Editing the router config changes its hash: the next scan tries again.
-		f.SetMode(routertest.OK)
-		e := routerEntry()
-		e["subnet"] = "192.168.0.0/24"
-		h.withRouters(t, srv.srv.URL, e)
+		// A new login saved in the web UI changes the hash: the next scan tries again.
+		srv.logins[1] = contract.RouterLogin{Username: "root", Password: routerPassword + "-new"}
 		h.run("scan", "--once")
 		if f.Logins() != 2 {
-			t.Errorf("mode %d: logins after a config change = %d, want 2", mode, f.Logins())
-		}
-		if run := lastUpload(t, srv); run.Sources[0].Outcome != contract.OutcomeOK {
-			t.Errorf("mode %d: outcome after the fix = %s", mode, run.Sources[0].Outcome)
+			t.Errorf("mode %d: logins after a new login = %d, want 2", mode, f.Logins())
 		}
 	}
 }
@@ -117,7 +108,7 @@ func TestCheckClearsRejectionAndTriesOnce(t *testing.T) {
 	for _, want := range []string{
 		"192.168.0.0/24     router huawei-hg8145v5 at 192.168.0.1",
 		"Routers:",
-		"huawei-hg8145v5 at 192.168.0.1 (login from config): OK, 13 online / 16 offline devices listed",
+		"huawei-hg8145v5 at 192.168.0.1 (login from server): OK, 13 online / 16 offline devices listed",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("check output lacks %q:\n%s", want, out)
@@ -130,7 +121,7 @@ func TestCheckRouterResults(t *testing.T) {
 		mode routertest.Mode
 		want string
 	}{
-		{routertest.WrongPassword, "login rejected (router skipped until its config changes or you run check)"},
+		{routertest.WrongPassword, "login rejected (router skipped until its login changes in the web UI or you run check)"},
 		{routertest.Locked, "locked by the router"},
 		{routertest.SessionBusy, "busy (someone is logged into the router)"},
 		{routertest.GarbledList, "page not understood (firmware?)"},
@@ -140,7 +131,7 @@ func TestCheckRouterResults(t *testing.T) {
 		if code := h.run("check"); code != 0 {
 			t.Errorf("mode %d: check = %d (a router failure never changes the exit code)", tc.mode, code)
 		}
-		if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1 (login from config): "+tc.want) {
+		if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1 (login from server): "+tc.want) {
 			t.Errorf("mode %d: check output lacks %q:\n%s", tc.mode, tc.want, h.stderr.String())
 		}
 	}
@@ -152,7 +143,7 @@ func TestCheckRouterResults(t *testing.T) {
 	h, _, _ = routerHarness(t, routertest.OK)
 	h.routerRT = routertest.Redirect(closedURL(t))
 	h.run("check")
-	if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1 (login from config): unreachable") {
+	if !strings.Contains(h.stderr.String(), "huawei-hg8145v5 at 192.168.0.1 (login from server): unreachable") {
 		t.Errorf("unreachable router:\n%s", h.stderr.String())
 	}
 }

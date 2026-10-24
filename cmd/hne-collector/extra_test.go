@@ -11,14 +11,10 @@ import (
 
 // Feature 002, US3: extra_subnets in hne-collector.json and HNE_EXTRA_SUBNETS (FR-015 – FR-017).
 
-func (h *harness) withExtras(t *testing.T, serverURL string, extras []string, routers ...map[string]any) {
+func (h *harness) withExtras(t *testing.T, serverURL string, extras []string) {
 	t.Helper()
-	c := map[string]any{"server_url": serverURL, "name": "desktop", "token": "tok", "subnets": []string{},
-		"interval_seconds": 900, "extra_subnets": extras}
-	if len(routers) > 0 {
-		c["routers"] = routers
-	}
-	writeConfig(t, h.dir, c)
+	writeConfig(t, h.dir, map[string]any{"server_url": serverURL, "name": "desktop", "token": "tok", "subnets": []string{},
+		"interval_seconds": 900, "extra_subnets": extras})
 }
 
 func dryRunSubnets(t *testing.T, h *harness) map[string]string {
@@ -80,7 +76,9 @@ func TestCheckListsExtraSubnets(t *testing.T) {
 
 	f := routertest.New(t, "root", routerPassword)
 	h.routerRT = f.Transport()
-	h.withExtras(t, srv.srv.URL, []string{"192.168.0.0/24"}, routerEntry())
+	srv.routers = []contract.RouterRef{uiRouter}
+	srv.logins[1] = contract.RouterLogin{Username: "root", Password: routerPassword}
+	h.withExtras(t, srv.srv.URL, []string{"192.168.0.0/24"})
 	if code := h.run("check"); code != 0 {
 		t.Fatalf("check = %d\n%s", code, h.stderr.String())
 	}

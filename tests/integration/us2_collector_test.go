@@ -24,7 +24,6 @@ type collectorConfig struct {
 	Subnets         []string         `yaml:"subnets"`
 	ExtraSubnets    []string         `yaml:"extra_subnets"`
 	IntervalSeconds int              `yaml:"interval_seconds"`
-	Routers         []map[string]any `yaml:"routers"` // feature 003: UI routers, no credentials
 }
 
 var configRe = regexp.MustCompile(`(?s)<pre id="collector-config">(.*?)</pre>`)
@@ -65,7 +64,7 @@ func TestCollectorConfigComments(t *testing.T) {
 		t.Fatal("no config shown")
 	}
 	lines := strings.Split(html.UnescapeString(m[1]), "\n")
-	for _, key := range []string{"server_url", "name", "token", "subnets", "extra_subnets", "interval_seconds", "routers"} {
+	for _, key := range []string{"server_url", "name", "token", "subnets", "extra_subnets", "interval_seconds"} {
 		found := false
 		for i, l := range lines {
 			if strings.HasPrefix(l, key+":") {

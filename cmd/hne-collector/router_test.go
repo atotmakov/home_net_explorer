@@ -11,6 +11,7 @@ import (
 
 const routerPassword = "pw-7Hk2!router-marker"
 
+// routerEntry is a routers entry of an older hne-collector.yaml (features 002, 003).
 func routerEntry() map[string]any {
 	return map[string]any{"model": "huawei-hg8145v5", "url": "http://192.168.0.1", "username": "root", "password": routerPassword}
 }
@@ -34,46 +35,71 @@ func lastUpload(t *testing.T, srv *fakeServer) *contract.CollectionRun {
 	return run
 }
 
-func TestRouterConfigErrors(t *testing.T) {
-	bad := map[string]func(r map[string]any){
-		"unknown model":      func(r map[string]any) { r["model"] = "netgear-r7000" },
-		"public address":     func(r map[string]any) { r["url"] = "http://8.8.8.8" },
-		"hostname":           func(r map[string]any) { r["url"] = "http://router.lan" },
-		"missing username":   func(r map[string]any) { delete(r, "username") },
-		"missing password":   func(r map[string]any) { delete(r, "password") },
-		"non-private subnet": func(r map[string]any) { r["subnet"] = "8.8.8.0/24" },
-		"/31 subnet":         func(r map[string]any) { r["subnet"] = "192.168.0.0/31" },
-	}
-	for label, f := range bad {
-		h := newHarness(t, "http://unused")
-		r := routerEntry()
-		f(r)
-		h.withRouters(t, "http://unused", r)
-		if code := h.run("scan", "--once", "--dry-run"); code != 2 {
-			t.Errorf("%s: exit %d, want 2 (config error)\n%s", label, code, h.stderr.String())
-		}
-		if strings.Contains(h.stderr.String()+h.stdout.String(), routerPassword) {
-			t.Errorf("%s: the config error reveals the router password", label)
-		}
-	}
-	h := newHarness(t, "http://unused")
-	var many []map[string]any
-	for i := 0; i < 9; i++ {
-		many = append(many, routerEntry())
-	}
-	h.withRouters(t, "http://unused", many...)
-	if code := h.run("scan", "--once", "--dry-run"); code != 2 {
-		t.Errorf("9 routers: exit %d, want 2 (at most %d)", code, contract.MaxRouters)
-	}
-}
-
-func TestRouterScanUploadsDevices(t *testing.T) {
+// Feature 013: routers are set up only in the web UI, like access points. A routers section in
+// an older hne-collector.yaml still loads, is never used (not even its login), and the
+// collector says so.
+func TestConfigRoutersIgnored(t *testing.T) {
 	srv := newFakeServer(t)
 	f := routertest.New(t, "root", routerPassword)
 	h := newHarness(t, srv.srv.URL)
 	h.routerRT = f.Transport()
+	bad := routerEntry()
+	bad["url"] = "http://8.8.8.8" // once a config error; now just ignored
+	var many []map[string]any
+	for i := 0; i < 9; i++ {
+		many = append(many, routerEntry())
+	}
+	for label, entries := range map[string][]map[string]any{
+		"with a login":    {routerEntry()},
+		"without a login": {{"model": "huawei-hg8145v5", "url": "http://192.168.0.1"}},
+		"invalid entry":   {bad},
+		"9 entries":       many,
+	} {
+		h.withRouters(t, srv.srv.URL, entries...)
+		if code := h.run("scan", "--once"); code != 0 {
+			t.Fatalf("%s: scan = %d\n%s", label, code, h.stderr.String())
+		}
+		out := h.stderr.String() + h.stdout.String()
+		if !strings.Contains(out, "the routers section of hne-collector.yaml is no longer used") {
+			t.Errorf("%s: no warning about the routers section:\n%s", label, out)
+		}
+		if strings.Contains(out, routerPassword) {
+			t.Errorf("%s: the output shows the router password", label)
+		}
+		if run := lastUpload(t, srv); len(run.Sources) != 0 {
+			t.Errorf("%s: sources = %+v, want none (no router set up in the web UI)", label, run.Sources)
+		}
+	}
+	if len(f.Requests()) != 0 {
+		t.Errorf("the router was contacted %d times from the config file", len(f.Requests()))
+	}
 	h.withRouters(t, srv.srv.URL, routerEntry())
+	h.run("scan", "--once")
+	if !strings.Contains(h.stderr.String(), "enter it on the router's device page") {
+		t.Errorf("no hint that the file's router login is ignored:\n%s", h.stderr.String())
+	}
+	h.withRouters(t, srv.srv.URL)
+	h.run("scan", "--once")
+	if strings.Contains(h.stderr.String(), "no longer used") {
+		t.Errorf("an empty routers section still warns:\n%s", h.stderr.String())
+	}
 
+	// The same router set up in the web UI is read with the server's login, not the file's.
+	srv.routers = []contract.RouterRef{uiRouter}
+	srv.logins[1] = contract.RouterLogin{Username: "root", Password: routerPassword}
+	h.withRouters(t, srv.srv.URL, map[string]any{"model": "huawei-hg8145v5", "url": "http://192.168.0.1",
+		"username": "root", "password": "file-password"})
+	h.run("scan", "--once")
+	if c := f.Credentials(); len(c) != 1 || c[0] != "root:"+routerPassword {
+		t.Errorf("router saw %v, want the server's login only", c)
+	}
+	if srv.loginRequests != 1 {
+		t.Errorf("login fetched %d times, want 1", srv.loginRequests)
+	}
+}
+
+func TestRouterScanUploadsDevices(t *testing.T) {
+	h, srv, f := serverRouterHarness(t)
 	if code := h.run("scan", "--once"); code != 0 {
 		t.Fatalf("scan --once = %d\n%s", code, h.stderr.String())
 	}
@@ -117,10 +143,7 @@ func TestRouterScanUploadsDevices(t *testing.T) {
 }
 
 func TestRouterDryRun(t *testing.T) {
-	f := routertest.New(t, "root", routerPassword)
-	h := newHarness(t, "http://unused")
-	h.routerRT = f.Transport()
-	h.withRouters(t, "http://unused", routerEntry())
+	h, srv, _ := serverRouterHarness(t)
 	if code := h.run("scan", "--once", "--dry-run"); code != 0 {
 		t.Fatalf("dry run = %d\n%s", code, h.stderr.String())
 	}
@@ -133,5 +156,8 @@ func TestRouterDryRun(t *testing.T) {
 	}
 	if !strings.Contains(h.stdout.String(), `"router_table"`) {
 		t.Error("dry run lacks router_table data")
+	}
+	if srv.uploads != 0 {
+		t.Errorf("dry run uploaded %d runs", srv.uploads)
 	}
 }

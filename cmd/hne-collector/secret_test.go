@@ -15,8 +15,9 @@ import (
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
 
-// SC-004 / FR-006: the router username and password never appear in stdout, stderr, the log
-// files, the spool (including rejected runs), the rejection marker or any upload.
+// SC-004 / FR-006: a router username and password left in an older hne-collector.yaml are
+// never used (feature 013) and never appear in stdout, stderr, the log files, the spool
+// (including rejected runs) or any upload.
 func TestRouterCredentialsNeverLeak(t *testing.T) {
 	stamp := time.Now().UnixNano()
 	user := fmt.Sprintf("user-%d", stamp)
@@ -47,13 +48,6 @@ func TestRouterCredentialsNeverLeak(t *testing.T) {
 	step("scan", "--once")
 	srv.uploadStatus = http.StatusCreated
 
-	f.SetMode(routertest.WrongPassword) // writes the rejection marker
-	step("scan", "--once")
-	f.SetMode(routertest.OK)
-	e := entry()
-	e["subnet"] = "192.168.0.0/24"
-	h.withRouters(t, srv.srv.URL, e)
-
 	// One iteration of `run` (it logs to hne-collector.log).
 	ctx, cancel := context.WithCancel(context.Background())
 	srv.onUpload = cancel
@@ -69,14 +63,17 @@ func TestRouterCredentialsNeverLeak(t *testing.T) {
 	h.ctx = nil
 	srv.onUpload = nil
 
-	// A config error must not echo the entry either.
+	// An entry that was once a config error is ignored without echoing it either.
 	bad := entry()
 	bad["url"] = "http://8.8.8.8"
 	h.withRouters(t, srv.srv.URL, bad)
 	step("check")
 	h.withRouters(t, srv.srv.URL, entry())
 
-	if len(srv.bodies) < 4 {
+	if len(f.Requests()) != 0 {
+		t.Errorf("the router was contacted with the file's login (%d requests)", len(f.Requests()))
+	}
+	if len(srv.bodies) < 3 {
 		t.Fatalf("only %d uploads recorded", len(srv.bodies))
 	}
 	for i, b := range srv.bodies {
@@ -95,7 +92,7 @@ func TestRouterCredentialsNeverLeak(t *testing.T) {
 		fmt.Fprintf(&out, "file %s: %s\n", path, b)
 		return nil
 	})
-	for _, want := range []string{"hne-collector.log", markerFile, "rejected"} {
+	for _, want := range []string{"hne-collector.log", "rejected", "no longer used"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("expected output %q was not produced, so the search is incomplete", want)
 		}

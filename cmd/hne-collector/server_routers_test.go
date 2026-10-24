@@ -99,35 +99,6 @@ func TestServerRouterLoginNotFound(t *testing.T) {
 	}
 }
 
-func TestServerManagedConfigEntries(t *testing.T) {
-	h, srv, _ := serverRouterHarness(t)
-	h.withRouters(t, srv.srv.URL, map[string]any{"model": "huawei-hg8145v5", "url": "http://192.168.0.1"})
-	if code := h.run("scan", "--once", "--dry-run"); code != 0 {
-		t.Errorf("an entry without credentials must be accepted: exit %d\n%s", code, h.stderr.String())
-	}
-	h.withRouters(t, srv.srv.URL, map[string]any{"model": "huawei-hg8145v5", "url": "http://192.168.0.1", "username": "root"})
-	if code := h.run("scan", "--once", "--dry-run"); code != 2 {
-		t.Errorf("a username without a password: exit %d, want 2", code)
-	}
-}
-
-// A config entry with its own credentials wins over the UI router at the same address (FR-013).
-func TestConfigCredentialsWin(t *testing.T) {
-	h, srv, f := serverRouterHarness(t)
-	srv.logins[1] = contract.RouterLogin{Username: "root", Password: "server-password"}
-	h.withRouters(t, srv.srv.URL, routerEntry()) // root / routerPassword, at 192.168.0.1
-	h.run("scan", "--once")
-	if srv.loginRequests != 0 {
-		t.Errorf("login fetched %d times although the config has credentials", srv.loginRequests)
-	}
-	if c := f.Credentials(); len(c) != 1 || c[0] != "root:"+routerPassword {
-		t.Errorf("router saw %v, want the config's credentials", c)
-	}
-	if run := lastUpload(t, srv); len(run.Sources) != 1 || run.Sources[0].Outcome != contract.OutcomeOK {
-		t.Errorf("sources = %+v", run.Sources)
-	}
-}
-
 func TestCheckShowsLoginSource(t *testing.T) {
 	h, srv, _ := serverRouterHarness(t)
 	if code := h.run("check"); code != 0 {
@@ -137,13 +108,6 @@ func TestCheckShowsLoginSource(t *testing.T) {
 		t.Errorf("check lacks %q:\n%s", want, h.stderr.String())
 	}
 
-	h.withRouters(t, srv.srv.URL, routerEntry())
-	h.run("check")
-	if want := "huawei-hg8145v5 at 192.168.0.1 (login from config): OK"; !strings.Contains(h.stderr.String(), want) {
-		t.Errorf("check lacks %q:\n%s", want, h.stderr.String())
-	}
-
-	h.withRouters(t, srv.srv.URL)
 	delete(srv.logins, 1)
 	h.run("check")
 	if want := "(login from server): login unavailable from the server"; !strings.Contains(h.stderr.String(), want) {
