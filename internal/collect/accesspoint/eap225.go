@@ -85,7 +85,11 @@ func (e *eap225) Read(ctx context.Context) Result {
 		return Result{Outcome: contract.OutcomeUnreachable}
 	}
 	if outcome := e.login(ctx, client); outcome != "" {
-		return Result{Outcome: outcome}
+		res := Result{Outcome: outcome}
+		if outcome == contract.OutcomePageNotUnderstood {
+			res.Detail = "the login state (data/login.json) was not understood"
+		}
+		return res
 	}
 	defer e.logout(client)
 
@@ -94,16 +98,63 @@ func (e *eap225) Read(ctx context.Context) Result {
 		if errors.Is(err, errNotFound) {
 			continue // the other firmware generation
 		}
-		if err != nil {
+		if errors.Is(err, errUnreachable) {
 			return failed(err)
 		}
-		clients, keys, err := parseClients(body)
-		if err != nil {
-			return failed(err)
+		clients, keys, perr := parseClients(body)
+		if err != nil || perr != nil {
+			// The web page itself asks with POST operation=load (js/su/data/store.js); the
+			// older firmware answers only that (gate G1).
+			pbody, err2 := e.do(ctx, client, http.MethodPost, p.path, url.Values{"operation": {"load"}})
+			if errors.Is(err2, errUnreachable) {
+				return failed(err2)
+			}
+			if err2 == nil {
+				body, err = pbody, nil
+				clients, keys, perr = parseClients(body)
+			}
+		}
+		if err != nil || perr != nil {
+			res := failed(errNotListed)
+			res.Detail = p.name + " answered " + describe(body, err)
+			return res
 		}
 		return Result{Outcome: contract.OutcomeOK, Clients: clients, Path: p.name, Keys: keys}
 	}
-	return Result{Outcome: contract.OutcomePageNotUnderstood}
+	return Result{Outcome: contract.OutcomePageNotUnderstood, Detail: "no client list endpoint (both answered 404)"}
+}
+
+// describe says what an answer looked like without quoting it: its size if it isn't JSON, else
+// the top-level key names, the success and timeout flags, and whether a client list is there.
+func describe(body []byte, err error) string {
+	var se statusError
+	if errors.As(err, &se) {
+		return "HTTP " + strconv.Itoa(int(se))
+	}
+	if err != nil {
+		return "an answer that is too large"
+	}
+	var ans map[string]json.RawMessage
+	if json.Unmarshal(body, &ans) != nil {
+		return "not JSON (" + strconv.Itoa(len(body)) + " bytes)"
+	}
+	keys := make([]string, 0, len(ans))
+	for k := range ans {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	flag := func(name string) string {
+		var b bool
+		if raw := field(ans, name); raw != nil && json.Unmarshal(raw, &b) == nil {
+			return strconv.FormatBool(b)
+		}
+		return "missing"
+	}
+	s := "JSON with keys " + strings.Join(keys, ", ") + "; success=" + flag("success") + ", timeout=" + flag("timeout")
+	if field(ans, "data") == nil && field(ans, "clients") == nil {
+		s += "; no client list"
+	}
+	return s
 }
 
 func failed(err error) Result {
@@ -198,11 +249,18 @@ func (e *eap225) do(ctx context.Context, c *http.Client, method, path string, fo
 	switch {
 	case res.StatusCode == http.StatusNotFound:
 		return nil, errNotFound
-	case res.StatusCode != http.StatusOK || len(b) > maxBody:
+	case res.StatusCode != http.StatusOK:
+		return nil, statusError(res.StatusCode)
+	case len(b) > maxBody:
 		return nil, errNotListed
 	}
 	return b, nil
 }
+
+// statusError is an answer other than 200 or 404.
+type statusError int
+
+func (e statusError) Error() string { return "HTTP " + strconv.Itoa(int(e)) }
 
 // parseClients reads a client list answer: {"success":true,"timeout":false,"data":[{…}]}. Keys
 // are matched case-insensitively (research R2); keys returns the first entry's key names.
