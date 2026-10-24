@@ -18,12 +18,12 @@ import (
 )
 
 type collectorConfig struct {
-	ServerURL       string           `yaml:"server_url"`
-	Name            string           `yaml:"name"`
-	Token           string           `yaml:"token"`
-	Subnets         []string         `yaml:"subnets"`
-	ExtraSubnets    []string         `yaml:"extra_subnets"`
-	IntervalSeconds int              `yaml:"interval_seconds"`
+	ServerURL       string   `yaml:"server_url"`
+	Name            string   `yaml:"name"`
+	Token           string   `yaml:"token"`
+	Subnets         []string `yaml:"subnets"`
+	ExtraSubnets    []string `yaml:"extra_subnets"`
+	IntervalSeconds int      `yaml:"interval_seconds"`
 }
 
 var configRe = regexp.MustCompile(`(?s)<pre id="collector-config">(.*?)</pre>`)
