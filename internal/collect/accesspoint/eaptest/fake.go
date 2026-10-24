@@ -78,7 +78,7 @@ type AP struct {
 	mu        sync.Mutex
 	managed   bool
 	locked    bool
-	postOnly  bool // the list answers only POST operation=load, as the web page asks
+	postOnly  bool   // the list answers only POST operation=load, as the web page asks
 	resetOn   string // "METHOD /path": that request gets its connection closed without an answer
 	clients   []Entry
 	list      []byte // raw list body override
