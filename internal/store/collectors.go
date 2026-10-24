@@ -178,6 +178,7 @@ func (s *Store) ScanProblems(ctx context.Context) ([]ScanProblem, error) {
 
 // RouterStatus is the outcome of one router read.
 type RouterStatus struct {
+	Type    string // contract.SourceTypeRouter or SourceTypeAccessPoint (feature 012)
 	Model   string
 	Address string
 	Outcome string
@@ -228,7 +229,7 @@ func (s *Store) CollectorOverviews(ctx context.Context) ([]CollectorOverview, er
 
 // latestRouters returns the router reads of the collector's latest run.
 func (s *Store) latestRouters(ctx context.Context, collectorID int64) ([]RouterStatus, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT model, address, outcome, online, offline FROM run_sources WHERE collection_id =
+	rows, err := s.db.QueryContext(ctx, `SELECT type, model, address, outcome, online, offline FROM run_sources WHERE collection_id =
 		(SELECT collection_id FROM collection_runs WHERE collector_id = ? ORDER BY rowid DESC LIMIT 1) ORDER BY idx`, collectorID)
 	if err != nil {
 		return nil, err
@@ -237,7 +238,7 @@ func (s *Store) latestRouters(ctx context.Context, collectorID int64) ([]RouterS
 	var out []RouterStatus
 	for rows.Next() {
 		var r RouterStatus
-		if err := rows.Scan(&r.Model, &r.Address, &r.Outcome, &r.Online, &r.Offline); err != nil {
+		if err := rows.Scan(&r.Type, &r.Model, &r.Address, &r.Outcome, &r.Online, &r.Offline); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

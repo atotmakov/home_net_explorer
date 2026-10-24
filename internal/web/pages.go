@@ -146,7 +146,7 @@ type deviceData struct {
 	Device store.DeviceRow
 	Types  []string
 	Saved  bool
-	Router *routerData        // Router card (feature 003); nil unless the type is "router"
+	Router *routerData        // Router or Access point card (features 003, 012); nil for other types
 	Links  []store.LinkOption // "Connected via" choices (feature 010)
 }
 
@@ -223,8 +223,9 @@ func (s *Server) handleDeviceAttrs(w http.ResponseWriter, r *http.Request) {
 				if err := inventory.SetDeviceAttr(r.Context(), tx, d.IdentityKey, c[0], c[1], at); err != nil {
 					return err
 				}
-				// A device that is no longer a router loses its router settings and password.
-				if c[0] == "type" && c[1] != "router" {
+				// A device whose type changes loses its router or access point settings and
+				// password (feature 012: the card, and so the settings, follow the type).
+				if c[0] == "type" {
 					if err := store.DeleteRouter(r.Context(), tx, d.IdentityKey); err != nil {
 						return err
 					}

@@ -19,7 +19,8 @@ const (
 	MaxRunWindow          = time.Hour
 	MaxFutureSkew         = 5 * time.Minute
 	ClockSkewFlagMs       = 300000
-	MaxSources            = 8  // router sources per run (feature 002)
+	MaxSources            = 16 // router and access point sources per run (features 002, 012)
+	MaxRouters            = 8  // router entries in a collector config (feature 002)
 	MaxViaLen             = 32 // Observation.via
 	MaxModelLen           = 64 // RunSource.model
 )
@@ -42,6 +43,8 @@ const (
 	MethodRouterTable     = "router_table" // subnet covered by a router's device list
 	ObsRouterTable        = "router_table" // device listed as online by a router
 	SourceTypeRouter      = "router"
+	ObsAPClient           = "ap_client"    // device listed by an access point as connected (feature 012)
+	SourceTypeAccessPoint = "access_point" // an access point's client list (feature 012)
 	StatusStored          = "stored"
 	StatusDuplicate       = "duplicate"
 	StatusDiscarded       = "discarded" // started before the owner's data reset; not stored (feature 004)
@@ -61,13 +64,21 @@ const (
 	OutcomePageNotUnderstood     = "page_not_understood"
 	OutcomeSkippedAfterRejection = "skipped_after_rejection"
 	OutcomeLoginUnavailable      = "login_unavailable" // the login could not be fetched from the server (feature 003)
+	OutcomeControllerManaged     = "controller_managed" // the access point is run by a central controller (feature 012)
+)
+
+// Supported models (research R4 of feature 012): the store and web UI tell routers and access
+// points apart by model, without importing the collector packages.
+var (
+	RouterModels      = []string{"huawei-hg8145v5"}
+	AccessPointModels = []string{"tplink-eap225"}
 )
 
 // ValidOutcome reports whether s is a known router read outcome.
 func ValidOutcome(s string) bool {
 	switch s {
 	case OutcomeOK, OutcomeUnreachable, OutcomeLoginRejected, OutcomeLocked, OutcomeSessionBusy,
-		OutcomePageNotUnderstood, OutcomeSkippedAfterRejection, OutcomeLoginUnavailable:
+		OutcomePageNotUnderstood, OutcomeSkippedAfterRejection, OutcomeLoginUnavailable, OutcomeControllerManaged:
 		return true
 	}
 	return false
@@ -88,8 +99,10 @@ type CollectionRun struct {
 	Sources         []RunSource   `json:"sources,omitempty"`
 }
 
-// RunSource is the outcome of one router read in a run (feature 002). It deliberately has no
-// credential fields: router logins never leave the collector (FR-006).
+// RunSource is the outcome of one router or access point read in a run (features 002, 012). It
+// deliberately has no credential fields: logins never leave the collector (FR-006). For an access
+// point, Online counts the clients sent as ap_client observations and Offline the clients left
+// out (no IP, bad MAC, or outside the run's scanned subnets).
 type RunSource struct {
 	Type    string `json:"type"`
 	Model   string `json:"model"`
@@ -146,7 +159,8 @@ type Observation struct {
 	Hostname       string    `json:"hostname,omitempty"`
 	HostnameSource string    `json:"hostname_source,omitempty"`
 	Method         string    `json:"method"`
-	Via            string    `json:"via,omitempty"` // router port or Wi-Fi interface (router_table only)
+	Via            string    `json:"via,omitempty"`          // router port or Wi-Fi interface (router_table); "<SSID> (<band>)" (ap_client)
+	AccessPoint    string    `json:"access_point,omitempty"` // address of the access point that listed the client (ap_client only, feature 012)
 }
 
 // UploadResult is the server's answer to an upload.
@@ -169,7 +183,8 @@ type PingResponse struct {
 	ServerTime              time.Time   `json:"server_time"`
 	SupportedSchemaVersions []int       `json:"supported_schema_versions"`
 	IgnoredSubnets          []string    `json:"ignored_subnets"`
-	Routers                 []RouterRef `json:"routers,omitempty"` // routers configured in the web UI (feature 003)
+	Routers                 []RouterRef `json:"routers,omitempty"`       // routers configured in the web UI (feature 003)
+	AccessPoints            []RouterRef `json:"access_points,omitempty"` // access points configured in the web UI (feature 012)
 }
 
 // RouterRef is a router configured in the web UI, as listed to collectors. It never carries

@@ -69,7 +69,7 @@ username shown, password only "set"; other types → no card.
 - [ ] T007 [US1] Implement in `internal/store/routers.go`: `ListAccessPoints(ctx)` (shared query
   helper with `ListRouters`, filtered by model set) and model filtering in `ListRouters`
   (model sets from `contract.RouterModels` / `contract.AccessPointModels`). Make T006 pass
-- [ ] T008 [P] [US1] Tests in `internal/web/access_point_test.go`: `GET /devices/{id}` of a device
+- [ ] T008 [P] [US1] Tests in `tests/integration/us_ap_ui_test.go` (where the router card's tests live): `GET /devices/{id}` of a device
   with type `access_point` shows an "Access point" card with the model select (`tplink-eap225`),
   username, password field and the device's current address; no card for `router` or untyped
   devices (and no Router card for `access_point`); `POST /devices/{id}/access-point` saves (303 to
@@ -95,9 +95,8 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   `Username`/`Password` (checks `password` = upper-case hex MD5), `Locked`, `Clients []Entry`,
   raw-body override for garbage pages; it records every request (path, whether credentials were
   sent) so tests can count login attempts; `JSESSIONID` cookie for `New`, `COOKIE=` for `Old`.
-  Fixture JSON in `internal/collect/accesspoint/testdata/` (`client_user_new.json`,
-  `client_monitor_old.json`) with keys `MAC` (`00-00-5E-00-53-13` form), `IP`, `SSID`, `Radio`,
-  `hostname` (research R2)
+  Client entries built by `eaptest.Client` with keys `MAC` (`00-00-5E-00-53-13` form), `IP`,
+  `SSID`, `Radio`, `hostname` (research R2); `Transport()` routes private addresses to the fake
 - [ ] T011 [P] [US2] Tests in `internal/collect/accesspoint/eap225_test.go` (contracts/
   access-point-eap225.md): both firmwares read OK with MACs normalized to `00:00:5e:00:53:13`,
   `Radio 0/1` → `2.4 GHz`/`5 GHz`, hostname kept, `Result.Path` names the endpoint, `Result.Keys`
@@ -135,7 +134,7 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   access point read of 192.168.0.0/24 does not make the AP a gateway; the router stays the
   gateway) and restrict the gateway query in `internal/store/topology.go` (`run_sources … WHERE
   outcome = 'ok'`) to `type = 'router'`. In PR 1, so the first live AP read cannot change the map
-- [ ] T017 [P] [US2] Tests: in `internal/web/api_test.go` (or the existing ping test file) ping
+- [ ] T017 [P] [US2] Tests: in `tests/integration/us_ap_ui_test.go` ping
   answers `access_points` with the configured APs and no credentials, and `routers` without them;
   in `cmd/hne-collector/accesspoints_test.go` the collector builds AP sources from the ping list,
   caches it in `hne-collector.access-points` (no credentials in the file) and uses the cache when

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
+	"github.com/atotmakov/home_net_explorer/internal/collect/accesspoint"
 	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
@@ -50,6 +51,11 @@ type Engine struct {
 	// before probing, bounded by RouterTimeout (default router.DefaultTimeout).
 	Routers       []router.Source
 	RouterTimeout time.Duration
+	// AccessPoints are the configured access points (feature 012). Each is read once per scan,
+	// in parallel with the routers and the probes, bounded by APTimeout (default
+	// accesspoint.DefaultTimeout).
+	AccessPoints []accesspoint.Source
+	APTimeout    time.Duration
 }
 
 type target struct {
@@ -102,6 +108,7 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 	}
 
 	targets := planTargets(v, opts, e.Routers)
+	apReads := e.readAccessPoints(ctx)
 	reads := e.readRouters(ctx, targets)
 	var arpScanned []netip.Prefix
 	var routerObs []contract.Observation // recorded last: one observation per IP, the router's wins
@@ -157,6 +164,7 @@ func (e *Engine) Scan(ctx context.Context, opts ScanOptions) (*contract.Collecti
 		o.ObservedAt = now
 		record(o)
 	}
+	run.Sources = append(run.Sources, e.addAccessPointClients(apReads(), run.Subnets, now, found)...)
 
 	obs := make([]contract.Observation, 0, len(found))
 	for _, o := range found {
@@ -203,6 +211,84 @@ func (e *Engine) readRouters(ctx context.Context, targets []target) map[int]rout
 	}
 	wg.Wait()
 	return out
+}
+
+// readAccessPoints starts reading every access point and returns a function that waits for the
+// results, sorted by access point address (research R7: the higher address wins a client listed
+// by two access points).
+func (e *Engine) readAccessPoints(ctx context.Context) func() []apRead {
+	timeout := e.APTimeout
+	if timeout <= 0 {
+		timeout = accesspoint.DefaultTimeout
+	}
+	out := make([]apRead, len(e.AccessPoints))
+	var wg sync.WaitGroup
+	for i, src := range e.AccessPoints {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			res := src.Read(rctx)
+			if res.Outcome != contract.OutcomeOK {
+				res = accesspoint.Result{Outcome: res.Outcome}
+			}
+			out[i] = apRead{src: src, res: res}
+		}()
+	}
+	return func() []apRead {
+		wg.Wait()
+		slices.SortStableFunc(out, func(a, b apRead) int { return a.src.Address().Compare(b.src.Address()) })
+		return out
+	}
+}
+
+type apRead struct {
+	src accesspoint.Source
+	res accesspoint.Result
+}
+
+// addAccessPointClients turns the clients of successful reads into ap_client observations
+// (research R6, R7). A client needs a valid MAC and an IP inside a non-skipped subnet of the
+// run; its observation replaces whatever else was recorded for that IP, keeping a hostname the
+// AP doesn't know. It returns one RunSource per access point.
+func (e *Engine) addAccessPointClients(reads []apRead, subnets []contract.SubnetScan, now time.Time, found map[netip.Addr]contract.Observation) []contract.RunSource {
+	var scanned []netip.Prefix
+	for _, s := range subnets {
+		if s.Method != contract.MethodSkipped {
+			scanned = append(scanned, netip.MustParsePrefix(s.CIDR))
+		}
+	}
+	inScanned := func(ip netip.Addr) bool {
+		return slices.ContainsFunc(scanned, func(p netip.Prefix) bool { return p.Contains(ip) })
+	}
+	byMAC := map[string]netip.Addr{} // a client listed by two access points keeps the later one
+	var sources []contract.RunSource
+	for _, rd := range reads {
+		src := contract.RunSource{Type: contract.SourceTypeAccessPoint, Model: rd.src.Model(),
+			Address: rd.src.Address().String(), Subnet: rd.src.Prefix().String(), Outcome: rd.res.Outcome}
+		for _, c := range rd.res.Clients {
+			if c.MAC == "" || !c.IP.Is4() || !inScanned(c.IP) {
+				src.Offline++
+				continue
+			}
+			src.Online++
+			if prev, ok := byMAC[c.MAC]; ok && prev != c.IP {
+				delete(found, prev)
+			}
+			byMAC[c.MAC] = c.IP
+			o := contract.Observation{ObservedAt: now, IP: c.IP.String(), MAC: c.MAC, Method: contract.ObsAPClient,
+				Via: accesspoint.Via(c), AccessPoint: src.Address}
+			if c.Hostname != "" {
+				o.Hostname, o.HostnameSource = c.Hostname, contract.HostnameSourceRouter
+			} else if old, ok := found[c.IP]; ok && old.MAC == c.MAC {
+				o.Hostname, o.HostnameSource = old.Hostname, old.HostnameSource
+			}
+			found[c.IP] = o
+		}
+		sources = append(sources, src)
+	}
+	return sources
 }
 
 // Faked answers (feature 005): a routed subnet where at least SaturationMinProbed addresses were

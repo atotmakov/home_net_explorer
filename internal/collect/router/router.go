@@ -149,7 +149,7 @@ type Source interface {
 }
 
 // Models lists the supported router models.
-func Models() []string { return []string{ModelHG8145V5} }
+func Models() []string { return contract.RouterModels }
 
 // New validates cfg and returns its Source. rt carries the router's HTTP traffic (nil: a
 // direct connection that ignores proxy settings, since the router is on the LAN).

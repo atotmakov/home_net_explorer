@@ -113,7 +113,7 @@ func validateSources(sources []RunSource) error {
 		return invalid("no more than %d sources per run", MaxSources)
 	}
 	for i, s := range sources {
-		if s.Type != SourceTypeRouter {
+		if s.Type != SourceTypeRouter && s.Type != SourceTypeAccessPoint {
 			return invalid("sources[%d]: unknown type %q", i, s.Type)
 		}
 		if s.Model == "" || len(s.Model) > MaxModelLen {
@@ -176,18 +176,28 @@ func validateObservation(i int, o Observation, run *CollectionRun, scanned []net
 		return invalid("observations[%d]: ip %s must be inside a non-skipped subnet of the same run", i, o.IP)
 	}
 	switch o.Method {
-	case ObsARP, ObsNeighborCache, ObsICMP, ObsTCP, ObsRouterTable:
+	case ObsARP, ObsNeighborCache, ObsICMP, ObsTCP, ObsRouterTable, ObsAPClient:
 	default:
 		return invalid("observations[%d]: unknown method %q", i, o.Method)
 	}
 	if o.MAC != "" && !macRe.MatchString(o.MAC) {
 		return invalid("observations[%d]: mac %q must be lower-case aa:bb:cc:dd:ee:ff", i, o.MAC)
 	}
-	if (o.Method == ObsARP || o.Method == ObsRouterTable) && o.MAC == "" {
+	if (o.Method == ObsARP || o.Method == ObsRouterTable || o.Method == ObsAPClient) && o.MAC == "" {
 		return invalid("observations[%d]: MAC is required when method is %s", i, o.Method)
 	}
-	if o.Via != "" && o.Method != ObsRouterTable {
-		return invalid("observations[%d]: via is only allowed when method is router_table", i)
+	if o.Via != "" && o.Method != ObsRouterTable && o.Method != ObsAPClient {
+		return invalid("observations[%d]: via is only allowed when method is router_table or ap_client", i)
+	}
+	if o.Method == ObsAPClient {
+		if o.Via == "" {
+			return invalid("observations[%d]: via is required when method is ap_client", i)
+		}
+		if a, err := netip.ParseAddr(o.AccessPoint); err != nil || !IsPrivateAddr(a) {
+			return invalid("observations[%d]: access_point %q must be a private IPv4 address", i, o.AccessPoint)
+		}
+	} else if o.AccessPoint != "" {
+		return invalid("observations[%d]: access_point is only allowed when method is ap_client", i)
 	}
 	if len(o.Via) > MaxViaLen {
 		return invalid("observations[%d]: via longer than %d characters", i, MaxViaLen)

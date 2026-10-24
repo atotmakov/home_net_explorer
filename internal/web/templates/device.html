@@ -43,15 +43,15 @@
   </form>
 </section>
 {{with $.Data.Router}}
-<section class="card" id="router">
-  <h2>Router</h2>
+<section class="card" id="{{.Kind.Anchor}}">
+  <h2>{{.Kind.Title}}</h2>
   {{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}
   {{if .HasAddress}}
   <p>Address <code>{{.Address.IP}}</code> <span class="muted">({{.Address.CIDR}})</span></p>
   {{else}}
-  <p class="warn">No current private address: the router can't be read until the device is seen on a private subnet.</p>
+  <p class="warn">No current private address: the {{.Kind.Noun}} can't be read until the device is seen on a private subnet.</p>
   {{end}}
-  <form method="post" action="/devices/{{$.Data.Device.ID}}/router">
+  <form method="post" action="/devices/{{$.Data.Device.ID}}/{{.Kind.Anchor}}">
     <label>Model
       <select name="model">
         {{range $m := .Models}}<option value="{{$m}}"{{with $.Data.Router.Settings}}{{if eq $m .Model}} selected{{end}}{{end}}>{{$m}}</option>{{end}}
@@ -68,10 +68,10 @@
     <label>Username <input type="text" name="username" maxlength="128" autocomplete="off" value="{{with .Settings}}{{.Username}}{{end}}"></label>
     <label>Password <input type="password" name="password" maxlength="128" autocomplete="new-password"></label>
     {{with .Settings}}{{if .PasswordSet}}<p class="muted">Password: set. Leave the field empty to keep it.</p>{{end}}{{end}}
-    <button type="submit">Save router</button>
+    <button type="submit">Save {{.Kind.Noun}}</button>
   </form>
   {{with .Settings}}
-  <form method="post" action="/devices/{{$.Data.Device.ID}}/router/remove"><button type="submit">Remove router</button></form>
+  <form method="post" action="/devices/{{$.Data.Device.ID}}/{{$.Data.Router.Kind.Anchor}}/remove"><button type="submit">Remove {{$.Data.Router.Kind.Noun}}</button></form>
   {{end}}
   {{with .Reads}}
   <h3>Latest read</h3>

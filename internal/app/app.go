@@ -45,7 +45,9 @@ type Options struct {
 	// RouterTransport carries the built-in collector's router traffic (nil: direct; tests use
 	// a routertest.Fake).
 	RouterTransport http.RoundTripper
-	DownloadsDir    string // collector binaries for /downloads/
+	// AccessPointTransport carries its access point traffic (feature 012), like RouterTransport.
+	AccessPointTransport http.RoundTripper
+	DownloadsDir         string // collector binaries for /downloads/
 	Version         string
 	Commit          string
 }
@@ -103,7 +105,7 @@ func New(ctx context.Context, o Options) (*App, error) {
 		a.Scanner = &Scanner{
 			engine: engine, ingester: a.Ingester, store: st, collectorID: cid,
 			clock: o.Clock, log: o.Log, subnets: o.Subnets, defaultInterval: o.ScanInterval,
-			routerRT: o.RouterTransport,
+			routerRT: o.RouterTransport, apRT: o.AccessPointTransport,
 			trigger:  make(chan struct{}, 1), wake: make(chan struct{}, 1), done: make(chan struct{}),
 		}
 		scanner = a.Scanner

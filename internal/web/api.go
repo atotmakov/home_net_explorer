@@ -122,6 +122,10 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "")
 		return
 	}
+	if resp.AccessPoints, err = s.opts.Store.ListAccessPoints(r.Context()); err != nil { // feature 012, no credentials
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "")
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 

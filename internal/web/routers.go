@@ -8,17 +8,33 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/atotmakov/home_net_explorer/internal/collect/router"
+	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/store"
 )
 
-// Router settings on the device page (feature 003). The stored password is never rendered:
-// the view has no password field, and the form's password input is always empty.
+// Router settings on the device page (feature 003), and access point settings, which follow the
+// same rules and share the settings table (feature 012, research R4). The stored password is
+// never rendered: the view has no password field, and the form's password input is always empty.
 
 const maxRouterField = 128
 
-// routerData is the Router card of the device page.
+// sourceKind is what a settings card configures: a router or an access point.
+type sourceKind struct {
+	Type   string // device type that offers the card
+	Title  string // card heading
+	Noun   string // in messages and buttons
+	Anchor string // card id and URL path segment
+	Models []string
+}
+
+var (
+	routerKind      = sourceKind{Type: "router", Title: "Router", Noun: "router", Anchor: "router", Models: contract.RouterModels}
+	accessPointKind = sourceKind{Type: "access_point", Title: "Access point", Noun: "access point", Anchor: "access-point", Models: contract.AccessPointModels}
+)
+
+// routerData is the Router or Access point card of the device page.
 type routerData struct {
+	Kind       sourceKind
 	Settings   *store.RouterView // nil when not configured
 	Models     []string
 	Addresses  []store.RouterAddress // candidate addresses (current, private, not ignored)
@@ -29,17 +45,23 @@ type routerData struct {
 }
 
 func (s *Server) loadRouterData(r *http.Request, d store.DeviceRow) (*routerData, error) {
-	if d.Type != "router" {
+	var kind sourceKind
+	switch d.Type {
+	case routerKind.Type:
+		kind = routerKind
+	case accessPointKind.Type:
+		kind = accessPointKind
+	default:
 		return nil, nil
 	}
 	ctx := r.Context()
-	rd := &routerData{Models: router.Models()}
+	rd := &routerData{Kind: kind, Models: kind.Models}
 	v, ok, err := s.opts.Store.GetRouterSettings(ctx, d.IdentityKey)
 	if err != nil {
 		return nil, err
 	}
 	preferred := ""
-	if ok {
+	if ok && slices.Contains(kind.Models, v.Model) {
 		rd.Settings, preferred = &v, v.Subnet
 	}
 	if rd.Addresses, err = s.opts.Store.RouterAddresses(ctx, d.IdentityKey); err != nil {
@@ -56,6 +78,15 @@ func (s *Server) loadRouterData(r *http.Request, d store.DeviceRow) (*routerData
 
 // handleRouterSave stores the router settings of a device of type "router".
 func (s *Server) handleRouterSave(w http.ResponseWriter, r *http.Request) {
+	s.saveSource(w, r, routerKind)
+}
+
+// handleAccessPointSave stores the access point settings of a device of type "access_point".
+func (s *Server) handleAccessPointSave(w http.ResponseWriter, r *http.Request) {
+	s.saveSource(w, r, accessPointKind)
+}
+
+func (s *Server) saveSource(w http.ResponseWriter, r *http.Request, kind sourceKind) {
 	d, ok := s.loadDevice(w, r)
 	if !ok {
 		return
@@ -85,10 +116,13 @@ func (s *Server) handleRouterSave(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case rd == nil:
-		fail("Set the device type to router first.")
+		fail("Set the device type to " + kind.Noun + " first.")
 		return
-	case !slices.Contains(router.Models(), settings.Model):
-		fail("Choose one of the supported router models.")
+	case rd.Kind.Type != kind.Type:
+		fail("This device is not a " + kind.Noun + ": change its type first.")
+		return
+	case !slices.Contains(kind.Models, settings.Model):
+		fail("Choose one of the supported " + kind.Noun + " models.")
 		return
 	case settings.Username == "" || len(settings.Username) > maxRouterField:
 		fail("The username must be 1 to 128 characters.")
@@ -97,7 +131,7 @@ func (s *Server) handleRouterSave(w http.ResponseWriter, r *http.Request) {
 		fail("The password must be at most 128 characters.")
 		return
 	case !rd.HasAddress:
-		fail("This device has no current private address, so it can't be used as a router yet.")
+		fail("This device has no current private address, so it can't be used as a " + kind.Noun + " yet.")
 		return
 	case settings.Subnet != "" && !slices.ContainsFunc(rd.Addresses, func(a store.RouterAddress) bool { return a.CIDR == settings.Subnet }):
 		fail("Choose one of the device's current subnets.")
@@ -107,17 +141,18 @@ func (s *Server) handleRouterSave(w http.ResponseWriter, r *http.Request) {
 		return store.SaveRouter(r.Context(), tx, d.IdentityKey, settings, s.opts.Clock.Now())
 	})
 	if errors.Is(err, store.ErrNoPassword) {
-		fail("Enter the router's password.")
+		fail("Enter the " + kind.Noun + "'s password.")
 		return
 	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/devices/"+strconv.FormatInt(d.ID, 10)+"?saved=1#router", http.StatusSeeOther)
+	http.Redirect(w, r, "/devices/"+strconv.FormatInt(d.ID, 10)+"?saved=1#"+kind.Anchor, http.StatusSeeOther)
 }
 
-// handleRouterRemove deletes a device's router settings, including the stored password.
+// handleRouterRemove deletes a device's router or access point settings, including the stored
+// password (one settings row per device, whichever card posted).
 func (s *Server) handleRouterRemove(w http.ResponseWriter, r *http.Request) {
 	d, ok := s.loadDevice(w, r)
 	if !ok {
@@ -129,5 +164,9 @@ func (s *Server) handleRouterRemove(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/devices/"+strconv.FormatInt(d.ID, 10)+"#router", http.StatusSeeOther)
+	anchor := routerKind.Anchor
+	if d.Type == accessPointKind.Type {
+		anchor = accessPointKind.Anchor
+	}
+	http.Redirect(w, r, "/devices/"+strconv.FormatInt(d.ID, 10)+"#"+anchor, http.StatusSeeOther)
 }
