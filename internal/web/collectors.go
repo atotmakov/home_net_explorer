@@ -44,14 +44,8 @@ type collectorConfig struct {
 	Subnets         []string
 	ExtraSubnets    []string
 	IntervalSeconds int
-	// Routers lists the routers configured in the web UI, without credentials (feature 003):
-	// the collector fetches their logins from the server before each read.
-	Routers []configRouter
-}
-
-type configRouter struct {
-	Model string `yaml:"model"`
-	URL   string `yaml:"url"`
+	// No routers: collectors get routers and access points from the server at each scan
+	// (features 012, 013).
 }
 
 // configHelp is the # comment written above each setting of hne-collector.yaml (features 008,
@@ -70,15 +64,10 @@ var configHelp = []struct {
 	{"extra_subnets", []string{
 		"Subnets scanned in addition to the ones above, e.g. [192.168.y.0/24] behind a",
 		"router. Devices there are found by ping/TCP, without MAC addresses."}},
-	{"interval_seconds", []string{`Seconds between scans for "hne-collector run" (900 = 15 minutes).`}},
-	{"routers", []string{
-		"Routers whose device lists are read at each scan, as set up on the server's Routers",
-		"page (their logins stay on the server). A router can also be added here, e.g.",
-		"  - model: huawei-hg8145v5",
-		"    url: http://192.168.y.1",
-		"    username: root",
-		"    password: <router password>",
-		"    subnet: 192.168.y.0/24   # optional; default: the router address with /24"}},
+	{"interval_seconds", []string{
+		`Seconds between scans for "hne-collector run" (900 = 15 minutes).`,
+		"Routers and access points are set up on their device page in the web UI;",
+		"the collector gets them from the server at each scan."}},
 }
 
 // commented renders the config as YAML with a # comment line above each setting.
@@ -89,11 +78,8 @@ func (c collectorConfig) commented() []byte {
 	if c.ExtraSubnets == nil {
 		c.ExtraSubnets = []string{}
 	}
-	if c.Routers == nil {
-		c.Routers = []configRouter{}
-	}
 	values := map[string]any{"server_url": c.ServerURL, "name": c.Name, "token": c.Token, "subnets": c.Subnets,
-		"extra_subnets": c.ExtraSubnets, "interval_seconds": c.IntervalSeconds, "routers": c.Routers}
+		"extra_subnets": c.ExtraSubnets, "interval_seconds": c.IntervalSeconds}
 	var b bytes.Buffer
 	for i, h := range configHelp {
 		if i > 0 {
@@ -148,16 +134,7 @@ func (s *Server) handleCollectorCreate(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	cfg := collectorConfig{ServerURL: scheme + "://" + r.Host, Name: name, Token: token, Subnets: []string{}, IntervalSeconds: 900,
-		Routers: []configRouter{}}
-	routers, err := s.opts.Store.ListRouters(r.Context())
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	for _, rt := range routers {
-		cfg.Routers = append(cfg.Routers, configRouter{Model: rt.Model, URL: "http://" + rt.Address})
-	}
+	cfg := collectorConfig{ServerURL: scheme + "://" + r.Host, Name: name, Token: token, Subnets: []string{}, IntervalSeconds: 900}
 	b := cfg.commented()
 	created := &createdCollector{
 		Name:       name,

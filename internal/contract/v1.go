@@ -20,7 +20,6 @@ const (
 	MaxFutureSkew         = 5 * time.Minute
 	ClockSkewFlagMs       = 300000
 	MaxSources            = 16 // router and access point sources per run (features 002, 012)
-	MaxRouters            = 8  // router entries in a collector config (feature 002)
 	MaxViaLen             = 32 // Observation.via
 	MaxModelLen           = 64 // RunSource.model
 )

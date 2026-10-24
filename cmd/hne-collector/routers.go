@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,16 +20,6 @@ import (
 // (research R6). It holds hashes only, never credentials.
 const rejectedFile = "hne-collector.router-rejected"
 
-// routerHash identifies one router config; editing any field (e.g. the password) changes it.
-func routerHash(rc router.Config) string {
-	h := sha256.New()
-	for _, f := range []string{rc.Model, rc.URL, rc.Username, rc.Password.Reveal(), rc.Subnet} {
-		h.Write([]byte(f))
-		h.Write([]byte{0})
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func loadRejected(dir string) map[string]bool {
 	b, err := os.ReadFile(filepath.Join(dir, rejectedFile))
 	if err != nil {
@@ -42,25 +30,6 @@ func loadRejected(dir string) map[string]bool {
 		set[line] = true
 	}
 	return set
-}
-
-// recordRejections adds the routers whose login was rejected (or locked) in this run to the
-// marker, so later scans don't try them again (FR-011).
-// Routers set up in the web UI record their own rejections through markerRejections (feature 003).
-func (c *collector) recordRejections(sources []contract.RunSource) {
-	for _, s := range sources {
-		if s.Type != contract.SourceTypeRouter || (s.Outcome != contract.OutcomeLoginRejected && s.Outcome != contract.OutcomeLocked) {
-			continue
-		}
-		for _, rc := range c.cfg.Routers {
-			if !rc.ServerManaged() && rc.Address().String() == s.Address && rc.Prefix().String() == s.Subnet {
-				if c.addRejection(routerHash(rc)) {
-					c.log.Warn("router login rejected; it is skipped until its config changes or you run check",
-						"router", s.Model+" at "+s.Address, "outcome", s.Outcome)
-				}
-			}
-		}
-	}
 }
 
 // addRejection adds one hash to the marker file (write-temp + rename) and reports whether it was
@@ -127,39 +96,24 @@ func (c *collector) saveRouterCache(routers []contract.RouterRef) {
 	}
 }
 
-func (c *collector) cachedRouters() ([]contract.RouterRef, bool) {
+func (c *collector) cachedRouters() []contract.RouterRef {
 	b, err := os.ReadFile(filepath.Join(c.env.dir, routerCacheFile))
 	if err != nil {
-		return nil, false
+		return nil
 	}
 	var rs []contract.RouterRef
 	if json.Unmarshal(b, &rs) != nil {
-		return nil, false
+		return nil
 	}
-	return rs, true
+	return rs
 }
 
-// buildRouters sets the engine's routers for the next read: the config file's routers with
-// credentials, plus every router set up in the web UI whose address the file doesn't cover
-// (FR-013). Without any server list (no ping, no cache), the file's entries without
-// credentials stand in for it; their reads then report login_unavailable.
+// buildRouters sets the engine's routers for the next read: every router set up in the web UI,
+// from the server's list or its cache (feature 013: the only way, as for access points).
 func (c *collector) buildRouters() {
-	routers := append([]router.Source(nil), c.fileRouters...)
+	var routers []router.Source
 	covered := map[string]bool{}
-	for _, rc := range c.cfg.Routers {
-		if !rc.ServerManaged() {
-			covered[rc.Address().String()] = true
-		}
-	}
 	list := c.serverRouters
-	if !c.haveRouterList {
-		list = nil
-		for _, rc := range c.cfg.Routers {
-			if rc.ServerManaged() {
-				list = append(list, contract.RouterRef{Model: rc.Model, Address: rc.Address().String(), Subnet: rc.Prefix().String()})
-			}
-		}
-	}
 	for _, rr := range list {
 		addr, err := netip.ParseAddr(rr.Address)
 		if err != nil || !contract.IsPrivateAddr(addr) || covered[rr.Address] {
@@ -193,24 +147,16 @@ func (c *collector) checkRouters(ctx context.Context, w io.Writer) {
 		return
 	}
 	fmt.Fprintln(w, "Routers:")
-	var sources []contract.RunSource
 	for _, src := range c.engine.Routers {
 		rctx, cancel := context.WithTimeout(ctx, router.DefaultTimeout)
 		res := src.Read(rctx)
 		cancel()
-		from := "config"
-		if _, ok := src.(*router.Remote); ok {
-			from = "server"
-		}
-		fmt.Fprintf(w, "  %s at %s (login from %s): %s\n", src.Model(), src.Address(), from, checkPhrase(res))
+		fmt.Fprintf(w, "  %s at %s (login from server): %s\n", src.Model(), src.Address(), checkPhrase(res))
 		if c.jsonOut {
 			c.log.Info("router read", "model", src.Model(), "address", src.Address().String(), "subnet", src.Prefix().String(),
 				"outcome", res.Outcome, "online", res.Online, "offline", res.Offline)
 		}
-		sources = append(sources, contract.RunSource{Type: contract.SourceTypeRouter, Model: src.Model(),
-			Address: src.Address().String(), Subnet: src.Prefix().String(), Outcome: res.Outcome})
 	}
-	c.recordRejections(sources)
 }
 
 func checkPhrase(res router.Result) string {
@@ -220,7 +166,7 @@ func checkPhrase(res router.Result) string {
 	case contract.OutcomeUnreachable:
 		return "unreachable"
 	case contract.OutcomeLoginRejected:
-		return "login rejected (router skipped until its config changes or you run check)"
+		return "login rejected (router skipped until its login changes in the web UI or you run check)"
 	case contract.OutcomeLocked:
 		return "locked by the router"
 	case contract.OutcomeSessionBusy:
