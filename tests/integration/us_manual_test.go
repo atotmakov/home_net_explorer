@@ -76,3 +76,93 @@ func TestAddManualDevice(t *testing.T) {
 		t.Error("home page does not count the device added by hand")
 	}
 }
+
+// Feature 011, US3: edit and remove a manual device (FR-007, FR-008, FR-012).
+func TestEditRemoveManualDevice(t *testing.T) {
+	e := newEnv(t, envOpts{builtinScan: true})
+	e.waitFor("initial scan", func() bool { return e.runCount() == 1 })
+	e.waitFor("scanner idle", func() bool { return !e.app.Scanner.Status().Running })
+	_, loc, _ := e.addManual(url.Values{"name": {"switch"}, "type": {"switch"}})
+	if loc == "" {
+		t.Fatal("add failed")
+	}
+	sw := strings.TrimPrefix(loc, "/devices/")
+	nas := deviceID(t, e, "nas.lan")
+
+	// Rename and retype through the usual form.
+	if res, _ := e.post(loc+"/attrs", url.Values{"name": {"TL-SL1218P"}, "type": {"switch"}}); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("rename = %d", res.StatusCode)
+	}
+	if !strings.Contains(e.get("/devices"), "TL-SL1218P") || !strings.Contains(e.get("/ui/map.json"), `"label":"TL-SL1218P"`) {
+		t.Error("the new name is not on the Devices list and the Map")
+	}
+
+	// The MAC: set, refused when in use, cleared.
+	page := e.get(loc)
+	if !strings.Contains(page, `action="`+loc+`/mac"`) || !strings.Contains(page, `action="`+loc+`/remove"`) {
+		t.Fatalf("manual device page lacks the MAC and Remove forms")
+	}
+	if res, _ := e.post(loc+"/mac", url.Values{"mac": {"00-00-5E-00-53-77"}}); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("set MAC = %d", res.StatusCode)
+	}
+	if !strings.Contains(e.get(loc), "00:00:5e:00:53:77") {
+		t.Error("MAC not shown after saving")
+	}
+	if res, body := e.post(loc+"/mac", url.Values{"mac": {"00:11:32:aa:bb:cc"}}); res.StatusCode != http.StatusBadRequest || !strings.Contains(body, "nas.lan") {
+		t.Errorf("MAC in use = %d, want 400 naming nas.lan", res.StatusCode)
+	}
+	if res, _ := e.post(loc+"/mac", url.Values{"mac": {""}}); res.StatusCode != http.StatusSeeOther || strings.Contains(e.get(loc), "00:00:5e:00:53:77") {
+		t.Error("clearing the MAC did not work")
+	}
+
+	// A scanned device has neither form, and its routes answer 404.
+	if page := e.get("/devices/" + nas); strings.Contains(page, `action="/devices/`+nas+`/remove"`) || strings.Contains(page, `action="/devices/`+nas+`/mac"`) {
+		t.Error("a scanned device's page has the MAC or Remove form")
+	}
+	for _, p := range []string{"/mac", "/remove"} {
+		if res, _ := e.post("/devices/"+nas+p, url.Values{"mac": {""}, "confirm": {"remove"}}); res.StatusCode != http.StatusNotFound {
+			t.Errorf("POST %s on a scanned device = %d, want 404", p, res.StatusCode)
+		}
+	}
+
+	// The NAS connects via the switch; removing the switch needs the confirmation and drops the link.
+	if res, _ := e.post("/devices/"+nas+"/link", url.Values{"via": {sw}}); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("link = %d", res.StatusCode)
+	}
+	if res, _ := e.post(loc+"/remove", url.Values{"confirm": {"yes"}}); res.StatusCode != http.StatusBadRequest || !strings.Contains(e.get("/devices"), "TL-SL1218P") {
+		t.Fatalf("remove without typing remove = %d, or the device went away", res.StatusCode)
+	}
+	if res, _ := e.post(loc+"/remove", url.Values{"confirm": {"remove"}}); res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/devices" {
+		t.Fatalf("remove = %d to %q", res.StatusCode, res.Header.Get("Location"))
+	}
+	if strings.Contains(e.get("/devices"), "TL-SL1218P") || strings.Contains(e.get("/ui/map.json"), "TL-SL1218P") {
+		t.Error("the removed device is still listed or on the Map")
+	}
+	nasPage := e.get("/devices/" + nas)
+	if strings.Contains(nasPage, "TL-SL1218P") {
+		t.Error("the NAS still connects via the removed device")
+	}
+	if strings.Contains(e.get("/ui/map.json"), `"kind":"manual"`) {
+		t.Error("a manual edge is left on the Map")
+	}
+	if res, _ := e.req("GET", loc, nil); res.StatusCode != http.StatusNotFound {
+		t.Errorf("removed device page = %d, want 404", res.StatusCode)
+	}
+}
+
+// FR-009: a link that would make a loop is refused with a message.
+func TestLinkLoopRefused(t *testing.T) {
+	e := newEnv(t, envOpts{builtinScan: true})
+	e.waitFor("initial scan", func() bool { return e.runCount() == 1 })
+	e.waitFor("scanner idle", func() bool { return !e.app.Scanner.Status().Running })
+	_, loc, _ := e.addManual(url.Values{"name": {"TL-SL1218P"}, "type": {"switch"}})
+	sw := strings.TrimPrefix(loc, "/devices/")
+	nas := deviceID(t, e, "nas.lan")
+	if res, _ := e.post("/devices/"+nas+"/link", url.Values{"via": {sw}}); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("link = %d", res.StatusCode)
+	}
+	res, body := e.post(loc+"/link", url.Values{"via": {nas}})
+	if res.StatusCode != http.StatusBadRequest || !strings.Contains(body, "this would make a loop") {
+		t.Errorf("loop link = %d %s, want 400 with the loop message", res.StatusCode, body)
+	}
+}
