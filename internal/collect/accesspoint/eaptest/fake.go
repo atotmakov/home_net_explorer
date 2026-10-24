@@ -80,6 +80,7 @@ type AP struct {
 	locked    bool
 	postOnly  bool   // the list answers only POST operation=load, as the web page asks
 	resetOn   string // "METHOD /path": that request gets its connection closed without an answer
+	otherPath int    // status of the other firmware's list path when logged in (0: 404)
 	clients   []Entry
 	list      []byte // raw list body override
 	delay     time.Duration
@@ -126,6 +127,11 @@ func (ap *AP) SetResetOn(method, path string) {
 	ap.resetOn = method + " " + path
 	ap.mu.Unlock()
 }
+
+// SetOtherPath sets the status the other firmware generation's list path answers once logged
+// in (the owner's older unit answers something other than 404 there; a POST to it drops the
+// connection: gate G1, run 4).
+func (ap *AP) SetOtherPath(status int) { ap.mu.Lock(); ap.otherPath = status; ap.mu.Unlock() }
 
 // SetLocked makes every login fail with a lockout.
 func (ap *AP) SetLocked(l bool) { ap.mu.Lock(); ap.locked = l; ap.mu.Unlock() }
@@ -271,6 +277,18 @@ func (ap *AP) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]any{"success": true, "timeout": false, "data": clients})
+	case ap.otherPath != 0 && req.Session && (r.URL.Path == PathNew || r.URL.Path == PathOld):
+		if r.Method == http.MethodPost {
+			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+				conn.Close()
+			}
+			return
+		}
+		if ap.otherPath == http.StatusFound {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		w.WriteHeader(ap.otherPath)
 	default:
 		http.NotFound(w, r)
 	}
