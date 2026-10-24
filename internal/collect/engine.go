@@ -412,7 +412,7 @@ func (e *Engine) mergeNeighbors(ctx context.Context, clk clock.Clock, scanned []
 	}
 	now := clk.Now()
 	for _, n := range entries {
-		if _, ok := found[n.IP]; ok || !containedIn(n.IP, scanned) {
+		if _, ok := found[n.IP]; ok || !containedIn(n.IP, scanned) || !hostAddr(n.IP, scanned) {
 			continue
 		}
 		mac, ok := NormalizeMAC(n.MAC)
@@ -421,6 +421,25 @@ func (e *Engine) mergeNeighbors(ctx context.Context, clk clock.Clock, scanned []
 		}
 		record(contract.Observation{ObservedAt: now, IP: n.IP.String(), MAC: mac, Method: contract.ObsNeighborCache})
 	}
+}
+
+// hostAddr reports whether ip is a host address of its subnet in scanned, not the network or
+// the broadcast address (Windows keeps x.x.x.255 in its ARP cache).
+func hostAddr(ip netip.Addr, scanned []netip.Prefix) bool {
+	for _, p := range scanned {
+		if p.Contains(ip) && p.Bits() <= 30 && (ip == p.Masked().Addr() || ip == lastAddr(p)) {
+			return false
+		}
+	}
+	return true
+}
+
+// lastAddr is the broadcast address of an IPv4 prefix.
+func lastAddr(p netip.Prefix) netip.Addr {
+	a := p.Masked().Addr().As4()
+	host := uint32(1)<<(32-p.Bits()) - 1
+	v := uint32(a[0])<<24 | uint32(a[1])<<16 | uint32(a[2])<<8 | uint32(a[3]) | host
+	return netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
 }
 
 // addSelf records the collector's own addresses (it never answers its own ARP requests).
@@ -613,8 +632,8 @@ func containedIn(ip netip.Addr, ps []netip.Prefix) bool {
 // addresses are rejected.
 func NormalizeMAC(mac string) (string, bool) {
 	hw, err := net.ParseMAC(mac)
-	if err != nil || len(hw) != 6 {
-		return "", false
+	if err != nil || len(hw) != 6 || hw[0]&1 == 1 {
+		return "", false // a group address (broadcast, multicast) is never a device
 	}
 	zero := true
 	for _, b := range hw {
