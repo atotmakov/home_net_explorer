@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"time"
 
@@ -49,6 +50,9 @@ func (a *Applier) Apply(ctx context.Context, tx *sql.Tx, collectorID int64, run 
 		sn := containing(subnets, o.IP)
 		if sn == nil || sn.ignored {
 			continue // ignored subnets stay in the raw run but are never folded
+		}
+		if !hostObservation(sn.prefix, o) {
+			continue // older collectors reported the broadcast address from the ARP cache
 		}
 		devID, err := a.observe(ctx, tx, collectorID, sn, o)
 		if err != nil {
@@ -105,6 +109,24 @@ func applySubnets(ctx context.Context, tx *sql.Tx, collectorID int64, run *contr
 		out = append(out, sn)
 	}
 	return out, created, nil
+}
+
+// hostObservation reports whether o can be a device: a host address of p (not its network or
+// broadcast address) with no group MAC (broadcast, multicast).
+func hostObservation(p netip.Prefix, o contract.Observation) bool {
+	if mac, err := net.ParseMAC(o.MAC); err == nil && len(mac) > 0 && mac[0]&1 == 1 {
+		return false
+	}
+	a, err := netip.ParseAddr(o.IP)
+	if err != nil || !a.Is4() || p.Bits() > 30 {
+		return err == nil
+	}
+	m := p.Masked().Addr().As4()
+	b := a.As4()
+	hostMask := uint32(1)<<(32-p.Bits()) - 1
+	v := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+	n := uint32(m[0])<<24 | uint32(m[1])<<16 | uint32(m[2])<<8 | uint32(m[3])
+	return v != n && v != n|hostMask
 }
 
 func containing(subnets []*scannedSubnet, ip string) *scannedSubnet {
