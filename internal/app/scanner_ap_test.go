@@ -40,8 +40,8 @@ func TestBuiltinScannerReadsAccessPoint(t *testing.T) {
 	run := &contract.CollectionRun{SchemaVersion: 1, CollectionID: "11111111-2222-4333-8444-555555555556",
 		Collector: contract.CollectorInfo{Name: "desktop", Version: "test", OS: "windows"},
 		StartedAt: t0, FinishedAt: t0.Add(time.Minute), SentAt: t0.Add(time.Minute), IntervalSeconds: 900,
-		Vantage: contract.Vantage{Interfaces: []contract.Interface{}, Routes: []contract.Route{}},
-		Subnets: []contract.SubnetScan{{CIDR: "192.168.1.0/24", Method: contract.MethodARP, Complete: true, HostsProbed: 254}},
+		Vantage:      contract.Vantage{Interfaces: []contract.Interface{}, Routes: []contract.Route{}},
+		Subnets:      []contract.SubnetScan{{CIDR: "192.168.1.0/24", Method: contract.MethodARP, Complete: true, HostsProbed: 254}},
 		Observations: []contract.Observation{{ObservedAt: t0, IP: "192.168.1.5", MAC: "00:00:5e:10:00:05", Method: contract.ObsARP}}}
 	raw, _ := json.Marshal(run)
 	cid, err := a.Store.EnsureCollector(ctx, "desktop", store.KindRemote, 900)

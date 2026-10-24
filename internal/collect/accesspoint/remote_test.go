@@ -72,7 +72,9 @@ func TestRemoteLockIsRecorded(t *testing.T) {
 	ap := eaptest.Start(t, eaptest.New, testUser, testPassword)
 	ap.SetLocked(true)
 	rej := &memRejections{set: map[string]bool{}}
-	login := func(context.Context) (string, router.Secret, error) { return testUser, router.Secret(testPassword), nil }
+	login := func(context.Context) (string, router.Secret, error) {
+		return testUser, router.Secret(testPassword), nil
+	}
 	src := NewRemote(ModelEAP225, netip.MustParseAddr(testAddr), netip.MustParsePrefix("192.168.0.0/24"), login, rej, ap.Transport())
 	if res := src.Read(context.Background()); res.Outcome != contract.OutcomeLocked {
 		t.Fatalf("locked = %s", res.Outcome)

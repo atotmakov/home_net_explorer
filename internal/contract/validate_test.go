@@ -145,13 +145,13 @@ func TestValidateAccessPointRules(t *testing.T) {
 	src := func(m map[string]any, i int) map[string]any { return m["sources"].([]any)[i].(map[string]any) }
 	const ap = 4 // first ap_client observation of valid_access_point.json
 	bad := map[string]func(m map[string]any){
-		"ap_client without mac":          func(m map[string]any) { delete(obs(m, ap), "mac") },
-		"ap_client without via":          func(m map[string]any) { delete(obs(m, ap), "via") },
-		"ap_client without access_point": func(m map[string]any) { delete(obs(m, ap), "access_point") },
-		"public access_point":            func(m map[string]any) { obs(m, ap)["access_point"] = "8.8.8.8" },
-		"malformed access_point":         func(m map[string]any) { obs(m, ap)["access_point"] = "eap.lan" },
-		"ap_client via of 33 characters": func(m map[string]any) { obs(m, ap)["via"] = strings.Repeat("x", 33) },
-		"ap_client outside every scanned subnet": func(m map[string]any) { obs(m, ap)["ip"] = "192.168.5.4" },
+		"ap_client without mac":                      func(m map[string]any) { delete(obs(m, ap), "mac") },
+		"ap_client without via":                      func(m map[string]any) { delete(obs(m, ap), "via") },
+		"ap_client without access_point":             func(m map[string]any) { delete(obs(m, ap), "access_point") },
+		"public access_point":                        func(m map[string]any) { obs(m, ap)["access_point"] = "8.8.8.8" },
+		"malformed access_point":                     func(m map[string]any) { obs(m, ap)["access_point"] = "eap.lan" },
+		"ap_client via of 33 characters":             func(m map[string]any) { obs(m, ap)["via"] = strings.Repeat("x", 33) },
+		"ap_client outside every scanned subnet":     func(m map[string]any) { obs(m, ap)["ip"] = "192.168.5.4" },
 		"access_point on a router_table observation": func(m map[string]any) { obs(m, 1)["access_point"] = "192.168.0.5" },
 		"access_point on an arp observation":         func(m map[string]any) { obs(m, 0)["access_point"] = "192.168.0.5" },
 		"unknown source type":                        func(m map[string]any) { src(m, 1)["type"] = "switch" },

@@ -111,9 +111,9 @@ func TestParseTolerant(t *testing.T) {
 
 func TestVia(t *testing.T) {
 	for c, want := range map[Client]string{
-		{SSID: "Home", Band: "5 GHz"}:               "Home (5 GHz)",
-		{SSID: "Home"}:                              "Home",
-		{Band: "2.4 GHz"}:                           "Wi-Fi (2.4 GHz)",
+		{SSID: "Home", Band: "5 GHz"}:                  "Home (5 GHz)",
+		{SSID: "Home"}:                                 "Home",
+		{Band: "2.4 GHz"}:                              "Wi-Fi (2.4 GHz)",
 		{SSID: strings.Repeat("n", 40), Band: "5 GHz"}: strings.Repeat("n", 24) + " (5 GHz)",
 	} {
 		if got := Via(c); got != want || len(got) > contract.MaxViaLen {
