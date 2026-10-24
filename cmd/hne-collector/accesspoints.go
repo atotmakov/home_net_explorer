@@ -114,6 +114,9 @@ func apCheckPhrase(res accesspoint.Result) string {
 		}
 		return fmt.Sprintf("OK, %d clients, %d without an IP address (endpoint %s; keys: %s)", len(res.Clients), noIP, res.Path, keys)
 	case contract.OutcomeUnreachable:
+		if res.Detail != "" {
+			return "unreachable (" + res.Detail + ")"
+		}
 		return "unreachable"
 	case contract.OutcomeLoginRejected:
 		return "login rejected (skipped until its login changes in the web UI or you run check)"

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/netip"
@@ -15,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
@@ -84,8 +86,11 @@ func (e *eap225) Read(ctx context.Context) Result {
 	if _, err := e.do(ctx, client, http.MethodGet, pathLoginPage, ""); errors.Is(err, errUnreachable) {
 		return Result{Outcome: contract.OutcomeUnreachable}
 	}
-	if outcome := e.login(ctx, client); outcome != "" {
+	if outcome, err := e.login(ctx, client); outcome != "" {
 		res := Result{Outcome: outcome}
+		if err != nil {
+			res = failed(err)
+		}
 		if outcome == contract.OutcomePageNotUnderstood {
 			res.Detail = "the login state (data/login.json) was not understood"
 		}
@@ -162,7 +167,7 @@ func describe(body []byte, err error) string {
 
 func failed(err error) Result {
 	if errors.Is(err, errUnreachable) {
-		return Result{Outcome: contract.OutcomeUnreachable}
+		return Result{Outcome: contract.OutcomeUnreachable, Detail: strings.TrimPrefix(err.Error(), errUnreachable.Error()+": ")}
 	}
 	return Result{Outcome: contract.OutcomePageNotUnderstood}
 }
@@ -170,41 +175,41 @@ func failed(err error) Result {
 // login posts the username and the upper-case hex MD5 of the password, in that order, as the
 // login page does (the older firmware ignores another order: gate G1, run 2). It returns "" when
 // logged in, else the outcome.
-func (e *eap225) login(ctx context.Context, c *http.Client) string {
+func (e *eap225) login(ctx context.Context, c *http.Client) (string, error) {
 	sum := md5.Sum([]byte(e.cfg.Password.Reveal()))
 	form := "username=" + url.QueryEscape(e.cfg.Username) + "&password=" + strings.ToUpper(hex.EncodeToString(sum[:]))
 	body, err := e.do(ctx, c, http.MethodPost, pathLoginPage, form)
 	if errors.Is(err, errUnreachable) {
-		return contract.OutcomeUnreachable
+		return contract.OutcomeUnreachable, err
 	}
 	var ans struct {
 		Result *bool `json:"result"`
 	}
 	if err == nil && json.Unmarshal(body, &ans) == nil && ans.Result != nil && *ans.Result {
-		return ""
+		return "", nil
 	}
 	// Not confirmed: the login state tells a wrong password from a lockout.
 	state, err := e.do(ctx, c, http.MethodPost, pathLoginData, "operation=read")
 	if err != nil {
-		return failed(err).Outcome
+		return failed(err).Outcome, err
 	}
 	var st struct {
 		Error        any  `json:"error"` // a number, or a string on older firmware
 		RetryChances *int `json:"retryChances"`
 	}
 	if json.Unmarshal(state, &st) != nil {
-		return contract.OutcomePageNotUnderstood
+		return contract.OutcomePageNotUnderstood, nil
 	}
 	code := number(st.Error)
 	switch {
 	case code == 3 || (st.RetryChances != nil && *st.RetryChances == 0):
-		return contract.OutcomeLocked
+		return contract.OutcomeLocked, nil
 	case code == 1:
-		return contract.OutcomeLoginRejected
+		return contract.OutcomeLoginRejected, nil
 	case ans.Result != nil && !*ans.Result:
-		return contract.OutcomeLoginRejected
+		return contract.OutcomeLoginRejected, nil
 	}
-	return "" // no error recorded: try the list (it says so if the session is not valid)
+	return "", nil // no error recorded: try the list (it says so if the session is not valid)
 }
 
 func number(v any) int {
@@ -242,14 +247,15 @@ func (e *eap225) do(ctx context.Context, c *http.Client, method, path, form stri
 	}
 	req.Header.Set("Referer", e.base+"/")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	where := method + " " + strings.SplitN(path, "?", 2)[0] // no query, form or credentials in errors
 	res, err := c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s %s", errUnreachable, method, strings.SplitN(path, "?", 2)[0]) // no credentials in errors
+		return nil, fmt.Errorf("%w: %s: %s", errUnreachable, where, netKind(err))
 	}
 	defer res.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
 	if err != nil {
-		return nil, fmt.Errorf("%w: reading %s", errUnreachable, path)
+		return nil, fmt.Errorf("%w: %s (reading the answer): %s", errUnreachable, where, netKind(err))
 	}
 	switch {
 	case res.StatusCode == http.StatusNotFound:
@@ -260,6 +266,23 @@ func (e *eap225) do(ctx context.Context, c *http.Client, method, path, form stri
 		return nil, errNotListed
 	}
 	return b, nil
+}
+
+// netKind names a transport failure without quoting it.
+func netKind(err error) string {
+	var ne net.Error
+	msg := strings.ToLower(err.Error())
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()):
+		return "timed out"
+	case errors.Is(err, syscall.ECONNREFUSED) || strings.Contains(msg, "refused"):
+		return "connection refused"
+	case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
+		return "connection closed without an answer"
+	case errors.Is(err, syscall.ECONNRESET) || strings.Contains(msg, "reset") || strings.Contains(msg, "forcibly closed"):
+		return "connection reset"
+	}
+	return "network error"
 }
 
 // statusError is an answer other than 200 or 404.
