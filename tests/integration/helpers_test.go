@@ -33,9 +33,11 @@ type env struct {
 }
 
 type envOpts struct {
-	builtinScan bool              // run the built-in scan loop
-	downloads   map[string]string // files served under /downloads/
-	log         io.Writer         // server log output (default: slog's default logger)
+	builtinScan bool                        // run the built-in scan loop
+	downloads   map[string]string           // files served under /downloads/
+	log         io.Writer                   // server log output (default: slog's default logger)
+	apRT        http.RoundTripper           // the built-in collector's access point traffic (feature 012)
+	hosts       map[string]collecttest.Host // more hosts on the fake network
 }
 
 // newEnv starts the full server over a temp data dir with a fake network behind the
@@ -47,6 +49,9 @@ func newEnv(t *testing.T, o envOpts) *env {
 		Add("192.168.1.100", collecttest.Host{MAC: "a0:b1:c2:d3:e4:f5", Hostname: "router.lan"}).
 		Add("192.168.1.20", collecttest.Host{MAC: "00:11:32:aa:bb:cc", Hostname: "nas.lan"}).
 		Add("192.168.1.50", collecttest.Host{MAC: "da:a1:19:01:02:03"})
+	for ip, h := range o.hosts {
+		fnet.Add(ip, h)
+	}
 	engine := &collect.Engine{
 		Prober: fnet, Presence: fnet, Neighbors: fnet, Resolver: fnet,
 		Routes:    collecttest.NewFakeRoutes("192.168.1.100", "eth0=192.168.1.20/24"),
@@ -60,14 +65,15 @@ func newEnv(t *testing.T, o envOpts) *env {
 		}
 	}
 	a, err := app.New(context.Background(), app.Options{
-		DownloadsDir:  dl,
-		DataDir:       filepath.Join(t.TempDir(), "data"),
-		Clock:         clk,
-		ScanInterval:  15 * time.Minute,
-		NoBuiltinScan: !o.builtinScan,
-		Engine:        engine,
-		Version:       "test",
-		Log:           serverLog(o.log),
+		DownloadsDir:         dl,
+		DataDir:              filepath.Join(t.TempDir(), "data"),
+		Clock:                clk,
+		ScanInterval:         15 * time.Minute,
+		NoBuiltinScan:        !o.builtinScan,
+		Engine:               engine,
+		AccessPointTransport: o.apRT,
+		Version:              "test",
+		Log:                  serverLog(o.log),
 	})
 	if err != nil {
 		t.Fatal(err)

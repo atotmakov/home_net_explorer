@@ -146,7 +146,7 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
   Store.ListAccessPoints`), `cmd/hne-collector/accesspoints.go` (build, cache, `checkAccessPoints`
   next to `checkRouters`, phrases for every outcome incl. `controller_managed`),
   `internal/app/scanner.go` (built-in collector). Make T017 pass
-- [ ] T019 [US2] **Gate G1** (manual, after deploying T001–T018 as 0.12 with quickstart §1–§3):
+- [X] T019 [US2] **Gate G1** (manual, after deploying T001–T018 as 0.12 with quickstart §1–§3):
   the owner runs `hne-collector.exe check` (needs T016a deployed); record in this file the endpoint and key names
   reported for 192.168.0.5 and 192.168.0.10; if they differ from T010's fixtures, update the
   fixtures and the parser (red test first) before Phase 5
@@ -162,14 +162,28 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
       `TestReadPostOnlyFirmware`, `TestPageNotUnderstoodDetail`, `TestCheckShowsWhyNotUnderstood`.
     - Side finding: the desktop's own `home` interface is 3c:52:a1:29:75:20 (192.168.1.10), so
       the "TP-Link Systems" device at 192.168.1.10 is the desktop, not a router.
-  - Run 2: pending (after this fix is deployed and the collector downloaded again)
-- [ ] T020 [P] [US2] Tests in `internal/store/devices_query_test.go` and
+  - Run 2 (0.13.139, PR #26): 192.168.0.10 `unreachable`: the unit drops the connection on the
+    POST fallback. The owner logged in to the unit's web page in a browser; its requests showed
+    the login form sends `username` before `password` (the unit ignores a login in another
+    order) and the list is `monitor.client.client` with keys `AccessPoint, ActiveTime, CCQ,
+    DeviceName, Down, IP, MAC, Radio, Rate, SNR, SSID, Up`, `Radio` as text ("2.4GHz") and
+    `timeout` as the string "false". Fix PR #27 (login field order, list format); PR #28 names the
+    failing request of an unreachable access point in `check`.
+  - Run 3 (PR #28): 192.168.0.10 unreachable, "POST /data/status.client.user.json: connection
+    reset": once logged in the unit answers the newer firmware's path with something other than
+    404. Fix PR #29: any answer other than 200 on a list path means "not this endpoint", no POST.
+  - Run 4 (PR #29): 192.168.0.10 "status.client.user answered not JSON (0 bytes)": a 200 with an
+    empty body. Fix PR #30: anything but a JSON object means "not this endpoint".
+  - Run 5 (0.13.154, PR #30): both OK. 192.168.0.5: 2 clients, endpoint `status.client.user`;
+    192.168.0.10: 2 clients, 0 without an IP address, endpoint `monitor.client.client`, keys as in
+    run 2. A scan by the desktop collector stored both reads `ok`. **G1 passed.**
+- [X] T020 [P] [US2] Tests in `internal/store/devices_query_test.go` and
   `internal/web/access_point_test.go`: a device whose latest sighting has `via_source` shows
   "via <AP display name> · Home (5 GHz)" on its device page (FR-013); an unknown AP address shows
   "via 192.168.0.5 · Home (5 GHz)"; the Collectors page lists "router huawei-hg8145v5 at
   192.168.0.1: ok, …" and "access point tplink-eap225 at 192.168.0.5: ok, 3 clients, 1 left out"
   for the same run
-- [ ] T021 [US2] Implement in `internal/store/devices_query.go`, `internal/web/pages.go`,
+- [X] T021 [US2] Implement in `internal/store/devices_query.go`, `internal/web/pages.go`,
   `internal/web/templates/device.html`, `internal/web/collectors.go` and its template; select
   `type` in `internal/store/collectors.go` (latest run sources) and label it. Make T020 pass
 
@@ -179,23 +193,26 @@ and an `access_point` source `ok, 3 / 0`; the server shows "via <AP> · <SSID> (
 **Independent test**: two devices reported by AP A, one by AP B → each under the right AP's
 "SSID (band)" port node; none under the router's LAN1.
 
-- [ ] T022 [P] [US3] Tests in `internal/store/topology_test.go` `TestTopologyAccessPoints`: port
+- [X] T022 [P] [US3] Tests in `internal/store/topology_test.go` `TestTopologyAccessPoints`: port
   node `port-<ap dev id>-Home (5 GHz)` with parent = the AP's group, edge `rp-<ap>-<via>` from the
   AP (current) and `pd-<dev>` to each client; an offline client keeps its last AP with `current:
   false`; a device whose latest via is the router's LAN1 stays under the router; a manual link
   still replaces the AP port edge; an AP address that no device holds → client drawn without a
   port edge; an `ok` AP read does not make the AP a gateway (`gateway_of` empty); JSON shape
   unchanged (existing `TestMapJSONShape` still passes)
-- [ ] T023 [US3] Implement in `internal/store/topology.go`: `viaSighting.source` from
+- [X] T023 [US3] Implement in `internal/store/topology.go`: `viaSighting.source` from
   `latestVias`; parent device = device with current address `source` when set, else the subnet's
   router (010 R6). Make T022 pass
-- [ ] T024 [P] [US3] Integration test `tests/integration/us_ap_test.go` `TestAccessPointEndToEnd`:
+- [X] T024 [P] [US3] Integration test `tests/integration/us_ap_test.go` `TestAccessPointEndToEnd`:
   server + collector engine with fake router and two fake EAP225s (one per firmware), configured
   through the web UI forms; after one scan `/ui/map.json` has the phones under their AP, the
   Collectors page shows both reads `ok`; after a scan where the phone moved AP the map shows the new
   AP (SC-005); with a wrong password the fake sees exactly one login attempt over three scans
   (SC-004)
-- [ ] T025 [US3] Make T024 pass (fix whatever it finds); keep `TestMapPerformance` green
+- [X] T025 [US3] Make T024 pass (fix whatever it finds); keep `TestMapPerformance` green
+  - T024 runs the built-in collector against the two fake access points without a fake
+    router: the router path and the replacement of a router's observation by the access point's
+    are covered by `TestTopologyAccessPoints` and `internal/collect/engine_ap_test.go`.
 
 ## Phase 6: Polish & Cross-Cutting
 

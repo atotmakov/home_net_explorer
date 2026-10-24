@@ -272,17 +272,24 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 		addEdge(TopoEdge{ID: "mu-" + strconv.FormatInt(d.ID, 10), Kind: "manual", Source: devNodeID(d.ID), Target: devNodeID(to), Current: true})
 	}
 
-	// Router ports and Wi-Fi (R6): the latest reported via, under the router of that subnet.
+	// Router ports and Wi-Fi (R6): the latest reported via, under the router of that subnet, or
+	// under the access point that reported it (feature 012; none if no device holds its address).
 	for _, d := range devs {
 		v, ok := vias[d.ID]
 		if !ok || manual[d.ID] {
 			continue
 		}
 		var router int64
-		for _, ip := range routers[subnetCIDR[v.subnet]] {
-			if h, ok := byIP[ip]; ok {
+		if v.source != "" {
+			if h, ok := byIP[v.source]; ok {
 				router = h.dev
-				break
+			}
+		} else {
+			for _, ip := range routers[subnetCIDR[v.subnet]] {
+				if h, ok := byIP[ip]; ok {
+					router = h.dev
+					break
+				}
 			}
 		}
 		if router == 0 || router == d.ID {
@@ -395,11 +402,12 @@ func (s *Store) routerAddressesBySubnet(ctx context.Context) (map[string][]strin
 type viaSighting struct {
 	subnet int64
 	via    string
+	source string // the reporting access point's address, '' for a router (feature 012)
 }
 
 // latestVias returns each device's most recent sighting with a router port or Wi-Fi interface.
 func (s *Store) latestVias(ctx context.Context) (map[int64]viaSighting, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT device_id, subnet_id, via FROM sightings WHERE via <> ''
+	rows, err := s.db.QueryContext(ctx, `SELECT device_id, subnet_id, via, via_source FROM sightings WHERE via <> ''
 		ORDER BY device_id, last_seen DESC, id DESC`)
 	if err != nil {
 		return nil, err
@@ -409,7 +417,7 @@ func (s *Store) latestVias(ctx context.Context) (map[int64]viaSighting, error) {
 	for rows.Next() {
 		var dev int64
 		var v viaSighting
-		if err := rows.Scan(&dev, &v.subnet, &v.via); err != nil {
+		if err := rows.Scan(&dev, &v.subnet, &v.via, &v.source); err != nil {
 			return nil, err
 		}
 		if _, ok := out[dev]; !ok {
