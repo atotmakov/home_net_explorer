@@ -98,39 +98,39 @@ func (e *eap225) Read(ctx context.Context) Result {
 	}
 	defer e.logout(client)
 
+	// Each firmware generation has one list path. An answer other than 200 means "not this
+	// endpoint" (the older unit answers the newer path with something other than 404 once logged
+	// in, and drops the connection on a POST to it: gate G1, run 4).
+	detail := "no client list endpoint answered"
 	for _, p := range listPaths {
 		body, err := e.do(ctx, client, http.MethodGet, p.path+"?operation=load", "")
-		if errors.Is(err, errNotFound) {
-			continue // the other firmware generation
-		}
 		if errors.Is(err, errUnreachable) {
 			return failed(err)
 		}
-		if err == nil && notLoggedIn(body) {
+		if err != nil {
+			detail = p.name + " answered " + describe(nil, err)
+			continue
+		}
+		if notLoggedIn(body) {
 			return Result{Outcome: contract.OutcomePageNotUnderstood,
 				Detail: p.name + " answered not logged in (timeout=true): the access point did not accept the login session"}
 		}
 		clients, keys, perr := parseClients(body)
-		if err != nil || perr != nil {
-			// Store.load on the page asks with operation=load (js/su/data/store.js); some
-			// firmware may answer it only as a POST.
-			pbody, err2 := e.do(ctx, client, http.MethodPost, p.path, "operation=load")
-			if errors.Is(err2, errUnreachable) {
-				return failed(err2)
-			}
-			if err2 == nil {
-				body, err = pbody, nil
-				clients, keys, perr = parseClients(body)
+		if perr != nil {
+			// A 200 that is not a list: ask as Store.load on the page does (js/su/data/store.js),
+			// with operation=load in a POST body. A failure here keeps the GET's description.
+			if pbody, err2 := e.do(ctx, client, http.MethodPost, p.path, "operation=load"); err2 == nil {
+				if c, k, err3 := parseClients(pbody); err3 == nil {
+					clients, keys, perr = c, k, nil
+				}
 			}
 		}
-		if err != nil || perr != nil {
-			res := failed(errNotListed)
-			res.Detail = p.name + " answered " + describe(body, err)
-			return res
+		if perr != nil {
+			return Result{Outcome: contract.OutcomePageNotUnderstood, Detail: p.name + " answered " + describe(body, nil)}
 		}
 		return Result{Outcome: contract.OutcomeOK, Clients: clients, Path: p.name, Keys: keys}
 	}
-	return Result{Outcome: contract.OutcomePageNotUnderstood, Detail: "no client list endpoint (both answered 404)"}
+	return Result{Outcome: contract.OutcomePageNotUnderstood, Detail: detail}
 }
 
 // describe says what an answer looked like without quoting it: its size if it isn't JSON, else
@@ -139,6 +139,9 @@ func describe(body []byte, err error) string {
 	var se statusError
 	if errors.As(err, &se) {
 		return "HTTP " + strconv.Itoa(int(se))
+	}
+	if errors.Is(err, errNotFound) {
+		return "HTTP 404"
 	}
 	if err != nil {
 		return "an answer that is too large"
