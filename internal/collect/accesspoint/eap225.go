@@ -80,11 +80,11 @@ func (e *eap225) Read(ctx context.Context) Result {
 			return Result{Outcome: contract.OutcomeControllerManaged}
 		}
 	} else if errors.Is(err, errUnreachable) {
-		return Result{Outcome: contract.OutcomeUnreachable}
+		return failed(err)
 	}
 	// The login page sets the older firmware's session cookie.
 	if _, err := e.do(ctx, client, http.MethodGet, pathLoginPage, ""); errors.Is(err, errUnreachable) {
-		return Result{Outcome: contract.OutcomeUnreachable}
+		return failed(err)
 	}
 	if outcome, err := e.login(ctx, client); outcome != "" {
 		res := Result{Outcome: outcome}
