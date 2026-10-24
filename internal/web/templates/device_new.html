@@ -1,0 +1,21 @@
+{{define "content"}}
+{{with .Data}}
+<p><a href="/devices">← Devices</a></p>
+<h1>Add device</h1>
+<section class="card">
+  <p class="muted">For equipment that scans cannot see, such as an unmanaged switch. Connect it to the network on its page after saving.</p>
+  <form method="post" action="/devices">
+    <label>Name <input type="text" name="name" value="{{.Form.Name}}" maxlength="100" required></label>
+    <label>Type
+      <select name="type">
+        <option value="">—</option>
+        {{range $t := .Types}}<option value="{{$t}}" {{if eq $t $.Data.Form.Type}}selected{{end}}>{{$t}}</option>{{end}}
+      </select>
+    </label>
+    <label>MAC <span class="muted">(optional)</span> <input type="text" name="mac" value="{{.Form.MAC}}" maxlength="20" placeholder="00:11:22:33:44:55"></label>
+    <label>Notes <textarea name="notes" rows="4" maxlength="2000">{{.Form.Notes}}</textarea></label>
+    <button type="submit">Save</button>
+  </form>
+</section>
+{{end}}
+{{end}}

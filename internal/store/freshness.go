@@ -12,6 +12,7 @@ const (
 	StateOnline  = "online"  // stored online, seen within FreshScans scan intervals
 	StateStale   = "stale"   // stored online, but not seen for longer: the information is old
 	StateOffline = "offline" // the latest complete scan of its subnets did not see it
+	StateManual  = "manual"  // added by hand, never seen by scans (feature 011)
 )
 
 // States lists the shown states (the Devices status filter).
@@ -86,6 +87,10 @@ func (s *Store) newStateEval(ctx context.Context, now time.Time) (*stateEval, er
 // subnet holding one of d's current addresses, else the built-in interval. With a zero time,
 // stored online devices are shown online.
 func (e *stateEval) apply(d *DeviceRow) {
+	if d.Manual {
+		d.State = StateManual // no scan says anything about it (feature 011, research R4)
+		return
+	}
 	if !e.now.IsZero() {
 		d.Age = e.now.Sub(d.LastSeen)
 	}

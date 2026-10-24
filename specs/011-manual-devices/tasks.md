@@ -18,13 +18,13 @@ contract are unchanged.
 
 ## Phase 1: Setup
 
-- [ ] T001 Set `VERSION` to `0.14`
+- [X] T001 Set `VERSION` to `0.14`
 
 ## Phase 2: Foundational (storage and facts)
 
 **Purpose**: the fact table, the projection flag and the replay, needed by every story.
 
-- [ ] T002 [P] Tests in `internal/inventory/manual_test.go`:
+- [X] T002 [P] Tests in `internal/inventory/manual_test.go`:
   - `AddManualDevice(ctx, tx, ManualDevice{Name, Type, MAC, Notes}, at)` returns an identity key
     `manual:<uuid>` and creates a `devices` row with `manual = 1`, `identity_strength = 'strong'`,
     `status = 'online'`, `first_seen = last_seen = at`, no addresses, the name/type/notes as
@@ -40,13 +40,13 @@ contract are unchanged.
     every device whose current link points to it
   - Rebuild (`inventory.Rebuild`) after add, rename, MAC change and a link reproduces the same
     rows; after remove the device stays gone
-- [ ] T003 [P] Test in `internal/store/migrate_internal_test.go`:
+- [X] T003 [P] Test in `internal/store/migrate_internal_test.go`:
   schema version 9 has `user_manual_devices` (`field IN ('add', 'mac', 'remove')`) and
   `devices.manual` defaulting to 0
-- [ ] T004 Implement `internal/store/migrations/0009_manual_devices.sql` exactly as in
+- [X] T004 Implement `internal/store/migrations/0009_manual_devices.sql` exactly as in
   data-model.md (table `user_manual_devices` with index, `ALTER TABLE devices ADD COLUMN manual
   INTEGER NOT NULL DEFAULT 0`). Make T003 pass
-- [ ] T005 Implement `internal/inventory/manual.go` (`ManualDevice`, `AddManualDevice`,
+- [X] T005 Implement `internal/inventory/manual.go` (`ManualDevice`, `AddManualDevice`,
   `SetManualMAC`, `RemoveManualDevice`, `applyManualFact`, `ErrMACInUse`) and add the manual facts
   to `loadUserFacts`/`applyFact` in `internal/inventory/rebuild.go` with order 0 (a device is added
   before its attributes on equal times). Make T002 pass
@@ -59,13 +59,13 @@ contract are unchanged.
 **Independent test**: add "TL-SL1218P" (switch); the Devices list shows it with "manual" and no
 address; its device page opens; status filters do not list it.
 
-- [ ] T006 [P] [US1] Tests in `internal/store/devices_query_test.go`:
+- [X] T006 [P] [US1] Tests in `internal/store/devices_query_test.go`:
   - `ListDevices` returns a manual device with `State == store.StateManual` and no addresses
   - `DeviceFilter{Status: online|stale|offline}` and `DeviceFilter{Subnet: …}` never return it;
     no filter does
   - `HomeCounts` has `Manual = 1`; Online + Stale + Offline + Manual == Total (SC-004)
   - `DeviceRow.Manual` is true for it
-- [ ] T007 [P] [US1] Tests in `tests/integration/us_manual_test.go` `TestAddManualDevice`:
+- [X] T007 [P] [US1] Tests in `tests/integration/us_manual_test.go` `TestAddManualDevice`:
   - `GET /devices/new` has the form (name, type select, MAC, notes)
   - `POST /devices` with name "TL-SL1218P", type "switch" → 303 to `/devices/{id}`; the page says
     "Added by hand"
@@ -74,10 +74,10 @@ address; its device page opens; status filters do not list it.
     scanned device → 400 naming that device; nothing saved in each case
   - The home page says "(1 added by hand)"
   - A post without the same-origin header is refused (feature 007)
-- [ ] T008 [US1] Implement in `internal/store/devices_query.go` and `internal/store/freshness.go`:
+- [X] T008 [US1] Implement in `internal/store/devices_query.go` and `internal/store/freshness.go`:
   `manual` in `deviceCols`/`scanDevice`, `DeviceRow.Manual`, `StateManual = "manual"` set first in
   `stateEval.apply`, filters and `Counts.Manual`. Make T006 pass
-- [ ] T009 [US1] Implement `internal/web/manual.go` (`GET /devices/new`, `POST /devices` through
+- [X] T009 [US1] Implement `internal/web/manual.go` (`GET /devices/new`, `POST /devices` through
   the ingester lock), routes in `internal/web/server.go`, template
   `internal/web/templates/device_new.html`, the "Add device" link and the "manual" badge in
   `devices.html`, "Added by hand on <date>" in `device.html`, "(M added by hand)" in `home.html`,

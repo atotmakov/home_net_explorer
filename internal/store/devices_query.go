@@ -55,6 +55,7 @@ type DeviceRow struct {
 	UserName      string
 	Notes         string
 	Type          string
+	Manual        bool          // added by hand (feature 011)
 	FirstSeen     time.Time
 	LastSeen      time.Time
 	Addresses     []Address // current addresses on visible (not ignored) subnets
@@ -90,13 +91,13 @@ var SortKeys = []string{"ip", "name", "mac", "hostname", "manufacturer", "first_
 var ErrBadSort = errors.New("store: unknown sort key")
 
 const deviceCols = `id, identity_key, display_name, hostname, COALESCE(mac, ''), mac_randomized,
-	identity_strength = 'weak', manufacturer, status, user_name, notes, type, first_seen, last_seen`
+	identity_strength = 'weak', manufacturer, status, user_name, notes, type, manual, first_seen, last_seen`
 
 func scanDevice(row interface{ Scan(...any) error }) (DeviceRow, error) {
 	var d DeviceRow
 	var first, last string
 	err := row.Scan(&d.ID, &d.IdentityKey, &d.DisplayName, &d.Hostname, &d.MAC, &d.MACRandomized, &d.Weak,
-		&d.Manufacturer, &d.Status, &d.UserName, &d.Notes, &d.Type, &first, &last)
+		&d.Manufacturer, &d.Status, &d.UserName, &d.Notes, &d.Type, &d.Manual, &first, &last)
 	if err != nil {
 		return d, err
 	}
@@ -303,6 +304,7 @@ func (s *Store) GetDevice(ctx context.Context, id int64, now time.Time) (DeviceR
 // Counts summarizes the inventory for the home page by shown state.
 type Counts struct {
 	Total, Online, Stale, Offline int
+	Manual                        int // added by hand (feature 011): in Total, in no state
 }
 
 // HomeCounts counts the devices the Devices list shows, by state at now (so the numbers always
@@ -322,6 +324,8 @@ func (s *Store) HomeCounts(ctx context.Context, now time.Time) (Counts, error) {
 			c.Stale++
 		case StateOffline:
 			c.Offline++
+		case StateManual:
+			c.Manual++
 		}
 	}
 	return c, nil

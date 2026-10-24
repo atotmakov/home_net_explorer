@@ -116,16 +116,18 @@ func TestManualDeviceValidation(t *testing.T) {
 	}
 }
 
+// Owner facts are timed after the scans they follow (received at T0+1m+1s), as in real use: a
+// rebuild replays runs and facts in time order.
 func TestManualMACAndRemove(t *testing.T) {
 	h := it.New(t)
 	ctx := context.Background()
 	h.Ingest(it.Run{Subnets: []contract.SubnetScan{it.Scan("192.168.0.0/24")}, Obs: []contract.Observation{
 		it.ARP("192.168.0.4", "00:00:5e:00:53:04", "pc.lan"), it.ARP("192.168.0.20", "00:00:5e:00:53:20", "nas.lan")}})
-	sw := addManual(t, h, inventory.ManualDevice{Name: "switch", Type: "switch"}, it.T0.Add(time.Minute))
+	sw := addManual(t, h, inventory.ManualDevice{Name: "switch", Type: "switch"}, it.T0.Add(2*time.Minute))
 	do := func(f func(tx *sql.Tx) error) error { return h.Ingester.Do(ctx, f) }
 
 	for _, c := range []struct{ mac, want string }{{"00-00-5E-00-53-99", "00:00:5e:00:53:99"}, {"00:00:5e:00:53:99", "00:00:5e:00:53:99"}, {"", ""}} {
-		if err := do(func(tx *sql.Tx) error { return inventory.SetManualMAC(ctx, tx, sw, c.mac, it.T0.Add(2*time.Minute)) }); err != nil {
+		if err := do(func(tx *sql.Tx) error { return inventory.SetManualMAC(ctx, tx, sw, c.mac, it.T0.Add(3*time.Minute)) }); err != nil {
 			t.Fatalf("set MAC %q: %v", c.mac, err)
 		}
 		if r, _ := manualDevice(t, h, sw); r.MAC != c.want {
@@ -142,12 +144,12 @@ func TestManualMACAndRemove(t *testing.T) {
 	}
 
 	pc, nas := inventory.MACKey("00:00:5e:00:53:04"), inventory.MACKey("00:00:5e:00:53:20")
-	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, pc, sw, it.T0.Add(3*time.Minute)) })
-	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, sw, nas, it.T0.Add(3*time.Minute)) })
-	if err := do(func(tx *sql.Tx) error { return inventory.RemoveManualDevice(ctx, tx, pc, it.T0.Add(4*time.Minute)) }); !errors.Is(err, inventory.ErrNotManual) {
+	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, pc, sw, it.T0.Add(4*time.Minute)) })
+	h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, sw, nas, it.T0.Add(4*time.Minute)) })
+	if err := do(func(tx *sql.Tx) error { return inventory.RemoveManualDevice(ctx, tx, pc, it.T0.Add(5*time.Minute)) }); !errors.Is(err, inventory.ErrNotManual) {
 		t.Errorf("remove a scanned device: %v, want ErrNotManual", err)
 	}
-	h.Fact(func(tx *sql.Tx) error { return inventory.RemoveManualDevice(ctx, tx, sw, it.T0.Add(4*time.Minute)) })
+	h.Fact(func(tx *sql.Tx) error { return inventory.RemoveManualDevice(ctx, tx, sw, it.T0.Add(5*time.Minute)) })
 	if _, ok := manualDevice(t, h, sw); ok {
 		t.Error("removed manual device still in devices")
 	}
@@ -173,9 +175,9 @@ func TestManualDeviceSurvivesRebuild(t *testing.T) {
 	ctx := context.Background()
 	h.Ingest(it.Run{Subnets: []contract.SubnetScan{it.Scan("192.168.0.0/24")}, Obs: []contract.Observation{
 		it.ARP("192.168.0.20", "00:00:5e:00:53:20", "nas.lan")}})
-	sw := addManual(t, h, inventory.ManualDevice{Name: "switch", Type: "switch", Notes: "n"}, it.T0.Add(time.Minute))
-	h.Fact(func(tx *sql.Tx) error { return inventory.SetDeviceAttr(ctx, tx, sw, "name", "TL-SL1218P", it.T0.Add(2*time.Minute)) })
-	h.Fact(func(tx *sql.Tx) error { return inventory.SetManualMAC(ctx, tx, sw, "00:00:5e:00:53:77", it.T0.Add(2*time.Minute)) })
+	sw := addManual(t, h, inventory.ManualDevice{Name: "switch", Type: "switch", Notes: "n"}, it.T0.Add(2*time.Minute))
+	h.Fact(func(tx *sql.Tx) error { return inventory.SetDeviceAttr(ctx, tx, sw, "name", "TL-SL1218P", it.T0.Add(3*time.Minute)) })
+	h.Fact(func(tx *sql.Tx) error { return inventory.SetManualMAC(ctx, tx, sw, "00:00:5e:00:53:77", it.T0.Add(3*time.Minute)) })
 	h.Ingest(it.Run{Start: it.T0.Add(15 * time.Minute), Subnets: []contract.SubnetScan{it.Scan("192.168.0.0/24")}, Obs: []contract.Observation{
 		it.ARP("192.168.0.20", "00:00:5e:00:53:20", "nas.lan")}})
 

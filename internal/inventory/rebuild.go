@@ -80,10 +80,13 @@ func loadRunRefs(ctx context.Context, tx *sql.Tx) ([]runRef, error) {
 	return out, rows.Err()
 }
 
-// loadUserFacts merges the user fact tables in time order (ties: table order, then id).
+// loadUserFacts merges the user fact tables in time order (ties: table order, then id; a manual
+// device is added before its attributes, feature 011).
 func loadUserFacts(ctx context.Context, tx *sql.Tx) ([]userFact, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT 'device_attr' AS t, 1 AS o, id, at, identity_key, field, value FROM user_device_attrs
+		SELECT 'manual_device' AS t, 0 AS o, id, at, identity_key, field, value FROM user_manual_devices
+		UNION ALL
+		SELECT 'device_attr', 1, id, at, identity_key, field, value FROM user_device_attrs
 		UNION ALL
 		SELECT 'subnet_attr', 2, id, at, cidr, field, value FROM user_subnet_attrs
 		ORDER BY at, o, id`)
@@ -126,6 +129,8 @@ func applyFact(ctx context.Context, tx *sql.Tx, f userFact) error {
 		return applyDeviceAttr(ctx, tx, f.key, f.field, f.value)
 	case "subnet_attr":
 		return applySubnetAttr(ctx, tx, f.key, f.field, f.value)
+	case "manual_device":
+		return applyManualFact(ctx, tx, f.key, f.field, f.value, f.at)
 	}
 	return fmt.Errorf("inventory: unknown fact table %s", f.table)
 }
