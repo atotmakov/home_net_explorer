@@ -211,6 +211,34 @@ func applyManualFact(ctx context.Context, tx *sql.Tx, key, field, value, at stri
 	return err
 }
 
+// foldManualDevices merges a manual device with mac into the scanned device devID: the owner's
+// name, type, notes and links carry over (FR-010, research R3).
+func foldManualDevices(ctx context.Context, tx *sql.Tx, devID int64, mac, at string) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM devices WHERE manual = 1 AND mac = ? AND status != 'merged_away' AND id != ?`, mac, devID)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := mergeInto(ctx, tx, id, devID, at); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func newUUID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {

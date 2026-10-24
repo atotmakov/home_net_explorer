@@ -91,29 +91,29 @@ address; its device page opens; status filters do not list it.
 **Independent test**: switch via the router, two devices via the switch → the Map shows the chain
 in 192.168.0.0/24, no LAN1 edge for the two devices.
 
-- [ ] T010 [P] [US2] Tests in `internal/store/topology_manual_test.go` `TestTopologyManualDevices`:
+- [X] T010 [P] [US2] Tests in `internal/store/topology_manual_test.go` `TestTopologyManualDevices`:
   - The manual node has `state: "manual"`, `last_seen_ago: ""`, `ips: []`
   - Its parent is the group of the device it connects via; via another manual device that connects
     via the router, both are in the router's group; connected to nothing → `other`
   - Edges `mu-<switch>` (switch → router) and `mu-<dev>` (device → switch); the devices' router
     port edges (`pd-<dev>`) are not drawn
   - `TestMapJSONShape` still passes
-- [ ] T011 [P] [US2] Tests in `internal/store/userlinks_test.go` (new):
+- [X] T011 [P] [US2] Tests in `internal/store/userlinks_test.go` (new):
   - `DeviceLinkOptions` lists the manual device; the order is routers, switches, access points,
     then by name (FR-004)
   - `LinkLoop(ctx, from, to)` reports a loop when to's chain reaches from (direct and two-step),
     and none otherwise
-- [ ] T012 [P] [US2] Tests in `internal/web/jstest/map-model.test.mjs`:
+- [X] T012 [P] [US2] Tests in `internal/web/jstest/map-model.test.mjs`:
   - A `state: "manual"` node gets the class `manual`; details say "manual (added by hand)" and no
     "last seen"
   - `visibleIds(topo, true)` keeps a manual node when an online or stale device has a manual edge to
     it, directly or through another manual node, and hides it when only offline devices do or none
-- [ ] T013 [US2] Implement the topology in `internal/store/topology.go` (manual state, group by link
+- [X] T013 [US2] Implement the topology in `internal/store/topology.go` (manual state, group by link
   chain with a visited set) and `LinkLoop` plus the ranking in `internal/store/userlinks.go`; the
   400 loop message in `internal/web/map.go` `handleDeviceLink` ("this would make a loop: <target>
   connects via <this device>"); the loop check and the link write run in one `Ingester.Do` call,
   so a concurrent edit cannot create a loop between check and write. Make T010 and T011 pass
-- [ ] T014 [US2] Implement `internal/web/static/map-model.js` (class, details text, "Online only"
+- [X] T014 [US2] Implement `internal/web/static/map-model.js` (class, details text, "Online only"
   rule) and the dashed outline in `internal/web/static/map.js`. Make T012 pass
 
 **Checkpoint**: SC-002 can be checked on the real network.
@@ -124,19 +124,19 @@ in 192.168.0.0/24, no LAN1 edge for the two devices.
 **Independent test**: rename → the new name in the list and on the Map; remove → gone, linked devices
 lose the link and are drawn from scan data again.
 
-- [ ] T015 [P] [US3] Tests in `tests/integration/us_manual_test.go` `TestEditRemoveManualDevice`:
+- [X] T015 [P] [US3] Tests in `tests/integration/us_manual_test.go` `TestEditRemoveManualDevice`:
   - Rename and retype through `POST /devices/{id}/attrs` show in `/devices` and `/ui/map.json`
   - `POST /devices/{id}/mac` sets and clears the MAC; a MAC in use → 400; on a scanned device → 404
   - `POST /devices/{id}/remove` without `confirm=remove` → 400 and the device stays; with it → 303
     to `/devices`, the device is gone from the list, the Map and the "Connected via" options; a
     device that was linked to it shows "not set" and is back on its router port on the Map
   - A scanned device's page has no Remove section and `POST …/remove` → 404 (FR-012)
-- [ ] T016 [P] [US3] Test in `internal/inventory/manual_test.go` `TestScanSeesManualMAC` (FR-010):
+- [X] T016 [P] [US3] Test in `internal/inventory/manual_test.go` `TestScanSeesManualMAC` (FR-010):
   a manual device with MAC m, then a scan sees m at 192.168.0.30 → one device with the owner's name,
   type, notes and link, a normal state, and the manual row merged away; a device whose "Connected
   via" pointed at the manual device now points at the merged device (its `mu-` edge on the Map
   targets it), and the merged device keeps the manual device's own link
-- [ ] T017 [US3] Implement `POST /devices/{id}/mac` and `POST /devices/{id}/remove` in
+- [X] T017 [US3] Implement `POST /devices/{id}/mac` and `POST /devices/{id}/remove` in
   `internal/web/manual.go`, each inside `Ingester.Do` (owner facts and projections change
   together, serialized with ingest and rebuild), the MAC field and Remove section in `device.html` (manual devices only),
   and the merge by MAC in `internal/inventory/apply.go` (after the scanned device is resolved: a row

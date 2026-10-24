@@ -39,6 +39,9 @@ func (s *Server) handleMapJSON(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tp)
 }
 
+// errLinkLoop refuses a link whose target already connects, directly or not, via the device.
+var errLinkLoop = errors.New("link loop")
+
 // handleDeviceLink sets (via=<device id>) or clears (via empty) the device's manual
 // "connected via" link, as an append-only user fact (research R7).
 func (s *Server) handleDeviceLink(w http.ResponseWriter, r *http.Request) {
@@ -65,12 +68,25 @@ func (s *Server) handleDeviceLink(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	at := s.opts.Clock.Now()
+	// The loop check and the write run under the ingest lock, so no other owner edit can close a
+	// loop in between (feature 011, FR-009).
 	err := s.opts.Ingester.Do(r.Context(), func(tx *sql.Tx) error {
 		if via == "" {
 			return store.ClearUserLink(r.Context(), tx, d.IdentityKey, at)
 		}
+		loop, err := s.opts.Store.LinkLoop(r.Context(), d.ID, target.ID)
+		if err != nil {
+			return err
+		}
+		if loop {
+			return errLinkLoop
+		}
 		return store.SetUserLink(r.Context(), tx, d.IdentityKey, target.IdentityKey, at)
 	})
+	if errors.Is(err, errLinkLoop) {
+		http.Error(w, "this would make a loop: "+target.DisplayName+" connects via "+d.DisplayName, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return

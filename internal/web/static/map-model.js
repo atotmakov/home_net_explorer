@@ -4,9 +4,13 @@
 
 const byId = (topo) => new Map([...topo.groups, ...topo.nodes].map((x) => [x.id, x]));
 
-// tooltip is the hover text of a device: name · IP · MAC · last seen … ago.
+const MANUAL = 'manual (added by hand)';
+
+// tooltip is the hover text of a device: name · IP · MAC · last seen … ago, or "manual (added by
+// hand)" for a device the owner added (feature 011).
 export function tooltip(n) {
   const parts = [n.label, n.ip, n.mac].filter((s) => s);
+  if (n.state === 'manual') return parts.concat(MANUAL).join(' · ');
   return parts.join(' · ') + ' · last seen ' + n.last_seen_ago + ' ago';
 }
 
@@ -24,6 +28,7 @@ export function toElements(topo) {
     }
     const cls = ['device', 'state-' + n.state];
     if (n.state === 'offline') cls.push('dim');
+    if (n.state === 'manual') cls.push('manual');
     if (n.gateway_of && n.gateway_of.length) cls.push('gateway');
     els.push({ group: 'nodes', data: { id: n.id, parent: n.parent, label: n.label, tip: tooltip(n) }, classes: cls.join(' ') });
   }
@@ -40,11 +45,27 @@ export function toElements(topo) {
 
 // visibleIds returns the ids (groups, nodes, edges of topo) to show. With onlineOnly, offline
 // devices are hidden, with every edge touching a hidden element, ports left without a visible
-// device, and groups left without a visible node. topo is not modified.
+// device, and groups left without a visible node. A manual device stays when an online or stale
+// device connects via it, directly or through other manual devices (feature 011, FR-006). topo is
+// not modified.
 export function visibleIds(topo, onlineOnly) {
   const hidden = new Set();
   if (onlineOnly) {
     for (const n of topo.nodes) if (n.kind === 'device' && n.state === 'offline') hidden.add(n.id);
+    const state = new Map(topo.nodes.map((n) => [n.id, n.state]));
+    const kept = new Set();
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const e of topo.edges) {
+        if (e.kind !== 'manual' || state.get(e.target) !== 'manual' || kept.has(e.target)) continue;
+        const from = state.get(e.source);
+        if (from === 'online' || from === 'stale' || (from === 'manual' && kept.has(e.source))) {
+          kept.add(e.target);
+          grew = true;
+        }
+      }
+    }
+    for (const n of topo.nodes) if (n.state === 'manual' && !kept.has(n.id)) hidden.add(n.id);
     for (const p of topo.nodes) {
       if (p.kind !== 'port') continue;
       const shown = topo.edges.some((e) => e.kind === 'port' && e.source === p.id && !hidden.has(e.target));
@@ -90,7 +111,7 @@ export function details(topo, id) {
   return {
     title: n.label,
     state: n.state,
-    statusText: n.state === 'offline' ? 'offline' : 'online',
+    statusText: n.state === 'manual' ? MANUAL : n.state === 'offline' ? 'offline' : 'online',
     href: '/devices/' + n.device_id,
     rows,
   };
