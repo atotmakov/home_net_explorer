@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<h1>Devices <a href="/devices/new" class="button" title="Add equipment that scans cannot see, such as an unmanaged switch">Add device</a></h1>
+<h1>Devices <a class="button" href="/devices/new" title="Add equipment that scans cannot see, such as an unmanaged switch">Add device</a></h1>
 <form class="filters" method="get" action="/devices"
       hx-get="/devices" hx-target="#device-rows" hx-trigger="input changed delay:300ms, change" hx-push-url="true">
   <input type="search" name="q" value="{{.Filter.Q}}" placeholder="Search name, IP, MAC, vendor" aria-label="Search">
