@@ -101,14 +101,20 @@ func (e *eap225) Read(ctx context.Context) Result {
 	// Each firmware generation has one list path. An answer other than 200 means "not this
 	// endpoint" (the older unit answers the newer path with something other than 404 once logged
 	// in, and drops the connection on a POST to it: gate G1, run 4).
-	detail := "no client list endpoint answered"
+	const noEndpoint = "no client list endpoint answered"
+	detail := noEndpoint
 	for _, p := range listPaths {
 		body, err := e.do(ctx, client, http.MethodGet, p.path+"?operation=load", "")
 		if errors.Is(err, errUnreachable) {
 			return failed(err)
 		}
+		if err == nil && !jsonObject(body) {
+			err = errNotListed // e.g. 200 with an empty body (gate G1, run 5): not this endpoint
+		}
 		if err != nil {
-			detail = p.name + " answered " + describe(nil, err)
+			if !errors.Is(err, errNotFound) || detail == noEndpoint { // keep the most useful description
+				detail = p.name + " answered " + describe(body, err)
+			}
 			continue
 		}
 		if notLoggedIn(body) {
@@ -142,6 +148,9 @@ func describe(body []byte, err error) string {
 	}
 	if errors.Is(err, errNotFound) {
 		return "HTTP 404"
+	}
+	if errors.Is(err, errNotListed) && body != nil {
+		err = nil // describe the body
 	}
 	if err != nil {
 		return "an answer that is too large"
@@ -333,6 +342,12 @@ func truthy(raw json.RawMessage) bool {
 	}
 	var s string
 	return json.Unmarshal(raw, &s) == nil && strings.EqualFold(strings.TrimSpace(s), "true")
+}
+
+// jsonObject reports whether body is a JSON object, the shape of every answer of the data pages.
+func jsonObject(body []byte) bool {
+	var m map[string]json.RawMessage
+	return json.Unmarshal(body, &m) == nil
 }
 
 // notLoggedIn reports an answer that says the session is not (or no longer) valid.
