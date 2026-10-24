@@ -318,11 +318,12 @@ func TestUnreachableDetail(t *testing.T) {
 	}
 }
 
-// Gate G1, run 4: logged in, the owner's older unit answers the newer firmware's list path with
-// something other than 404, and drops the connection on a POST to it. Any answer other than 200
-// on a list path means "not this endpoint": the reader goes on to the other path, no POST.
+// Gate G1, runs 4 and 5: logged in, the owner's older unit answers the newer firmware's list
+// path with something other than a JSON answer (run 5: 200 with an empty body), and drops the
+// connection on a POST to it. Anything but a JSON answer on a list path means "not this
+// endpoint": the reader goes on to the other path, without a POST.
 func TestOtherFirmwarePathNotFound(t *testing.T) {
-	for _, status := range []int{http.StatusFound, http.StatusForbidden, http.StatusInternalServerError} {
+	for _, status := range []int{http.StatusOK, http.StatusFound, http.StatusForbidden, http.StatusInternalServerError} {
 		ap := eaptest.Start(t, eaptest.Old, testUser, testPassword)
 		ap.SetOtherPath(status)
 		ap.SetClients(eaptest.OldClient("00-00-5E-00-53-13", "192.168.0.13", "Home", "2.4GHz", "Pixel-9a"))
