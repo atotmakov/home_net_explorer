@@ -25,6 +25,8 @@ function styles() {
     { selector: 'node.state-stale', style: { 'background-color': fg } },
     { selector: 'node.state-offline', style: { 'background-color': muted } },
     { selector: 'node.dim', style: { opacity: 0.45 } },
+    { selector: 'node.manual', style: { shape: 'round-rectangle', width: 20, 'background-color': card, 'border-width': 2,
+      'border-style': 'dashed', 'border-color': fg } },
     { selector: 'node.gateway', style: { shape: 'diamond', width: 22, height: 22, 'border-width': 3, 'border-color': accent } },
     { selector: 'node.port', style: { shape: 'round-rectangle', width: 10, height: 10, 'background-color': line,
       'font-size': 10, color: muted } },

@@ -91,7 +91,8 @@ type LinkOption struct {
 }
 
 // DeviceLinkOptions lists the devices that device id can be linked to: every other device of the
-// Devices list, routers and access points first, then by name; the current target is selected.
+// Devices list, routers, switches and access points first (feature 011, FR-004), then by name;
+// the current target is selected.
 func (s *Store) DeviceLinkOptions(ctx context.Context, id int64, now time.Time) ([]LinkOption, error) {
 	devs, err := s.ListDevices(ctx, DeviceFilter{Now: now})
 	if err != nil {
@@ -117,10 +118,12 @@ func (s *Store) DeviceLinkOptions(ctx context.Context, id int64, now time.Time) 
 		switch t {
 		case "router":
 			return 0
-		case "access_point":
+		case "switch":
 			return 1
+		case "access_point":
+			return 2
 		}
-		return 2
+		return 3
 	}
 	slices.SortStableFunc(out, func(a, b LinkOption) int {
 		if c := cmp.Compare(rank(a.Type), rank(b.Type)); c != 0 {
@@ -129,4 +132,21 @@ func (s *Store) DeviceLinkOptions(ctx context.Context, id int64, now time.Time) 
 		return cmp.Compare(strings.ToLower(a.Label), strings.ToLower(b.Label))
 	})
 	return out, nil
+}
+
+// LinkLoop reports whether linking from to to would close a loop: to's chain of current links
+// reaches from (feature 011, FR-009).
+func (s *Store) LinkLoop(ctx context.Context, from, to int64) (bool, error) {
+	links, err := s.userLinkTargets(ctx)
+	if err != nil {
+		return false, err
+	}
+	seen := map[int64]bool{}
+	for cur := to; cur != 0 && !seen[cur]; cur = links[cur] {
+		if cur == from {
+			return true, nil
+		}
+		seen[cur] = true
+	}
+	return false, nil
 }

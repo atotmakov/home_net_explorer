@@ -168,6 +168,9 @@ func (a *Applier) observe(ctx context.Context, tx *sql.Tx, collectorID int64, sn
 		if err == nil {
 			err = foldWeakDevices(ctx, tx, d.id, sn, o.IP, o.Hostname, at)
 		}
+		if err == nil {
+			err = foldManualDevices(ctx, tx, d.id, o.MAC, at)
+		}
 	} else {
 		var holder int64
 		holder, err = currentHolder(ctx, tx, subnetID, o.IP)

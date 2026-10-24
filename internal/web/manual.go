@@ -67,3 +67,54 @@ func ownerInputError(err error) (string, bool) {
 	}
 	return "", false
 }
+
+// loadManual loads the device of the path and answers 404 unless it was added by hand (FR-012).
+func (s *Server) loadManual(w http.ResponseWriter, r *http.Request) (store.DeviceRow, bool) {
+	d, ok := s.loadDevice(w, r)
+	if ok && !d.Manual {
+		http.NotFound(w, r)
+		return d, false
+	}
+	return d, ok
+}
+
+// handleManualMAC sets or clears the MAC of a manual device.
+func (s *Server) handleManualMAC(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.loadManual(w, r)
+	if !ok {
+		return
+	}
+	mac := r.PostFormValue("mac")
+	err := s.opts.Ingester.Do(r.Context(), func(tx *sql.Tx) error {
+		return inventory.SetManualMAC(r.Context(), tx, d.IdentityKey, mac, s.opts.Clock.Now())
+	})
+	if msg, bad := ownerInputError(err); bad {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/devices/"+strconv.FormatInt(d.ID, 10)+"?saved=1", http.StatusSeeOther)
+}
+
+// handleManualRemove removes a manual device after the owner typed "remove" (FR-007).
+func (s *Server) handleManualRemove(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.loadManual(w, r)
+	if !ok {
+		return
+	}
+	if r.PostFormValue("confirm") != "remove" {
+		http.Error(w, `type "remove" to confirm`, http.StatusBadRequest)
+		return
+	}
+	err := s.opts.Ingester.Do(r.Context(), func(tx *sql.Tx) error {
+		return inventory.RemoveManualDevice(r.Context(), tx, d.IdentityKey, s.opts.Clock.Now())
+	})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/devices", http.StatusSeeOther)
+}

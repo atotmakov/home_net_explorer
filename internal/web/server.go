@@ -170,6 +170,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /devices", s.handleDevices)
 	s.mux.HandleFunc("GET /devices/new", s.handleManualNew) // feature 011
 	s.mux.HandleFunc("POST /devices", s.handleManualAdd)
+	s.mux.HandleFunc("POST /devices/{id}/mac", s.handleManualMAC)
+	s.mux.HandleFunc("POST /devices/{id}/remove", s.handleManualRemove)
 	s.mux.HandleFunc("GET /devices/{id}", s.handleDevice)
 	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
 	s.mux.HandleFunc("POST /devices/{id}/router", s.handleRouterSave)
