@@ -420,3 +420,24 @@ func TestTopologyManualLinkFollowsMerge(t *testing.T) {
 		t.Errorf("manual link did not follow the merge: %+v", tp.Edges)
 	}
 }
+
+// Feature 012: an access point read with outcome ok is not a router read; the access point is
+// never made the gateway of its subnet.
+func TestAccessPointNotGateway(t *testing.T) {
+	h := it.New(t)
+	routerRead(h, it.T0, listedAt("192.168.0.1", "e0:00:5e:10:00:01", ""), listedAt("192.168.0.5", "00:00:5e:10:00:05", "LAN1"))
+	run := h.Build(it.Run{Collector: "desktop", Start: it.T0.Add(time.Minute), Subnets: []contract.SubnetScan{routerTable()},
+		Obs: []contract.Observation{listedAt("192.168.0.5", "00:00:5e:10:00:05", "LAN1")}})
+	run.Sources = []contract.RunSource{{Type: "access_point", Model: "tplink-eap225", Address: "192.168.0.5",
+		Subnet: routerLAN, Outcome: contract.OutcomeOK, Online: 0, Offline: 0}}
+	h.IngestRun(run, run.FinishedAt.Add(time.Second))
+
+	tp := topo(t, h, it.T0.Add(5*time.Minute))
+	g0 := groupOf(t, h, routerLAN)
+	if r := devNode(t, tp, "192.168.0.1"); !slices.Equal(r.GatewayOf, []string{g0}) {
+		t.Errorf("router gateway_of = %v, want [%s]", r.GatewayOf, g0)
+	}
+	if ap := devNode(t, tp, "192.168.0.5"); len(ap.GatewayOf) != 0 {
+		t.Errorf("access point gateway_of = %v, want none", ap.GatewayOf)
+	}
+}

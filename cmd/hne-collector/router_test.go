@@ -63,7 +63,7 @@ func TestRouterConfigErrors(t *testing.T) {
 	}
 	h.withRouters(t, "http://unused", many...)
 	if code := h.run("scan", "--once", "--dry-run"); code != 2 {
-		t.Errorf("9 routers: exit %d, want 2 (at most %d)", code, contract.MaxSources)
+		t.Errorf("9 routers: exit %d, want 2 (at most %d)", code, contract.MaxRouters)
 	}
 }
 
