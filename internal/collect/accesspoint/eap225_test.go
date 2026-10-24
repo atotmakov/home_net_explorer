@@ -2,9 +2,9 @@ package accesspoint
 
 import (
 	"bytes"
-	"net/http"
 	"context"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"reflect"
 	"strings"
