@@ -63,12 +63,12 @@ const (
 // config is hne-collector.yaml, overridable by HNE_SERVER_URL, HNE_TOKEN, HNE_SUBNETS and
 // HNE_EXTRA_SUBNETS.
 type config struct {
-	ServerURL       string          `json:"server_url" yaml:"server_url"`
-	Name            string          `json:"name" yaml:"name"`
-	Token           string          `json:"token" yaml:"token"`
-	Subnets         []string        `json:"subnets" yaml:"subnets"`
-	ExtraSubnets    []string        `json:"extra_subnets" yaml:"extra_subnets"` // scanned in addition to subnets/auto-discovery
-	IntervalSeconds int             `json:"interval_seconds" yaml:"interval_seconds"`
+	ServerURL       string        `json:"server_url" yaml:"server_url"`
+	Name            string        `json:"name" yaml:"name"`
+	Token           string        `json:"token" yaml:"token"`
+	Subnets         []string      `json:"subnets" yaml:"subnets"`
+	ExtraSubnets    []string      `json:"extra_subnets" yaml:"extra_subnets"` // scanned in addition to subnets/auto-discovery
+	IntervalSeconds int           `json:"interval_seconds" yaml:"interval_seconds"`
 	Routers         legacyRouters `json:"routers" yaml:"routers"` // no longer used (feature 013)
 
 	prefixes      []netip.Prefix
@@ -282,13 +282,13 @@ func run(args []string, env environment) int {
 	}
 
 	c := &collector{
-		cfg:         cfg,
-		env:         env,
-		log:         log,
-		jsonOut:     jsonOut,
-		engine:      engine,
-		client:      &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
-		spool:       upload.Spool{Dir: filepath.Join(env.dir, "spool")},
+		cfg:     cfg,
+		env:     env,
+		log:     log,
+		jsonOut: jsonOut,
+		engine:  engine,
+		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
+		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
 	parent := env.ctx
 	if parent == nil {
@@ -315,8 +315,8 @@ type collector struct {
 	client  *upload.Client
 	spool   upload.Spool
 
-	serverRouters  []contract.RouterRef // routers set up in the web UI (ping, else the cache)
-	markerMu       sync.Mutex           // guards the rejection marker file
+	serverRouters []contract.RouterRef // routers set up in the web UI (ping, else the cache)
+	markerMu      sync.Mutex           // guards the rejection marker file
 }
 
 func (c *collector) check(ctx context.Context) int {
