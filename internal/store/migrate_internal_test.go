@@ -61,3 +61,33 @@ ALTER TABLE collectors_tmp RENAME TO collectors;`}
 		t.Error("foreign keys stay off after the migration")
 	}
 }
+
+// Feature 011: schema 9 holds the owner's manual devices (facts) and the devices.manual flag.
+func TestManualDevicesSchema(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if v, _ := s.Version(ctx); v < 9 {
+		t.Fatalf("schema version = %d, want >= 9", v)
+	}
+	ins := `INSERT INTO user_manual_devices (identity_key, field, value, at) VALUES ('manual:x', ?, '', 'a')`
+	for _, f := range []string{"add", "mac", "remove"} {
+		if _, err := s.db.ExecContext(ctx, ins, f); err != nil {
+			t.Errorf("field %s refused: %v", f, err)
+		}
+	}
+	if _, err := s.db.ExecContext(ctx, ins, "name"); err == nil {
+		t.Error("field name accepted in user_manual_devices")
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO devices (identity_key, identity_strength, status, first_seen, last_seen, display_name)
+		VALUES ('mac:x', 'strong', 'online', 'a', 'a', 'x')`); err != nil {
+		t.Fatal(err)
+	}
+	var manual int
+	if err := s.db.QueryRowContext(ctx, `SELECT manual FROM devices WHERE identity_key = 'mac:x'`).Scan(&manual); err != nil || manual != 0 {
+		t.Errorf("devices.manual = %d, %v; want default 0", manual, err)
+	}
+}
