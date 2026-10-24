@@ -63,7 +63,7 @@ const (
 	OutcomeSessionBusy           = "session_busy"
 	OutcomePageNotUnderstood     = "page_not_understood"
 	OutcomeSkippedAfterRejection = "skipped_after_rejection"
-	OutcomeLoginUnavailable      = "login_unavailable" // the login could not be fetched from the server (feature 003)
+	OutcomeLoginUnavailable      = "login_unavailable"  // the login could not be fetched from the server (feature 003)
 	OutcomeControllerManaged     = "controller_managed" // the access point is run by a central controller (feature 012)
 )
 

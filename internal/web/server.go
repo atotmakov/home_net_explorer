@@ -172,7 +172,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
 	s.mux.HandleFunc("POST /devices/{id}/router", s.handleRouterSave)
 	s.mux.HandleFunc("POST /devices/{id}/router/remove", s.handleRouterRemove)
-	s.mux.HandleFunc("POST /devices/{id}/access-point", s.handleAccessPointSave)    // feature 012
+	s.mux.HandleFunc("POST /devices/{id}/access-point", s.handleAccessPointSave)     // feature 012
 	s.mux.HandleFunc("POST /devices/{id}/access-point/remove", s.handleRouterRemove) // same settings row
 	s.mux.HandleFunc("POST /devices/{id}/link", s.handleDeviceLink)
 	s.mux.HandleFunc("GET /map", s.handleMap)
