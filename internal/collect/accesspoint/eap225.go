@@ -69,7 +69,7 @@ func (e *eap225) Read(ctx context.Context) Result {
 	}}
 
 	// A controller-managed access point has no client list of its own: don't log in.
-	if body, err := e.do(ctx, client, http.MethodGet, pathManaged, nil); err == nil {
+	if body, err := e.do(ctx, client, http.MethodGet, pathManaged, ""); err == nil {
 		var m struct {
 			Success bool `json:"success"`
 			ErrCode int  `json:"errCode"`
@@ -81,7 +81,7 @@ func (e *eap225) Read(ctx context.Context) Result {
 		return Result{Outcome: contract.OutcomeUnreachable}
 	}
 	// The login page sets the older firmware's session cookie.
-	if _, err := e.do(ctx, client, http.MethodGet, pathLoginPage, nil); errors.Is(err, errUnreachable) {
+	if _, err := e.do(ctx, client, http.MethodGet, pathLoginPage, ""); errors.Is(err, errUnreachable) {
 		return Result{Outcome: contract.OutcomeUnreachable}
 	}
 	if outcome := e.login(ctx, client); outcome != "" {
@@ -94,18 +94,22 @@ func (e *eap225) Read(ctx context.Context) Result {
 	defer e.logout(client)
 
 	for _, p := range listPaths {
-		body, err := e.do(ctx, client, http.MethodGet, p.path+"?operation=load", nil)
+		body, err := e.do(ctx, client, http.MethodGet, p.path+"?operation=load", "")
 		if errors.Is(err, errNotFound) {
 			continue // the other firmware generation
 		}
 		if errors.Is(err, errUnreachable) {
 			return failed(err)
 		}
+		if err == nil && notLoggedIn(body) {
+			return Result{Outcome: contract.OutcomePageNotUnderstood,
+				Detail: p.name + " answered not logged in (timeout=true): the access point did not accept the login session"}
+		}
 		clients, keys, perr := parseClients(body)
 		if err != nil || perr != nil {
-			// The web page itself asks with POST operation=load (js/su/data/store.js); the
-			// older firmware answers only that (gate G1).
-			pbody, err2 := e.do(ctx, client, http.MethodPost, p.path, url.Values{"operation": {"load"}})
+			// Store.load on the page asks with operation=load (js/su/data/store.js); some
+			// firmware may answer it only as a POST.
+			pbody, err2 := e.do(ctx, client, http.MethodPost, p.path, "operation=load")
 			if errors.Is(err2, errUnreachable) {
 				return failed(err2)
 			}
@@ -144,9 +148,8 @@ func describe(body []byte, err error) string {
 	}
 	sort.Strings(keys)
 	flag := func(name string) string {
-		var b bool
-		if raw := field(ans, name); raw != nil && json.Unmarshal(raw, &b) == nil {
-			return strconv.FormatBool(b)
+		if raw := field(ans, name); raw != nil {
+			return strconv.FormatBool(truthy(raw))
 		}
 		return "missing"
 	}
@@ -164,11 +167,12 @@ func failed(err error) Result {
 	return Result{Outcome: contract.OutcomePageNotUnderstood}
 }
 
-// login posts the username and the upper-case hex MD5 of the password, as the login page does.
-// It returns "" when logged in, else the outcome.
+// login posts the username and the upper-case hex MD5 of the password, in that order, as the
+// login page does (the older firmware ignores another order: gate G1, run 2). It returns "" when
+// logged in, else the outcome.
 func (e *eap225) login(ctx context.Context, c *http.Client) string {
 	sum := md5.Sum([]byte(e.cfg.Password.Reveal()))
-	form := url.Values{"username": {e.cfg.Username}, "password": {strings.ToUpper(hex.EncodeToString(sum[:]))}}
+	form := "username=" + url.QueryEscape(e.cfg.Username) + "&password=" + strings.ToUpper(hex.EncodeToString(sum[:]))
 	body, err := e.do(ctx, c, http.MethodPost, pathLoginPage, form)
 	if errors.Is(err, errUnreachable) {
 		return contract.OutcomeUnreachable
@@ -180,7 +184,7 @@ func (e *eap225) login(ctx context.Context, c *http.Client) string {
 		return ""
 	}
 	// Not confirmed: the login state tells a wrong password from a lockout.
-	state, err := e.do(ctx, c, http.MethodPost, pathLoginData, url.Values{"operation": {"read"}})
+	state, err := e.do(ctx, c, http.MethodPost, pathLoginData, "operation=read")
 	if err != nil {
 		return failed(err).Outcome
 	}
@@ -219,21 +223,22 @@ func number(v any) int {
 func (e *eap225) logout(c *http.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), logoutTimeout)
 	defer cancel()
-	e.do(ctx, c, http.MethodGet, pathLogout, nil)
+	e.do(ctx, c, http.MethodGet, pathLogout, "")
 }
 
-// do sends one request and returns the body of a 200 answer.
-func (e *eap225) do(ctx context.Context, c *http.Client, method, path string, form url.Values) ([]byte, error) {
+// do sends one request and returns the body of a 200 answer. form is an encoded form body
+// ("" for none), in the field order the access point's own page uses.
+func (e *eap225) do(ctx context.Context, c *http.Client, method, path, form string) ([]byte, error) {
 	var body io.Reader
-	if form != nil {
-		body = strings.NewReader(form.Encode())
+	if form != "" {
+		body = strings.NewReader(form)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, e.base+path, body)
 	if err != nil {
 		return nil, errNotListed
 	}
-	if form != nil {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if form != "" {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	}
 	req.Header.Set("Referer", e.base+"/")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
@@ -269,10 +274,7 @@ func parseClients(body []byte) (clients []Client, keys []string, err error) {
 	if json.Unmarshal(body, &ans) != nil {
 		return nil, nil, errNotListed
 	}
-	var success, timeout bool
-	json.Unmarshal(field(ans, "success"), &success)
-	json.Unmarshal(field(ans, "timeout"), &timeout)
-	if !success || timeout {
+	if !truthy(field(ans, "success")) || truthy(field(ans, "timeout")) {
 		return nil, nil, errNotListed
 	}
 	list := field(ans, "data")
@@ -294,6 +296,23 @@ func parseClients(body []byte) (clients []Client, keys []string, err error) {
 		clients = append(clients, clientFrom(en))
 	}
 	return clients, keys, nil
+}
+
+// truthy reads a flag the firmware sends as true or as the text "true" (the older firmware sends
+// timeout as "false").
+func truthy(raw json.RawMessage) bool {
+	var b bool
+	if json.Unmarshal(raw, &b) == nil {
+		return b
+	}
+	var s string
+	return json.Unmarshal(raw, &s) == nil && strings.EqualFold(strings.TrimSpace(s), "true")
+}
+
+// notLoggedIn reports an answer that says the session is not (or no longer) valid.
+func notLoggedIn(body []byte) bool {
+	var ans map[string]json.RawMessage
+	return json.Unmarshal(body, &ans) == nil && truthy(field(ans, "timeout"))
 }
 
 func field(m map[string]json.RawMessage, names ...string) json.RawMessage {
@@ -334,7 +353,7 @@ func clientFrom(m map[string]json.RawMessage) Client {
 	}
 	c.SSID = text(m, "ssid")
 	c.Band = band(text(m, "radio", "band", "freq"))
-	c.Hostname = text(m, "hostname", "name", "host")
+	c.Hostname = text(m, "hostname", "devicename", "name", "host") // DeviceName: older firmware
 	if len(c.Hostname) > 253 || c.Hostname == "--" {
 		c.Hostname = ""
 	}
