@@ -168,6 +168,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /login", home)
 	s.mux.HandleFunc("GET /{$}", s.handleHome)
 	s.mux.HandleFunc("GET /devices", s.handleDevices)
+	s.mux.HandleFunc("GET /devices/new", s.handleManualNew) // feature 011
+	s.mux.HandleFunc("POST /devices", s.handleManualAdd)
 	s.mux.HandleFunc("GET /devices/{id}", s.handleDevice)
 	s.mux.HandleFunc("POST /devices/{id}/attrs", s.handleDeviceAttrs)
 	s.mux.HandleFunc("POST /devices/{id}/router", s.handleRouterSave)
@@ -336,8 +338,8 @@ func stateLabel(state string) string {
 // badgeLabel is the text of a device's status badge: stale devices read "online" too; the color
 // and the "last seen" tooltip tell fresh from stale (feature 006, FR-001).
 func badgeLabel(state string) string {
-	if state == store.StateOffline {
-		return "offline"
+	if state == store.StateOffline || state == store.StateManual {
+		return state
 	}
 	return "online"
 }

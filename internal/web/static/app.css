@@ -32,6 +32,7 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .muted { color: var(--muted); }
 .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: .8rem; border: 1px solid currentColor; }
 .s-online { color: var(--ok); } .s-stale { color: var(--fg); } .s-offline { color: var(--muted); }
+.s-manual { color: var(--fg); border-style: dashed; }
 .warn { color: var(--warn); }
 .table-wrap { overflow-x: auto; }
 h2 { font-size: 1.1rem; margin: 20px 0 10px; }

@@ -1,7 +1,7 @@
 {{define "content"}}
 {{with .Data}}{{with .Device}}
 <p><a href="/devices">← Devices</a></p>
-<h1>{{.DisplayName}} <span class="badge s-{{.State}}" title="last seen {{ago .Age}} ago">{{badgeLabel .State}}</span></h1>
+<h1>{{.DisplayName}} {{if .Manual}}<span class="badge s-manual" title="Added by hand, not seen by scans">manual</span>{{else}}<span class="badge s-{{.State}}" title="last seen {{ago .Age}} ago">{{badgeLabel .State}}</span>{{end}}</h1>
 <div class="grid2">
 <section class="card">
   <h2>Identity</h2>
@@ -10,8 +10,9 @@
     <dt>Manufacturer</dt><dd>{{or .Manufacturer "—"}}</dd>
     <dt>Hostname</dt><dd>{{or .Hostname "—"}}</dd>
     <dt>Addresses</dt><dd>{{range .Addresses}}{{.IP}} <span class="muted">({{.CIDR}}{{with .ViaText}}, via {{.}}{{end}})</span><br>{{else}}—{{end}}</dd>
+    {{if .Manual}}<dt>Added by hand</dt><dd>{{fmtTime .FirstSeen}} <span class="muted">(scans cannot see it)</span></dd>{{else}}
     <dt>First seen</dt><dd>{{fmtTime .FirstSeen}}</dd>
-    <dt>Last seen</dt><dd>{{fmtTime .LastSeen}}</dd>
+    <dt>Last seen</dt><dd>{{fmtTime .LastSeen}}</dd>{{end}}
   </dl>
 </section>
 <section class="card">
