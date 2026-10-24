@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -314,5 +315,25 @@ func TestUnreachableDetail(t *testing.T) {
 	src.timeout = 100 * time.Millisecond
 	if res := src.Read(context.Background()); res.Outcome != contract.OutcomeUnreachable || res.Detail != "GET /data/managedMode.json: timed out" {
 		t.Errorf("slow access point = %s, detail %q", res.Outcome, res.Detail)
+	}
+}
+
+// Gate G1, run 4: logged in, the owner's older unit answers the newer firmware's list path with
+// something other than 404, and drops the connection on a POST to it. Any answer other than 200
+// on a list path means "not this endpoint": the reader goes on to the other path, no POST.
+func TestOtherFirmwarePathNotFound(t *testing.T) {
+	for _, status := range []int{http.StatusFound, http.StatusForbidden, http.StatusInternalServerError} {
+		ap := eaptest.Start(t, eaptest.Old, testUser, testPassword)
+		ap.SetOtherPath(status)
+		ap.SetClients(eaptest.OldClient("00-00-5E-00-53-13", "192.168.0.13", "Home", "2.4GHz", "Pixel-9a"))
+		res := source(t, ap, testPassword).Read(context.Background())
+		if res.Outcome != contract.OutcomeOK || res.Path != "monitor.client.client" || len(res.Clients) != 1 {
+			t.Errorf("other path answers %d: %s, path %q, %d clients, detail %q", status, res.Outcome, res.Path, len(res.Clients), res.Detail)
+		}
+		for _, r := range ap.Requests() {
+			if r.Method == "POST" && strings.Contains(r.Path, "client") {
+				t.Errorf("other path answers %d: POST to %s", status, r.Path)
+			}
+		}
 	}
 }
