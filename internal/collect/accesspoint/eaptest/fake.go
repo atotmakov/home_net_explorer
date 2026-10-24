@@ -3,10 +3,12 @@
 package eaptest
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -42,6 +44,19 @@ func Client(mac, ip, ssid string, radio int, hostname string) Entry {
 	}
 	if hostname != "" {
 		e["hostname"] = hostname
+	}
+	return e
+}
+
+// OldClient returns an entry as the older firmware lists it (seen on the owner's 192.168.0.10,
+// 2026-10-24): the name under DeviceName and Radio as text such as "2.4GHz".
+func OldClient(mac, ip, ssid, radio, name string) Entry {
+	e := Entry{"MAC": mac, "SSID": ssid, "Radio": radio, "AccessPoint": "EAP225", "CCQ": 90}
+	if ip != "" {
+		e["IP"] = ip
+	}
+	if name != "" {
+		e["DeviceName"] = name
 	}
 	return e
 }
@@ -155,6 +170,8 @@ func (ap *AP) serve(w http.ResponseWriter, r *http.Request) {
 	if delay > 0 {
 		time.Sleep(delay)
 	}
+	raw, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(raw))
 	r.ParseForm()
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -177,6 +194,11 @@ func (ap *AP) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte("<html><head><title>Login</title></head><body id=\"login-body\"></body></html>"))
+	case login && ap.Firmware == Old && !strings.HasPrefix(string(raw), "username="):
+		// The older firmware reads the fields in the order its page sends them; any other order
+		// is silently not a login (no error recorded, no session): the owner's unit, gate G1.
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte("<html></html>"))
 	case login:
 		sum := md5.Sum([]byte(ap.Password))
 		want := strings.ToUpper(hex.EncodeToString(sum[:]))
@@ -225,6 +247,10 @@ func (ap *AP) serve(w http.ResponseWriter, r *http.Request) {
 		clients := ap.clients
 		if clients == nil {
 			clients = []Entry{}
+		}
+		if ap.Firmware == Old { // as the owner's unit answers: timeout as text, and an error code
+			writeJSON(w, map[string]any{"success": true, "timeout": "false", "error": 0, "data": clients})
+			return
 		}
 		writeJSON(w, map[string]any{"success": true, "timeout": false, "data": clients})
 	default:

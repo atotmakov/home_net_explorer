@@ -226,7 +226,7 @@ func TestPageNotUnderstoodDetail(t *testing.T) {
 	}{
 		{`<html>secret-page-text</html>`, []string{"not JSON", "bytes"}},
 		{`{"success":true,"timeout":true,"ip":"192.168.1.33","username":"admin"}`,
-			[]string{"JSON with keys ip, success, timeout, username", "success=true", "timeout=true"}},
+			[]string{"not logged in (timeout=true)", "did not accept the login session"}},
 		{`{"success":true,"timeout":false,"rows":[{"MAC":"00-00-5E-00-53-13"}]}`,
 			[]string{"JSON with keys rows, success, timeout", "no client list"}},
 	} {
@@ -246,6 +246,44 @@ func TestPageNotUnderstoodDetail(t *testing.T) {
 			if strings.Contains(res.Detail, secret) {
 				t.Errorf("detail %q shows a value (%s)", res.Detail, secret)
 			}
+		}
+	}
+}
+
+// Gate G1, run 2 (2026-10-24), from the owner's browser on 192.168.0.10: the page posts
+// username before password and lists clients with the older field names. The fake's older
+// firmware ignores a login in any other field order, as the unit did.
+func TestReadOldFirmwareAsTheUnit(t *testing.T) {
+	ap := eaptest.Start(t, eaptest.Old, testUser, testPassword)
+	ap.SetClients(
+		eaptest.OldClient("00-00-5E-00-53-13", "192.168.0.13", "Home", "2.4GHz", "Pixel-9a"),
+		eaptest.OldClient("00-00-5E-00-53-14", "192.168.0.14", "Home", "5GHz", ""),
+	)
+	res := source(t, ap, testPassword).Read(context.Background())
+	if res.Outcome != contract.OutcomeOK {
+		t.Fatalf("outcome %s (%s)", res.Outcome, res.Detail)
+	}
+	want := []Client{
+		{MAC: "00:00:5e:00:53:13", IP: netip.MustParseAddr("192.168.0.13"), SSID: "Home", Band: "2.4 GHz", Hostname: "Pixel-9a"},
+		{MAC: "00:00:5e:00:53:14", IP: netip.MustParseAddr("192.168.0.14"), SSID: "Home", Band: "5 GHz"},
+	}
+	if !reflect.DeepEqual(res.Clients, want) {
+		t.Errorf("clients\n%+v\nwant\n%+v", res.Clients, want)
+	}
+}
+
+// When the list says "not logged in", the session was not accepted: the reader says so and does
+// not send the POST that makes the older firmware drop the connection.
+func TestSessionNotAccepted(t *testing.T) {
+	ap := eaptest.Start(t, eaptest.New, testUser, testPassword)
+	ap.SetList([]byte(`{"success":true,"timeout":"true"}`))
+	res := source(t, ap, testPassword).Read(context.Background())
+	if res.Outcome != contract.OutcomePageNotUnderstood || !strings.Contains(res.Detail, "did not accept the login session") {
+		t.Errorf("outcome %s, detail %q", res.Outcome, res.Detail)
+	}
+	for _, r := range ap.Requests() {
+		if r.Method == "POST" && strings.Contains(r.Path, "client") {
+			t.Errorf("POST to %s after the session was refused", r.Path)
 		}
 	}
 }

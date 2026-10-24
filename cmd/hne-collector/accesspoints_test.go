@@ -138,7 +138,7 @@ func TestCheckShowsWhyNotUnderstood(t *testing.T) {
 	h, _, ap := apHarness(t)
 	ap.SetList([]byte(`{"success":true,"timeout":true}`))
 	h.run("check")
-	want := "page not understood (firmware?): status.client.user answered JSON with keys success, timeout; success=true, timeout=true"
+	want := "page not understood (firmware?): status.client.user answered not logged in (timeout=true): the access point did not accept the login session"
 	if !strings.Contains(h.stderr.String(), want) {
 		t.Errorf("check lacks %q:\n%s", want, h.stderr.String())
 	}
