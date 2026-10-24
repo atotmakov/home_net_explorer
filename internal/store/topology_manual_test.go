@@ -46,7 +46,7 @@ func TestTopologyManualDevices(t *testing.T) {
 	at := it.T0.Add(2 * time.Minute)
 	sw := manualKey(t, h, "TL-SL1218P", at)
 	hub := manualKey(t, h, "hub", at) // connects via the switch
-	manualKey(t, h, "spare", at)       // connects to nothing
+	manualKey(t, h, "spare", at)      // connects to nothing
 	key := func(mac string) string { return inventory.MACKey(mac) }
 	link := func(from, to string) {
 		h.Fact(func(tx *sql.Tx) error { return store.SetUserLink(ctx, tx, from, to, at.Add(time.Minute)) })
