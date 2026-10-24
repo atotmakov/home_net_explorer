@@ -18,7 +18,7 @@ func TestNeighborCacheSkipsBroadcastAndMulticast(t *testing.T) {
 	net.Neighbors = []collect.Neighbor{
 		{IP: netip.MustParseAddr("192.168.1.77"), MAC: "3c:22:fb:44:55:66"},
 		{IP: netip.MustParseAddr("192.168.1.255"), MAC: "ff:ff:ff:ff:ff:ff"},
-		{IP: netip.MustParseAddr("192.168.1.0"), MAC: "3c:22:fb:44:55:00"},  // the network address
+		{IP: netip.MustParseAddr("192.168.1.0"), MAC: "3c:22:fb:44:55:00"},   // the network address
 		{IP: netip.MustParseAddr("192.168.1.251"), MAC: "01:00:5e:00:00:fb"}, // a group MAC
 	}
 	e := newEngine(net, collecttest.NewFakeRoutes("192.168.1.100", "eth0=192.168.1.20/24"))
