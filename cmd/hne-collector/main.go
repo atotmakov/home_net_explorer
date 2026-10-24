@@ -32,7 +32,6 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
-	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/upload"
 	"gopkg.in/yaml.v3"
@@ -64,13 +63,13 @@ const (
 // config is hne-collector.yaml, overridable by HNE_SERVER_URL, HNE_TOKEN, HNE_SUBNETS and
 // HNE_EXTRA_SUBNETS.
 type config struct {
-	ServerURL       string          `json:"server_url" yaml:"server_url"`
-	Name            string          `json:"name" yaml:"name"`
-	Token           string          `json:"token" yaml:"token"`
-	Subnets         []string        `json:"subnets" yaml:"subnets"`
-	ExtraSubnets    []string        `json:"extra_subnets" yaml:"extra_subnets"` // scanned in addition to subnets/auto-discovery
-	IntervalSeconds int             `json:"interval_seconds" yaml:"interval_seconds"`
-	Routers         []router.Config `json:"routers" yaml:"routers"` // opt-in router sources (feature 002)
+	ServerURL       string        `json:"server_url" yaml:"server_url"`
+	Name            string        `json:"name" yaml:"name"`
+	Token           string        `json:"token" yaml:"token"`
+	Subnets         []string      `json:"subnets" yaml:"subnets"`
+	ExtraSubnets    []string      `json:"extra_subnets" yaml:"extra_subnets"` // scanned in addition to subnets/auto-discovery
+	IntervalSeconds int           `json:"interval_seconds" yaml:"interval_seconds"`
+	Routers         legacyRouters `json:"routers" yaml:"routers"` // no longer used (feature 013)
 
 	prefixes      []netip.Prefix
 	extraPrefixes []netip.Prefix
@@ -161,15 +160,56 @@ func loadConfig(dir string, getenv func(string) string) (config, error) {
 		}
 		cfg.extraPrefixes = append(cfg.extraPrefixes, p)
 	}
-	if len(cfg.Routers) > contract.MaxRouters {
-		return cfg, fmt.Errorf("routers: at most %d entries", contract.MaxRouters)
-	}
-	for i, r := range cfg.Routers {
-		if err := r.Validate(); err != nil { // never contains credentials (FR-006)
-			return cfg, fmt.Errorf("routers[%d]: %w", i, err)
+	return cfg, nil
+}
+
+// legacyRouters is the routers section of an older config (features 002, 003). Routers are set
+// up only in the web UI now (feature 013), so its entries are never used: only how many there
+// were and how many carried a login are kept, never a value (FR-004).
+type legacyRouters struct {
+	Entries   int
+	WithLogin int
+}
+
+func (l *legacyRouters) count(entries []map[string]any) {
+	l.Entries = len(entries)
+	for _, e := range entries {
+		if e["username"] != nil || e["password"] != nil {
+			l.WithLogin++
 		}
 	}
-	return cfg, nil
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler. Errors never quote the section.
+func (l *legacyRouters) UnmarshalYAML(n *yaml.Node) error {
+	var entries []map[string]any
+	if n.Decode(&entries) != nil {
+		return errors.New("routers: must be a list (and is no longer used: set routers up in the web UI)")
+	}
+	l.count(entries)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler for hne-collector.json. Errors never quote the section.
+func (l *legacyRouters) UnmarshalJSON(b []byte) error {
+	var entries []map[string]any
+	if json.Unmarshal(b, &entries) != nil {
+		return errors.New("routers: must be a list (and is no longer used: set routers up in the web UI)")
+	}
+	l.count(entries)
+	return nil
+}
+
+// warn tells the owner, at each start, that the section is ignored (FR-003).
+func (l legacyRouters) warn(log *slog.Logger) {
+	if l.Entries == 0 {
+		return
+	}
+	log.Warn("the routers section of hne-collector.yaml is no longer used: routers are set up on their " +
+		"device page in the web UI and the collector gets them from the server; delete the section")
+	if l.WithLogin > 0 {
+		log.Warn("a router login in hne-collector.yaml is ignored: enter it on the router's device page in the web UI")
+	}
 }
 
 func platformEngine(cfg config) (*collect.Engine, func() error, error) {
@@ -227,6 +267,7 @@ func run(args []string, env environment) int {
 		log.Error("config error", "err", err)
 		return exitConfig
 	}
+	cfg.Routers.warn(log)
 	engine, closeEngine, err := env.newEngine(cfg)
 	if err != nil {
 		log.Error("cannot start the scanner", "err", err)
@@ -234,40 +275,20 @@ func run(args []string, env environment) int {
 	}
 	defer closeEngine()
 	engine.IntervalSeconds = cfg.IntervalSeconds
-	// FR-011: a router whose login was rejected is skipped until its config changes; check
-	// clears the marker and tries once more.
-	rejected := loadRejected(env.dir)
+	// A router or access point whose login was rejected is skipped until its login changes in the
+	// web UI; check clears the marker and tries once more (feature 002 FR-011, 003 FR-014).
 	if cmd == "check" {
 		os.Remove(filepath.Join(env.dir, rejectedFile))
-		rejected = nil
-	}
-	// Routers with credentials in the config file (feature 002). Routers set up in the web UI
-	// are added at each scan from the server's list (feature 003, buildRouters).
-	var fileRouters []router.Source
-	for _, rc := range cfg.Routers {
-		if rc.ServerManaged() {
-			continue
-		}
-		src, err := router.New(rc, env.routerTransport)
-		if err != nil {
-			log.Error("config error", "err", err)
-			return exitConfig
-		}
-		if rejected[routerHash(rc)] {
-			src = router.Skipped(src)
-		}
-		fileRouters = append(fileRouters, src)
 	}
 
 	c := &collector{
-		cfg:         cfg,
-		env:         env,
-		log:         log,
-		jsonOut:     jsonOut,
-		engine:      engine,
-		fileRouters: fileRouters,
-		client:      &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
-		spool:       upload.Spool{Dir: filepath.Join(env.dir, "spool")},
+		cfg:     cfg,
+		env:     env,
+		log:     log,
+		jsonOut: jsonOut,
+		engine:  engine,
+		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
+		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
 	parent := env.ctx
 	if parent == nil {
@@ -294,10 +315,8 @@ type collector struct {
 	client  *upload.Client
 	spool   upload.Spool
 
-	fileRouters    []router.Source      // routers with credentials in hne-collector.yaml
-	serverRouters  []contract.RouterRef // routers set up in the web UI (ping, else the cache)
-	haveRouterList bool                 // serverRouters came from a ping or the cache
-	markerMu       sync.Mutex           // guards the rejection marker file
+	serverRouters []contract.RouterRef // routers set up in the web UI (ping, else the cache)
+	markerMu      sync.Mutex           // guards the rejection marker file
 }
 
 func (c *collector) check(ctx context.Context) int {
@@ -360,12 +379,12 @@ func (c *collector) pingExit(err error) int {
 func (c *collector) ignored(ctx context.Context) ([]netip.Prefix, error) {
 	ping, err := c.client.Ping(ctx)
 	if err != nil {
-		c.serverRouters, c.haveRouterList = c.cachedRouters()
+		c.serverRouters = c.cachedRouters()
 		c.buildRouters()
 		c.buildAccessPoints(c.cachedAPs())
 		return c.lastIgnored(), err
 	}
-	c.serverRouters, c.haveRouterList = ping.Routers, true
+	c.serverRouters = ping.Routers
 	c.saveRouterCache(ping.Routers)
 	c.buildRouters()
 	c.saveAPCache(ping.AccessPoints)
@@ -418,7 +437,6 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 		c.log.Error("scan failed", "err", err)
 		return exitFailure
 	}
-	c.recordRejections(run.Sources)
 	for _, s := range run.Subnets {
 		if s.SkipReason == contract.SkipFakedAnswers {
 			c.log.Warn("subnet skipped: answers faked on the network path (almost every address answered); "+

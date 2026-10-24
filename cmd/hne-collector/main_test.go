@@ -203,8 +203,12 @@ routers:
 		len(cfg.Subnets) != 0 || len(cfg.ExtraSubnets) != 1 || cfg.IntervalSeconds != 600 {
 		t.Errorf("cfg = %+v", cfg)
 	}
-	if len(cfg.Routers) != 1 || cfg.Routers[0].URL != "http://192.168.0.1" || cfg.Routers[0].Password.Reveal() != "pw: #1" {
-		t.Errorf("routers = %+v (password must be usable)", cfg.Routers)
+	// Feature 013: an older routers section still loads; only its size is kept, never the login.
+	if cfg.Routers.Entries != 1 || cfg.Routers.WithLogin != 1 {
+		t.Errorf("routers = %+v, want 1 entry with a login", cfg.Routers)
+	}
+	if s := fmt.Sprintf("%+v %#v", cfg, cfg); strings.Contains(s, "pw: #1") {
+		t.Errorf("the loaded config keeps the router password: %s", s)
 	}
 
 	// The YAML file wins over an old hne-collector.json next to it.
