@@ -42,7 +42,7 @@ devices overlap.
 4. **Given** each device, **When** the Map is shown, **Then** its box shows its name and its address
    (or "added by hand"), readable without zooming at the default size, with the state shown by colour
    (online, stale, offline dimmed, manual dashed) and gateways outlined.
-5. **Given** a device in two subnets, or a gateway of another subnet, **When** the Map is shown,
+5. **Given** a gateway of another subnet (two-subnet devices were removed 2026-10-25), **When** the Map is shown,
    **Then** a dashed line goes from it to the other subnet's box.
 
 ---
@@ -83,7 +83,7 @@ panel on click, the hover text, moving and zooming.
   a dotted line, unless that would make a loop.
 - **FR-004**: Device boxes MUST show name and address (or "added by hand"), state by colour, gateways
   outlined, manual devices dashed, offline dimmed, last-known lines dotted.
-- **FR-005**: Two-subnet devices and gateways of other subnets MUST be joined to the other subnet's
+- **FR-005**: Gateways of other subnets (two-subnet devices until 2026-10-25) MUST be joined to the other subnet's
   box by a dashed line.
 - **FR-006**: "All devices"/"Online only", the details panel, the hover text, pan, zoom and a Fit
   button MUST work.

@@ -69,7 +69,7 @@ per-Wi-Fi grouping.
 1. **Given** a subnet whose gateway is known, **When** the map is shown, **Then** the gateway
    device is marked as the gateway of that subnet.
 2. **Given** a device with addresses in two subnets, **When** the map is shown, **Then** it appears
-   once, and a link shows that it also belongs to the other subnet.
+   once, in the subnet of its first address (no two-subnet link since 2026-10-25, FR-006).
 3. **Given** a router that reports the port or Wi-Fi interface of its devices (the Huawei router
    reports its LAN ports as LAN1–LAN4 and its Wi-Fi networks as SSID1, SSID2, …; shown as the
    router reports them), **When** the map is shown, **Then** the devices behind that router are
@@ -169,8 +169,10 @@ the map; remove it and check it is gone.
 - **FR-004**: The map MUST open with all devices shown, and MUST offer a switch between "all
   devices" and "online only" (online and stale) that does not reload the page.
 - **FR-005**: The gateway of each subnet, when known, MUST be marked as such.
-- **FR-006**: A device with current addresses in more than one subnet MUST appear once, with a
-  "two-subnet" link (called `bridge` in the map data) to each other subnet it belongs to.
+- **FR-006**: A device with current addresses in more than one subnet MUST appear once, in the
+  subnet of its first address. *(Changed 2026-10-25 by the owner: the "two-subnet" link, `bridge`
+  in the map data, is removed. A computer with two network cards has two MACs and is two devices;
+  a device that left a subnet loses its address there, PR #38.)*
 - **FR-007**: When a router reports the port or Wi-Fi interface of a device, the device MUST be
   linked to that router through the reported port or interface; for an offline device the last
   reported one is used and drawn as "last known".
@@ -179,8 +181,7 @@ the map; remove it and check it is gone.
 - **FR-009**: The owner MUST be able to set and remove a manual "connected via" link from a device
   to another device; manual links MUST survive scans and take precedence over router-reported
   connections for the same device.
-- **FR-010**: Links MUST be visually distinguishable by kind: gateway, two-subnet, router
-  port/Wi-Fi, manual.
+- **FR-010**: Links MUST be visually distinguishable by kind: gateway, router port/Wi-Fi, manual.
 - **FR-011**: The map MUST use only data already collected; it MUST NOT query switches, access
   points or routers when it is opened (001 FR-028), and MUST work without internet access.
 - **FR-012**: Removed or merged devices MUST NOT appear on the map.
@@ -192,7 +193,7 @@ the map; remove it and check it is gone.
 - **Device on the map**: a device of the inventory with its status, name, type, addresses, and
   whether it is a gateway.
 - **Connection**: a link between a device and a subnet or another device, of one kind: gateway,
-  two-subnet, router port / Wi-Fi (with the port or interface name, current or last known), or
+  router port / Wi-Fi (with the port or interface name, current or last known), or
   manual (set by the owner).
 
 ## Success Criteria *(mandatory)*

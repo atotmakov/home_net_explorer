@@ -6,10 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/netip"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
@@ -69,8 +67,9 @@ func (n TopoNode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p)
 }
 
-// TopoEdge is a connection: gateway (device → its subnet), bridge (device → another subnet it
-// is in), port (router → port, port → device; Current false = last known), manual (owner).
+// TopoEdge is a connection: gateway (device → a subnet it routes), port (router → port, port →
+// device; Current false = last known), manual (owner). There is no "two subnets" link: a device is
+// drawn in the subnet of its first address, and a computer with two network cards is two devices.
 type TopoEdge struct {
 	ID      string `json:"id"`
 	Kind    string `json:"kind"`
@@ -84,8 +83,8 @@ func devNodeID(id int64) string   { return "dev-" + strconv.FormatInt(id, 10) }
 func groupID(subnet int64) string { return "subnet-" + strconv.FormatInt(subnet, 10) }
 
 // Topology builds the map at time now: every device of the unfiltered Devices list (R2), grouped
-// by the subnet of its first address (R3), with gateways (R4), two-subnet links (R5), router
-// ports (R6) and the owner's links (R7).
+// by the subnet of its first address (R3), with gateways (R4), router ports (R6) and the owner's
+// links (R7). Two-subnet links (R5) were removed.
 func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 	tp := Topology{Groups: []TopoGroup{}, Nodes: []TopoNode{}, Edges: []TopoEdge{}}
 	devs, err := s.ListDevices(ctx, DeviceFilter{Now: now})
@@ -144,7 +143,6 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 	// Device nodes.
 	type holder struct{ dev, subnet int64 }
 	byIP := map[string]holder{}
-	byMAC := map[string]int64{}
 	nodeIdx := map[int64]int{}
 	used := map[string]bool{}
 	for _, d := range devs {
@@ -163,16 +161,12 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 			used[groupID(a.SubnetID)] = true
 		}
 		used[n.Parent] = true
-		if d.MAC != "" {
-			byMAC[strings.ToLower(d.MAC)] = d.ID
-		}
 		nodeIdx[d.ID] = len(tp.Nodes)
 		tp.Nodes = append(tp.Nodes, n)
 	}
 
 	// Groups: subnets holding devices, plus subnets in a collector's latest run (R3).
 	order := map[string]int{}
-	cidrGroup := map[string]string{}
 	subnetCIDR := map[int64]string{}
 	for _, si := range subnets {
 		if si.Ignored {
@@ -188,7 +182,6 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 			label = si.Name + " (" + si.CIDR + ")"
 		}
 		order[id] = len(tp.Groups)
-		cidrGroup[si.CIDR] = id
 		tp.Groups = append(tp.Groups, TopoGroup{ID: id, Label: label, CIDR: si.CIDR, Stale: si.Stale})
 	}
 	if used["other"] {
@@ -243,45 +236,6 @@ func (s *Store) Topology(ctx context.Context, now time.Time) (Topology, error) {
 		slices.SortFunc(n.GatewayOf, func(a, b string) int { return order[a] - order[b] })
 		for _, g := range n.GatewayOf {
 			addEdge(TopoEdge{ID: "gw-" + strconv.FormatInt(d.ID, 10) + "-" + g, Kind: "gateway", Source: n.ID, Target: g, Current: true})
-		}
-	}
-
-	// Two-subnet devices (R5): current addresses in other subnets, and collectors' interfaces.
-	bridge := func(dev int64, g string) {
-		n := tp.Nodes[nodeIdx[dev]]
-		if _, ok := order[g]; !ok || g == n.Parent {
-			return
-		}
-		addEdge(TopoEdge{ID: "br-" + strconv.FormatInt(dev, 10) + "-" + g, Kind: "bridge", Source: n.ID, Target: g, Current: true})
-	}
-	for _, d := range devs {
-		for _, a := range d.Addresses {
-			bridge(d.ID, groupID(a.SubnetID))
-		}
-	}
-	for _, v := range vantages {
-		var dev int64
-		for _, in := range v.Interfaces {
-			if id, ok := byMAC[strings.ToLower(in.MAC)]; ok && in.MAC != "" {
-				dev = id
-				break
-			}
-		}
-		if dev == 0 {
-			continue
-		}
-		for _, in := range v.Interfaces {
-			ip, err := netip.ParseAddr(in.IP)
-			if err != nil {
-				continue
-			}
-			p, err := ip.Prefix(in.PrefixLen)
-			if err != nil {
-				continue
-			}
-			if g, ok := cidrGroup[p.String()]; ok {
-				bridge(dev, g)
-			}
 		}
 	}
 
