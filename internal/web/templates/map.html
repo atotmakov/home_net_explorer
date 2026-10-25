@@ -10,18 +10,21 @@
     <li><span class="dot s-online"></span> online</li>
     <li><span class="dot s-stale"></span> online, not seen recently</li>
     <li><span class="dot s-offline"></span> offline</li>
-    <li><span class="dot gw"></span> gateway</li>
-    <li><span class="line bridge"></span> two subnets</li>
+    <li><span class="box gw"></span> gateway</li>
+    <li><span class="box manual"></span> added by hand</li>
     <li><span class="line port"></span> port / Wi-Fi</li>
-    <li><span class="line last"></span> last known</li>
     <li><span class="line manual"></span> manual</li>
+    <li><span class="line unknown"></span> wiring unknown</li>
+    <li><span class="line last"></span> last known</li>
+    <li><span class="line bridge"></span> two subnets</li>
   </ul>
+  <button type="button" id="map-fit" title="Show the whole map">Fit</button>
 </div>
 <div class="map-wrap">
   <div id="map" aria-label="Network map"></div>
   <aside id="map-details" class="card" hidden></aside>
 </div>
 <div id="map-tip" class="map-tip" hidden></div>
-<script src="/static/vendor/cytoscape.min.js"></script>
+<script src="/static/vendor/elk.bundled.js"></script>
 <script type="module" src="/static/map.js"></script>
 {{end}}

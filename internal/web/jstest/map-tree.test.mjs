@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { tree, elkGraph, place, nodeClass, visibleIds, SIZE } from '../static/map-model.js';
+import { tree, elkGraph, place, shelf, nodeClass, visibleIds, SIZE } from '../static/map-model.js';
 
 const require = createRequire(import.meta.url);
 const ELK = require('../static/vendor/elk.bundled.js');
@@ -95,10 +95,14 @@ test('nodeClass', () => {
 
 test('elkGraph: subnet boxes, sizes, leaf blocks', () => {
   const t = net();
-  const { graph, blocks } = elkGraph(t, all(t));
-  assert.equal(graph.layoutOptions['elk.algorithm'], 'layered');
-  assert.equal(graph.layoutOptions['elk.direction'], 'DOWN');
+  const { graph, blocks, cross } = elkGraph(t, all(t));
+  // Subnets are packed as boxes; each is laid out as a top-down tree of its own.
+  assert.equal(graph.layoutOptions['elk.algorithm'], 'rectpacking');
   assert.deepEqual(graph.children.map((g) => g.id), ['subnet-2', 'subnet-3']);
+  assert.equal(graph.children[0].layoutOptions['elk.algorithm'], 'layered');
+  assert.equal(graph.children[0].layoutOptions['elk.direction'], 'DOWN');
+  assert.ok(graph.children[0].edges.some((e) => e.id === 'mu-20'));
+  assert.deepEqual(cross, []);
   const kids = asMap(graph.children[0].children);
   assert.deepEqual([kids['dev-4'].width, kids['dev-4'].height], [SIZE.w, SIZE.h]);
   assert.deepEqual([kids['port-1-LAN1'].width, kids['port-1-LAN1'].height], [SIZE.pw, SIZE.ph]);
@@ -118,16 +122,16 @@ test('elkGraph: subnet boxes, sizes, leaf blocks', () => {
     assert.equal(b.cols, cols);
     const ids = g.graph.children[0].children.map((c) => c.id);
     assert.ok(ids.includes('block-port-1-LAN1') && !ids.includes('dev-4'), 'members are inside the block');
-    const toBlock = g.graph.edges.filter((e) => e.targets[0] === 'block-port-1-LAN1');
+    const toBlock = g.graph.children[0].edges.filter((e) => e.targets[0] === 'block-port-1-LAN1');
     assert.equal(toBlock.length, 1);
     assert.equal(toBlock[0].sources[0], 'port-1-LAN1');
   }
 });
 
 async function laidOut(t, show = all(t)) {
-  const { graph, blocks } = elkGraph(t, show);
+  const { graph, blocks, edges } = elkGraph(t, show);
   const res = await new ELK().layout(graph);
-  return { p: place(res, blocks), edges: tree(t, show) };
+  return { p: place(res, blocks, edges), edges };
 }
 
 const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -198,4 +202,19 @@ test('ELK layout: 250 devices in under 2 seconds (SC-002)', async () => {
   await laidOut(t);
   const ms = performance.now() - start;
   assert.ok(ms < 2000, `250-device layout took ${Math.round(ms)} ms`);
+});
+
+test('shelf: subnet boxes in rows towards the screen shape', () => {
+  // The owner's map: one wide subnet and two small ones go under it side by side.
+  const { positions, width, height } = shelf([
+    { id: 'big', w: 1332, h: 488 }, { id: 'mid', w: 568, h: 280 }, { id: 'small', w: 200, h: 168 }], 1.7);
+  assert.deepEqual(positions.get('big'), { x: 0, y: 0 });
+  assert.deepEqual(positions.get('mid'), { x: 0, y: 512 });
+  assert.deepEqual(positions.get('small'), { x: 592, y: 512 });
+  assert.equal(width, 1332);
+  assert.equal(height, 512 + 280);
+  // Many equal boxes: rows, not one long line.
+  const many = shelf(Array.from({ length: 9 }, (_, i) => ({ id: 'g' + i, w: 300, h: 200 })), 1.6);
+  assert.ok(many.width / many.height < 3 && many.width / many.height > 0.8, `${many.width}x${many.height}`);
+  assert.deepEqual(shelf([]).positions.size, 0);
 });

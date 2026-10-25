@@ -49,6 +49,10 @@ levels, no overlap, groups contain their nodes, 250-device time); Go page test.
   2 columns (3 above 6); members are placed in the block's grid after layout.
 - **R4 Rendering**: SVG built from strings with every value escaped; click/hover by event delegation
   on `data-id`; pan/zoom by a transform on one group; Fit recomputes it.
+- **R6 Subnet boxes**: each subnet is laid out as its own layered tree; the boxes are shelf-packed
+  (tallest first, rows up to a width that matches the screen's aspect ratio). ELK's own packing
+  (INCLUDE_CHILDREN layered, rectpacking with any optimisation goal) put the owner's three subnets in
+  one wide row or one column. A "connected via" across subnets is drawn straight.
 - **R5 Online only**: the existing `visibleIds` decides what is shown; the tree is laid out again on
   the visible part.
 

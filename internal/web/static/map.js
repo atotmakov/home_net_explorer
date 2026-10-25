@@ -1,45 +1,15 @@
-// Map page (feature 010): draws /ui/map.json with the vendored Cytoscape. All decisions are in
-// map-model.js (tested); this file only wires them to the page.
-import { toElements, visibleIds, details, layout } from './map-model.js';
+// Map page (feature 010; tree layout: feature 014): lays /ui/map.json out with the vendored ELK and
+// draws it as SVG. All decisions are in map-model.js (tested); this file only wires them to the page.
+import { visibleIds, details, tooltip, elkGraph, place, nodeClass } from './map-model.js';
 
 const box = document.getElementById('map');
 const panel = document.getElementById('map-details');
 const tip = document.getElementById('map-tip');
+const fitButton = document.getElementById('map-fit');
+const NS = 'http://www.w3.org/2000/svg';
 
-function color(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-function styles() {
-  const fg = color('--fg'), muted = color('--muted'), line = color('--line'), card = color('--card');
-  const accent = color('--accent'), ok = color('--ok'), manual = color('--new');
-  return [
-    { selector: 'node', style: { label: 'data(label)', 'font-size': 11, color: fg, 'text-valign': 'bottom',
-      'text-margin-y': 4, 'text-wrap': 'ellipsis', 'text-max-width': '120px', width: 16, height: 16,
-      'background-color': muted } },
-    { selector: 'node.group', style: { shape: 'round-rectangle', 'background-color': card, 'background-opacity': 1,
-      'border-width': 1, 'border-color': line, 'text-valign': 'top', 'text-margin-y': -4, 'font-size': 12,
-      'font-weight': 'bold', padding: 24, 'text-max-width': '400px' } },
-    { selector: 'node.group.stale', style: { 'border-style': 'dashed' } },
-    { selector: 'node.state-online', style: { 'background-color': ok } },
-    { selector: 'node.state-stale', style: { 'background-color': fg } },
-    { selector: 'node.state-offline', style: { 'background-color': muted } },
-    { selector: 'node.dim', style: { opacity: 0.45 } },
-    { selector: 'node.manual', style: { shape: 'round-rectangle', width: 20, 'background-color': card, 'border-width': 2,
-      'border-style': 'dashed', 'border-color': fg } },
-    { selector: 'node.gateway', style: { shape: 'diamond', width: 22, height: 22, 'border-width': 3, 'border-color': accent } },
-    { selector: 'node.port', style: { shape: 'round-rectangle', width: 10, height: 10, 'background-color': line,
-      'font-size': 10, color: muted } },
-    { selector: 'edge', style: { width: 1, 'curve-style': 'bezier', 'line-color': line } },
-    { selector: 'edge.kind-gateway', style: { width: 3, 'line-color': accent } },
-    { selector: 'edge.kind-bridge', style: { width: 2, 'line-style': 'dashed', 'line-color': accent } },
-    { selector: 'edge.kind-port', style: { 'line-color': muted } },
-    { selector: 'edge.last-known', style: { 'line-style': 'dotted', opacity: 0.6 } },
-    { selector: 'edge.kind-manual', style: { width: 2, 'line-color': manual, 'target-arrow-shape': 'triangle',
-      'target-arrow-color': manual } },
-    { selector: 'node.device:selected', style: { 'border-width': 3, 'border-color': accent } },
-  ];
-}
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const cut = (s, n) => (s && s.length > n ? s.slice(0, n - 1) + '…' : s || '');
 
 function showDetails(topo, id) {
   const d = details(topo, id);
@@ -71,44 +41,162 @@ function showDetails(topo, id) {
   panel.hidden = false;
 }
 
+// svgFor draws the placed map. Every value from the data is escaped (names are plain text).
+function svgFor(topo, show, p) {
+  const nodes = new Map(topo.nodes.map((n) => [n.id, n]));
+  const groups = new Map(topo.groups.map((g) => [g.id, g]));
+  let s = '';
+  for (const g of p.groups) {
+    const info = groups.get(g.id) || {};
+    s += `<g class="group${info.stale ? ' stale' : ''}"><rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="10"/>`
+      + `<text x="${g.x + 14}" y="${g.y + 23}">${esc(info.label || g.id)}</text></g>`;
+  }
+  for (const b of p.blocks) s += `<rect class="block" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="8"/>`;
+  for (const e of p.paths) {
+    const cls = 'edge ' + e.kind + (e.current ? '' : ' last');
+    s += `<path class="${cls}" d="M${e.points.map((pt) => pt.join(',')).join(' L')}"/>`;
+  }
+  // Two-subnet devices and gateways of another subnet: a dashed line to that subnet's box.
+  const groupRect = new Map(p.groups.map((g) => [g.id, g]));
+  for (const e of topo.edges) {
+    if ((e.kind !== 'bridge' && e.kind !== 'gateway') || !show.has(e.id)) continue;
+    const a = p.nodes.get(e.source), g = groupRect.get(e.target);
+    const src = nodes.get(e.source);
+    if (!a || !g || !src || src.parent === e.target) continue;
+    const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+    const tx = Math.min(Math.max(cx, g.x), g.x + g.w), ty = Math.min(Math.max(cy, g.y), g.y + g.h);
+    const sx = tx < a.x ? a.x : tx > a.x + a.w ? a.x + a.w : cx;
+    const sy = sx === cx ? (ty < cy ? a.y : a.y + a.h) : cy;
+    s += `<path class="edge bridge" d="M${sx},${sy} L${tx},${ty}"/>`;
+  }
+  for (const [id, r] of p.nodes) {
+    const n = nodes.get(id);
+    if (!n) continue;
+    if (n.kind === 'port') {
+      s += `<g class="port"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="10"/>`
+        + `<text x="${r.x + r.w / 2}" y="${r.y + 14}" text-anchor="middle">${esc(cut(n.label, 20))}</text></g>`;
+      continue;
+    }
+    const sub = n.state === 'manual' ? 'added by hand' : [n.ip, n.type].filter(Boolean).join(' · ');
+    s += `<g class="${nodeClass(n)}" data-id="${esc(id)}" tabindex="0" role="button" aria-label="${esc(n.label)}">`
+      + `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="6"/>`
+      + `<circle class="dot" cx="${r.x + 11}" cy="${r.y + 14}" r="4"/>`
+      + `<text class="name" x="${r.x + 21}" y="${r.y + 18}">${esc(cut(n.label, 19))}</text>`
+      + `<text class="sub" x="${r.x + 11}" y="${r.y + 33}">${esc(cut(sub, 26))}</text></g>`;
+  }
+  return s;
+}
+
 async function main() {
-  if (!box || typeof cytoscape !== 'function') return;
+  if (!box || typeof ELK !== 'function') return;
   const res = await fetch('/ui/map.json', { cache: 'no-store' });
   if (!res.ok) {
     box.textContent = 'The map could not be loaded (' + res.status + ').';
     return;
   }
   const topo = await res.json();
-  const cy = cytoscape({
-    container: box,
-    elements: toElements(topo),
-    style: styles(),
-    layout: { name: 'preset', positions: layout(topo), fit: true, padding: 30 },
-    minZoom: 0.2,
-    maxZoom: 3,
-  });
+  const elk = new ELK();
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'map-svg');
+  const vp = document.createElementNS(NS, 'g');
+  svg.append(vp);
+  box.replaceChildren(svg);
 
-  const apply = (onlineOnly) => {
+  let view = { x: 0, y: 0, k: 1 };
+  let size = { w: 0, h: 0 };
+  const apply = () => vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+  const fit = () => {
+    const r = svg.getBoundingClientRect();
+    if (!size.w || !r.width) return;
+    view.k = Math.min(r.width / (size.w + 40), r.height / (size.h + 40), 1.25);
+    view.x = (r.width - size.w * view.k) / 2;
+    view.y = Math.max(10, (r.height - size.h * view.k) / 2);
+    apply();
+  };
+
+  const draw = async (onlineOnly) => {
     const show = visibleIds(topo, onlineOnly);
-    cy.batch(() => cy.elements().forEach((el) => el.style('display', show.has(el.id()) ? 'element' : 'none')));
+    const r = svg.getBoundingClientRect();
+    const aspect = r.width && r.height ? r.width / r.height : 1.6;
+    const { graph, blocks, edges, cross } = elkGraph(topo, show, aspect);
+    const p = place(await elk.layout(graph), blocks, edges, aspect);
+    // A "connected via" across subnets is drawn straight, parent bottom to child top.
+    for (const e of cross) {
+      const a = p.nodes.get(e.source), b = p.nodes.get(e.target);
+      if (a && b) p.paths.push({ id: e.id, kind: e.kind, current: e.current, points: [[a.x + a.w / 2, a.y + a.h], [b.x + b.w / 2, b.y]] });
+    }
+    vp.innerHTML = svgFor(topo, show, p);
+    size = { w: p.width, h: p.height };
+    fit();
   };
   for (const r of document.querySelectorAll('input[name="map-scope"]')) {
-    r.addEventListener('change', () => apply(r.value === 'online' && r.checked));
+    r.addEventListener('change', () => draw(r.value === 'online' && r.checked));
   }
+  if (fitButton) fitButton.addEventListener('click', fit);
 
-  cy.on('tap', 'node.device', (ev) => showDetails(topo, ev.target.id()));
-  cy.on('tap', (ev) => {
-    if (ev.target === cy) panel.hidden = true;
+  // Click: details (devices); background: close. Hover: tooltip.
+  const deviceAt = (ev) => ev.target.closest && ev.target.closest('g.device');
+  let moved = false;
+  svg.addEventListener('click', (ev) => {
+    if (moved) return;
+    const g = deviceAt(ev);
+    if (g) showDetails(topo, g.dataset.id);
+    else panel.hidden = true;
   });
-  cy.on('mouseover', 'node.device', (ev) => {
-    const p = ev.renderedPosition;
-    const r = box.getBoundingClientRect();
-    tip.textContent = ev.target.data('tip');
-    tip.style.left = (r.left + window.scrollX + p.x + 12) + 'px';
-    tip.style.top = (r.top + window.scrollY + p.y + 12) + 'px';
+  svg.addEventListener('keydown', (ev) => {
+    const g = deviceAt(ev);
+    if (g && (ev.key === 'Enter' || ev.key === ' ')) {
+      ev.preventDefault();
+      showDetails(topo, g.dataset.id);
+    }
+  });
+  const byId = new Map(topo.nodes.map((n) => [n.id, n]));
+  svg.addEventListener('mousemove', (ev) => {
+    const g = deviceAt(ev);
+    if (!g || drag) {
+      tip.hidden = true;
+      return;
+    }
+    tip.textContent = tooltip(byId.get(g.dataset.id));
+    tip.style.left = (ev.pageX + 12) + 'px';
+    tip.style.top = (ev.pageY + 12) + 'px';
     tip.hidden = false;
   });
-  cy.on('mouseout', 'node.device', () => { tip.hidden = true; });
+  svg.addEventListener('mouseleave', () => { tip.hidden = true; });
+
+  // Pan (drag) and zoom (wheel, around the pointer).
+  let drag = null;
+  svg.addEventListener('mousedown', (ev) => {
+    drag = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y };
+    moved = false;
+  });
+  window.addEventListener('mousemove', (ev) => {
+    if (!drag) return;
+    const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    view.x = drag.vx + dx;
+    view.y = drag.vy + dy;
+    apply();
+  });
+  window.addEventListener('mouseup', () => { drag = null; });
+  svg.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const f = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const k = Math.min(3, Math.max(0.15, view.k * f));
+    const r = svg.getBoundingClientRect();
+    const px = ev.clientX - r.left, py = ev.clientY - r.top;
+    view.x = px - (px - view.x) * (k / view.k);
+    view.y = py - (py - view.y) * (k / view.k);
+    view.k = k;
+    apply();
+  }, { passive: false });
+  // The details panel and the window change the map's width: fit again.
+  if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(box);
+  else window.addEventListener('resize', fit);
+
+  await draw(false);
 }
 
-main();
+main().catch((err) => {
+  if (box) box.textContent = 'The map could not be drawn: ' + err;
+});
