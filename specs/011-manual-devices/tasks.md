@@ -153,8 +153,12 @@ lose the link and are drawn from scan data again.
 - [X] T020 Integration test `TestManualDeviceSurvives` in `tests/integration/us_manual_test.go`:
   after three scans and `app.Rebuild` the manual device, its links and the Map are unchanged
   (SC-003); `TestMapPerformance` stays green
-- [ ] T021 Real-network validation, quickstart §1–§7 after deploying 0.14: record the results here
+- [X] T021 Real-network validation, quickstart §1–§7 after deploying 0.14: record the results here
   (counts only, no MACs); time the steps of §1 and §3 (SC-001: under 2 minutes)
+  - 2026-10-25, 0.14.174: the owner added "TP-Link TL-SL1218P" (switch) and wired it: "manual
+    device and connect work". Live Map: 1 manual node, in the 192.168.0.0/24 group, with 1 link
+    out (to the Huawei) and 2 devices connected via it; neither of the two keeps a router port
+    edge (SC-002 for those devices). Timing (SC-001) was not measured.
 - [X] T022 [P] Docs: in the feature 001 identity rules (`specs/001-lan-inventory-topology/
   data-model.md`, the `identity_key` row) add the `manual:<uuid>` key: set once when the owner adds
   a device, never derived from observations; a scan that sees the manual device's MAC merges it into

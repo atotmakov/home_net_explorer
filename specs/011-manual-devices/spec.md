@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Planning (resumed 2026-10-24 after 012)
+**Status**: Implemented (0.14, 2026-10-25)
 
 **Input**: User description: "I have tp link sl1218p router, it is unmanaged device so there is no
 ip on it, network scanner does not see it. Lets add ability to create device without ip and
