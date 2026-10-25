@@ -122,7 +122,8 @@ func TestMapPage(t *testing.T) {
 	for _, want := range []string{
 		`<a href="/map" aria-current="page">`,
 		`<div id="map"`,
-		`<script src="/static/vendor/cytoscape.min.js"></script>`,
+		`<script src="/static/vendor/elk.bundled.js"></script>`, // feature 014
+		`<button type="button" id="map-fit"`,
 		`<script type="module" src="/static/map.js"></script>`,
 		`<aside id="map-details"`,
 		"All devices", "Online only",
@@ -134,6 +135,9 @@ func TestMapPage(t *testing.T) {
 	}
 	if strings.Contains(body, "No devices yet") {
 		t.Error("/map shows the no-devices notice with devices")
+	}
+	if strings.Contains(body, "cytoscape") {
+		t.Error("/map still loads Cytoscape (replaced by ELK, feature 014)")
 	}
 	if !strings.Contains(body, `value="all" checked`) || strings.Contains(body, `value="online" checked`) {
 		t.Error("the map must open on All devices")
