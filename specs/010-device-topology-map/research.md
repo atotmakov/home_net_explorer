@@ -44,6 +44,9 @@ All questions are resolved from the existing code and data; no NEEDS CLARIFICATI
 - **Decision**: a device with current addresses in more than one visible subnet appears once (R3)
   with a `bridge` edge to each other subnet. A collector whose latest vantage has interfaces in two
   subnets is matched to its device by interface MAC and gets the same edges.
+- **Removed 2026-10-25** (owner): the collector rule hung the link on one of the PC's two cards
+  while the other card was drawn as its own device in the other subnet. Each network card (MAC) is
+  a device; no `bridge` edges are produced.
 
 ## R6 Router port / Wi-Fi
 

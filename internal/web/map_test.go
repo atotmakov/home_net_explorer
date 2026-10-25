@@ -127,7 +127,7 @@ func TestMapPage(t *testing.T) {
 		`<script type="module" src="/static/map.js"></script>`,
 		`<aside id="map-details"`,
 		"All devices", "Online only",
-		"online", "offline", "gateway", "two subnets", "port / Wi-Fi", "last known", "manual",
+		"online", "offline", "gateway", "gateway of another subnet", "port / Wi-Fi", "last known", "manual",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/map lacks %q", want)
@@ -135,6 +135,9 @@ func TestMapPage(t *testing.T) {
 	}
 	if strings.Contains(body, "No devices yet") {
 		t.Error("/map shows the no-devices notice with devices")
+	}
+	if strings.Contains(body, "two subnets") {
+		t.Error("/map legend still has the two-subnets link (removed)")
 	}
 	if strings.Contains(body, "cytoscape") {
 		t.Error("/map still loads Cytoscape (replaced by ELK, feature 014)")

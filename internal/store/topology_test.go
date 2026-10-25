@@ -233,7 +233,9 @@ func TestTopologyGateways(t *testing.T) {
 	}
 }
 
-func TestTopologyBridges(t *testing.T) {
+// No "two subnets" link: a device is drawn in the subnet of its first address only, and a
+// collector with network cards in two subnets is a device per card (one MAC each).
+func TestTopologyNoTwoSubnetLinks(t *testing.T) {
 	h := it.New(t)
 	// DUNE: one MAC in two subnets.
 	h.Ingest(it.Run{Subnets: []contract.SubnetScan{it.Scan("192.168.1.0/24")}, Obs: []contract.Observation{
@@ -253,15 +255,17 @@ func TestTopologyBridges(t *testing.T) {
 	if dune.Parent != g0 || !slices.Equal(dune.IPs, []string{"192.168.0.28", "192.168.1.43"}) {
 		t.Errorf("dune = %+v, want parent %s with both addresses", dune, g0)
 	}
-	if _, ok := edge(tp, "bridge", dune.ID, g1); !ok {
-		t.Errorf("no bridge edge dune → %s: %+v", g1, tp.Edges)
-	}
 	desk := devNode(t, tp, "192.168.1.10")
-	if _, ok := edge(tp, "bridge", desk.ID, g8); !ok {
-		t.Errorf("no bridge edge for the two-interface collector → %s: %+v", g8, tp.Edges)
+	if desk.Parent != g1 {
+		t.Errorf("desktop parent = %s, want %s", desk.Parent, g1)
 	}
-	if _, ok := edge(tp, "bridge", desk.ID, g1); ok {
-		t.Error("bridge edge to the device's own group")
+	for _, e := range tp.Edges {
+		if e.Kind == "bridge" {
+			t.Errorf("two-subnet link %+v", e)
+		}
+		if e.Source == desk.ID && e.Target == g8 {
+			t.Errorf("desktop linked to %s: %+v", g8, e)
+		}
 	}
 }
 

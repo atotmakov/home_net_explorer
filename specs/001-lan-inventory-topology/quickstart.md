@@ -107,7 +107,8 @@ Open **Map**. **Expected**:
 - Two subnet groups.
 - Each device inside its subnet.
 - Gateways highlighted.
-- The desktop drawn as a bridge between the subnets.
+- The desktop's two network cards as two devices, one in each subnet (the bridge drawing was
+  removed 2026-10-25 by the owner: each network card (MAC) is a device of its own).
 
 Then set "connected via" for a device, pointing to an access point, and check that the edge
 appears and is still there after the next scan. Toggle **online only** / **all** and confirm the

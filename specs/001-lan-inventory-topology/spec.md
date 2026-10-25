@@ -267,9 +267,8 @@ on) is deferred to a separate, later feature.
   name, the collectors that cover it, its last-scanned time, and an ignored flag.
 - **Change Event**: a derived record of a meaningful change (new, IP/hostname/MAC changed,
   offline/online, merged/split) with the time, device, old value, and new value.
-- **Link**: a connection between devices or subnets on the map. It is either inferred (gateway,
-  or a **bridge** formed by a device with addresses in several subnets) or set manually by the
-  user.
+- **Link**: a connection between devices or subnets on the map. It is either inferred (gateway) or set manually by the user. (An inferred **bridge** for a
+  device with addresses in several subnets was removed 2026-10-25 by the owner: each network card (MAC) is a device of its own.)
 
 ## Success Criteria *(mandatory)*
 

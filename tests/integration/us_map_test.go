@@ -56,7 +56,7 @@ func TestMapEndToEnd(t *testing.T) {
 	cfg := e.createCollector("desktop")
 	e.clock.Set(time.Date(2026, 10, 5, 10, 6, 32, 0, time.UTC))
 
-	// The desktop sees itself on 192.168.1.10 too, so its two interfaces make it a two-subnet device.
+	// The desktop sees itself on 192.168.1.10 too; its card in 192.168.8.0/24 is another device.
 	full := contracttest.Modify(t, "valid_full.json", func(m map[string]any) {
 		obs := m["observations"].([]any)
 		self := map[string]any{"ip": "192.168.1.10", "mac": "10:7b:44:01:02:03", "method": "arp",
@@ -113,14 +113,10 @@ func TestMapEndToEnd(t *testing.T) {
 	if !ok {
 		t.Fatal("no desktop node")
 	}
-	bridged := false
-	for _, g := range m.Groups {
-		if g.CIDR == "192.168.8.0/24" {
-			bridged = m.has("bridge", desk.ID, g.ID)
+	for _, e := range m.Edges {
+		if e.Kind == "bridge" || e.Source == desk.ID && e.Kind != "manual" && e.Kind != "port" {
+			t.Errorf("desktop or two-subnet link %+v (each network card is a device of its own)", e)
 		}
-	}
-	if !bridged {
-		t.Errorf("no bridge edge desktop → 192.168.8.0/24: %+v", m.Edges)
 	}
 
 	// A manual link survives 3 more scans (SC-005).

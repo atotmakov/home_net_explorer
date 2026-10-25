@@ -56,10 +56,10 @@ function svgFor(topo, show, p) {
     const cls = 'edge ' + e.kind + (e.current ? '' : ' last');
     s += `<path class="${cls}" d="M${e.points.map((pt) => pt.join(',')).join(' L')}"/>`;
   }
-  // Two-subnet devices and gateways of another subnet: a dashed line to that subnet's box.
+  // Gateways of another subnet: a dashed line to that subnet's box.
   const groupRect = new Map(p.groups.map((g) => [g.id, g]));
   for (const e of topo.edges) {
-    if ((e.kind !== 'bridge' && e.kind !== 'gateway') || !show.has(e.id)) continue;
+    if (e.kind !== 'gateway' || !show.has(e.id)) continue;
     const a = p.nodes.get(e.source), g = groupRect.get(e.target);
     const src = nodes.get(e.source);
     if (!a || !g || !src || src.parent === e.target) continue;
@@ -67,7 +67,7 @@ function svgFor(topo, show, p) {
     const tx = Math.min(Math.max(cx, g.x), g.x + g.w), ty = Math.min(Math.max(cy, g.y), g.y + g.h);
     const sx = tx < a.x ? a.x : tx > a.x + a.w ? a.x + a.w : cx;
     const sy = sx === cx ? (ty < cy ? a.y : a.y + a.h) : cy;
-    s += `<path class="edge bridge" d="M${sx},${sy} L${tx},${ty}"/>`;
+    s += `<path class="edge far" d="M${sx},${sy} L${tx},${ty}"/>`;
   }
   for (const [id, r] of p.nodes) {
     const n = nodes.get(id);
