@@ -28,9 +28,10 @@ const (
 	SettingBuiltinInterval = "builtin_interval_seconds"
 	BuiltinCollector       = "nas"
 	// ProjectionRules is the version of the derivation rules (feature 006: offline after one
-	// missed complete scan; 7: a broadcast address or group MAC is never a device). Data derived
-	// by older rules is rebuilt once at start-up.
-	ProjectionRules = 7
+	// missed complete scan; 7: a broadcast address or group MAC is never a device; 8: an address
+	// ends on a subnet the device moved away from). Data derived by older rules is rebuilt once at
+	// start-up.
+	ProjectionRules = 8
 )
 
 // Options configure the server.

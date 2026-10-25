@@ -77,3 +77,42 @@ func evaluateOffline(ctx context.Context, tx *sql.Tx, run *contract.CollectionRu
 	}
 	return nil
 }
+
+// endMovedAddresses ends the current address on subnet sn of each device the complete scan did
+// not see there but that has a current address on another subnet seen after its address on sn: it
+// moved (a Dune player that left one subnet for another kept both addresses and was
+// drawn in two subnets). A device seen nowhere since keeps its last address (it goes offline).
+func endMovedAddresses(ctx context.Context, tx *sql.Tx, sn *scannedSubnet, seen map[int64]bool) error {
+	rows, err := tx.QueryContext(ctx, `SELECT a.device_id FROM device_addresses a
+		WHERE a.subnet_id = ? AND a.current = 1 AND EXISTS (
+			SELECT 1 FROM device_addresses b JOIN subnets s ON s.id = b.subnet_id
+			WHERE b.device_id = a.device_id AND b.current = 1 AND b.subnet_id != a.subnet_id
+			AND s.ignored = 0 AND b.as_of > a.as_of)`, sn.id)
+	if err != nil {
+		return err
+	}
+	var moved []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		if !seen[id] {
+			moved = append(moved, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range moved {
+		if _, err := tx.ExecContext(ctx, `UPDATE device_addresses SET current = 0 WHERE device_id = ? AND subnet_id = ?`, id, sn.id); err != nil {
+			return err
+		}
+		if err := refreshDisplayName(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}

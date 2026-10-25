@@ -74,6 +74,9 @@ func (a *Applier) Apply(ctx context.Context, tx *sql.Tx, collectorID int64, run 
 		if err := evaluateOffline(ctx, tx, run, runRow, collectorID, sn, seen[sn.id]); err != nil {
 			return nil, err
 		}
+		if err := endMovedAddresses(ctx, tx, sn, seen[sn.id]); err != nil {
+			return nil, err
+		}
 	}
 	return newSubnets, nil
 }
