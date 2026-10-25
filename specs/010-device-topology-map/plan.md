@@ -7,7 +7,7 @@
 Build the Map tab that 001 planned but never delivered. `GET /ui/map.json` returns, computed at
 request time, every device of the unfiltered Devices list grouped by subnet with its feature-006
 state, plus the connections already in the data: subnet gateways (router reads and route next
-hops), devices in two subnets, router ports / Wi-Fi interfaces (current, or last known for offline
+hops), router ports / Wi-Fi interfaces (current, or last known for offline
 devices) and owner-set "connected via" links. `GET /map` draws it with the vendored Cytoscape,
 starts on "All devices", filters "Online only" client-side, and shows a details panel. The device
 page gets a "Connected via" select.
@@ -37,7 +37,7 @@ when the map is opened (FR-011).
 
 See [research.md](research.md): R1 view-time topology (the unused `links` table stays unused); R2
 device set = `ListDevices` unfiltered; R3 grouping and the "Other" group; R4 gateways from router
-reads and route next hops; R5 two-subnet devices and collector interfaces; R6 port nodes from
+reads and route next hops; R5 two-subnet devices (removed 2026-10-25); R6 port nodes from
 `sightings.via`, last known for offline devices; R7 manual links in `user_links`, overriding
 ports; R8 Cytoscape page with client-side filter and a JSON-fed details panel; R9 tests.
 

@@ -8,11 +8,11 @@ existing tables.
 | Table / source | Used for |
 |----------------|----------|
 | `devices` via `ListDevices(DeviceFilter{}, now)` | device set, name, type, MAC, vendor, `State`, `Age` (R2) |
-| `device_addresses` (current, visible subnets) | group, bridges, gateway matching (R3–R5) |
+| `device_addresses` (current, visible subnets) | group, gateway matching (R3–R4) |
 | `subnets`, `SubnetStatus(now)` | group label, `stale` (R3) |
 | `sightings.via` (latest non-empty per device) | port / Wi-Fi connection (R6) |
 | `run_sources` (latest `ok` per subnet), `ListRouters` | router address of a subnet (R4a) |
-| latest `collection_runs.payload_gz` per collector → `vantage` | route next hops (R4b), collector interfaces (R5) |
+| latest `collection_runs.payload_gz` per collector → `vantage` | route next hops (R4b) |
 | `user_links` (latest row per `from_identity_key`) | manual links (R7) |
 
 ## View: Topology
@@ -28,7 +28,7 @@ Node    { ID "dev-<id>" | "port-<routerDevID>-<via>"; Kind device|port; Parent g
           // device only:
           DeviceID; Label; IP; IPs []string; MAC; Vendor; Type; State online|stale|offline;
           LastSeenAgo (text, feature 006 "ago"); GatewayOf []group ID }
-Edge    { ID; Kind gateway|bridge|port|manual; Source node ID; Target node or group ID;
+Edge    { ID; Kind gateway|port|manual; Source node ID; Target node or group ID;
           Label (port name for port edges); Current bool (port edges: false = last known) }
 ```
 
@@ -37,7 +37,7 @@ Edge    { ID; Kind gateway|bridge|port|manual; Source node ID; Target node or gr
 - Every device of the unfiltered Devices list is exactly one device node (FR-001); its `Parent` is
   the group of its first current address, else `other`.
 - `gateway` edge: device → group, for each subnet it is the gateway of (R4).
-- `bridge` edge: device → group, for each other visible subnet it has a current address in (R5).
+- No `bridge` edge (R5, removed 2026-10-25 by the owner: each network card (MAC) is a device of its own).
 - `port`: node per (router device, via); edges router → port (`port`, current) and port → device
   (`port`, `Current` = device state ≠ offline) (R6). Omitted when the router is not a device in
   the inventory or the device has a manual link.

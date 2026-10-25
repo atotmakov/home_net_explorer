@@ -52,17 +52,16 @@ right subnet, with the right status.
 
 ### User Story 2 - See how devices are connected (Priority: P1)
 
-As the owner, I want to see what connects to what: the router or gateway of each subnet, devices
-that sit in two subnets at once (for example a PC with two network adapters, or a media player
-known in two subnets), and, where a router reports it, which router port or Wi-Fi interface a
-device is connected through.
+As the owner, I want to see what connects to what: the router or gateway of each subnet and,
+where a router reports it, which router port or Wi-Fi interface a device is connected through.
+(A "two-subnet" link for devices in two subnets at once was part of this story until 2026-10-25;
+the owner removed it: a PC with two network adapters has two MACs and is two devices, FR-006.)
 
 **Why this priority**: "Topology" means connections, not only groups. The data for the connections
 is already collected; without it the map is just the Devices list drawn as boxes.
 
-**Independent Test**: With a router that reports ports and Wi-Fi for its devices, and a PC with
-adapters in two subnets, open the map and check the gateway, the two-subnet link and the per-port /
-per-Wi-Fi grouping.
+**Independent Test**: With a router that reports ports and Wi-Fi for its devices, open the map
+and check the gateway and the per-port / per-Wi-Fi grouping.
 
 **Acceptance Scenarios**:
 

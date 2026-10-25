@@ -22,7 +22,9 @@ Validation on the real network after deployment (`.\deploy.ps1 -Pull`). Tests ru
    nodes and the devices behind each.
 2. An offline device behind the router (for example Pixel-10a) hangs off its last port with a
    dashed "last known" edge.
-3. DUNE (192.168.0.28 and 192.168.1.43) appears once, with a two-subnet edge to the other group.
+3. A device with addresses in two subnets appears once, in the group of its first address, with
+   no line to the other group; the desktop's two network cards are two devices (two-subnet edge
+   removed 2026-10-25 by the owner: each network card (MAC) is a device of its own).
 
 ## 3. Online only (US3, SC-003)
 

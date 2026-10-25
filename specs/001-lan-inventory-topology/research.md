@@ -91,7 +91,8 @@ Each section resolves an unknown from the plan's Technical Context.
     gateway on the map.
   - **Bridge between subnets**: a device with addresses in two subnets (the same MAC seen in both,
     or a collector that has interfaces in both) is drawn as a link between those subnets. In this
-    network, the desktop itself is the only known bridge.
+    network, the desktop itself is the only known bridge. *Removed 2026-10-25 by the owner (feature
+    010 R5): each network card (MAC) is a device; no bridge is drawn.*
   - **Manual links** ("connected via") are stored as user facts and always override inferred
     links.
 - **Rationale**: this uses only data the collectors already have. It needs no traceroute, no

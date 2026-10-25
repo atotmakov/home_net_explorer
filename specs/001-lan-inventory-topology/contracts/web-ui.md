@@ -51,5 +51,5 @@ collector's bearer token.
 }
 ```
 
-A device with addresses on several subnets appears once. It is placed in its first subnet, and
-`bridge` edges connect it to the others.
+A device with addresses on several subnets appears once. It is placed in its first subnet. (The
+`bridge` edges to the others were removed 2026-10-25 by the owner: each network card (MAC) is a device of its own.)

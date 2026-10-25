@@ -221,7 +221,7 @@ after an outage):
 | Field | Type | Rules |
 |-------|------|-------|
 | id | int | PK |
-| kind | enum | `gateway` (device ↔ subnet), `bridge` (device in 2+ subnets), `manual` (device → device) |
+| kind | enum | `gateway` (device ↔ subnet), `bridge` (device in 2+ subnets; never produced since 2026-10-25), `manual` (device → device) |
 | from_device_id | int | |
 | to_device_id | int? | for `manual` |
 | subnet_id | int? | for `gateway` / `bridge` |
