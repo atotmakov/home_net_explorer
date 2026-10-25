@@ -48,14 +48,14 @@ func nlNeigh(family byte, state uint16, ip []byte, mac []byte) []byte {
 func TestParseNetlinkNeighbors(t *testing.T) {
 	mac := func(last byte) []byte { return []byte{0x14, 0xc0, 0x89, 0x10, 0x83, last} }
 	var dump []byte
-	dump = append(dump, nlNeigh(2, 0x02, []byte{192, 168, 1, 9}, mac(1))...)   // REACHABLE
-	dump = append(dump, nlNeigh(2, 0x04, []byte{192, 168, 1, 43}, mac(2))...)  // STALE: the Dune's old address
-	dump = append(dump, nlNeigh(2, 0x08, []byte{192, 168, 1, 20}, mac(3))...)  // DELAY
-	dump = append(dump, nlNeigh(2, 0x10, []byte{192, 168, 1, 21}, mac(4))...)  // PROBE
-	dump = append(dump, nlNeigh(2, 0x20, []byte{192, 168, 1, 22}, mac(5))...)  // FAILED
-	dump = append(dump, nlNeigh(2, 0x01, []byte{192, 168, 1, 23}, nil)...)     // INCOMPLETE, no MAC
-	dump = append(dump, nlNeigh(2, 0x80, []byte{192, 168, 1, 24}, mac(7))...)  // PERMANENT
-	dump = append(dump, nlNeigh(10, 0x02, make([]byte, 16), mac(8))...)        // IPv6: skipped
+	dump = append(dump, nlNeigh(2, 0x02, []byte{192, 168, 1, 9}, mac(1))...)  // REACHABLE
+	dump = append(dump, nlNeigh(2, 0x04, []byte{192, 168, 1, 43}, mac(2))...) // STALE: the Dune's old address
+	dump = append(dump, nlNeigh(2, 0x08, []byte{192, 168, 1, 20}, mac(3))...) // DELAY
+	dump = append(dump, nlNeigh(2, 0x10, []byte{192, 168, 1, 21}, mac(4))...) // PROBE
+	dump = append(dump, nlNeigh(2, 0x20, []byte{192, 168, 1, 22}, mac(5))...) // FAILED
+	dump = append(dump, nlNeigh(2, 0x01, []byte{192, 168, 1, 23}, nil)...)    // INCOMPLETE, no MAC
+	dump = append(dump, nlNeigh(2, 0x80, []byte{192, 168, 1, 24}, mac(7))...) // PERMANENT
+	dump = append(dump, nlNeigh(10, 0x02, make([]byte, 16), mac(8))...)       // IPv6: skipped
 	done := make([]byte, 20)
 	binary.NativeEndian.PutUint32(done[0:], 20)
 	binary.NativeEndian.PutUint16(done[4:], 3) // NLMSG_DONE
