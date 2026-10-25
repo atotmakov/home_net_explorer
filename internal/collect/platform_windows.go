@@ -22,7 +22,8 @@ import (
 var (
 	iphlpapi              = windows.NewLazySystemDLL("iphlpapi.dll")
 	procSendARP           = iphlpapi.NewProc("SendARP")
-	procGetIpNetTable     = iphlpapi.NewProc("GetIpNetTable")
+	procGetIpNetTable2    = iphlpapi.NewProc("GetIpNetTable2")
+	procFreeMibTable      = iphlpapi.NewProc("FreeMibTable")
 	procGetIpForwardTable = iphlpapi.NewProc("GetIpForwardTable")
 	procIcmpCreateFile    = iphlpapi.NewProc("IcmpCreateFile")
 	procIcmpCloseHandle   = iphlpapi.NewProc("IcmpCloseHandle")
@@ -66,39 +67,28 @@ func (SendARPProber) Probe(ctx context.Context, iface string, ip netip.Addr) (st
 	return m, ok, nil
 }
 
-// IPNetTable reads the ARP cache with GetIpNetTable (IPv4).
+// IPNetTable reads the ARP cache with GetIpNetTable2, which also gives each entry's state
+// (GetIpNetTable shows a Stale entry like a confirmed one; see parseIPNetTable2).
 type IPNetTable struct{}
-
-// mibIPNetRow is MIB_IPNETROW.
-type mibIPNetRow struct {
-	Index       uint32
-	PhysAddrLen uint32
-	PhysAddr    [8]byte
-	Addr        uint32
-	Type        uint32 // 1 other, 2 invalid, 3 dynamic, 4 static
-}
 
 // Entries implements NeighborTable.
 func (IPNetTable) Entries(ctx context.Context) ([]Neighbor, error) {
-	buf, err := callTable(procGetIpNetTable)
-	if err != nil {
-		return nil, err
-	}
-	n := binary.LittleEndian.Uint32(buf)
-	if n == 0 {
+	var table *byte
+	r, _, _ := procGetIpNetTable2.Call(2, uintptr(unsafe.Pointer(&table))) // AF_INET
+	if windows.Errno(r) == windows.ERROR_NOT_FOUND {
 		return nil, nil
 	}
-	rows := unsafe.Slice((*mibIPNetRow)(unsafe.Pointer(&buf[4])), n)
-	var out []Neighbor
-	for _, r := range rows {
-		if r.Type == 2 || r.PhysAddrLen != 6 {
-			continue // invalid/incomplete
-		}
-		if mac, ok := NormalizeMAC(net.HardwareAddr(r.PhysAddr[:6]).String()); ok {
-			out = append(out, Neighbor{IP: addrFromDWORD(r.Addr), MAC: mac})
-		}
+	if r != 0 {
+		return nil, fmt.Errorf("collect: GetIpNetTable2: %w", windows.Errno(r))
 	}
-	return out, nil
+	if table == nil {
+		return nil, nil
+	}
+	defer procFreeMibTable.Call(uintptr(unsafe.Pointer(table)))
+	n := *(*uint32)(unsafe.Pointer(table))
+	buf := make([]byte, 8+int(n)*88)
+	copy(buf, unsafe.Slice(table, len(buf)))
+	return parseIPNetTable2(buf), nil
 }
 
 // callTable calls a GetXxxTable(pTable, pdwSize, bOrder) function, growing the buffer.

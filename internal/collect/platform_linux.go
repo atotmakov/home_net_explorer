@@ -14,49 +14,30 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
 
-// Platform returns the Linux implementations: raw ARP, /proc/net/arp and /proc/net/route.
+// Platform returns the Linux implementations: raw ARP, the netlink neighbor table and
+// /proc/net/route.
 // close releases the raw sockets.
 func Platform() (Prober, PresenceProber, NeighborTable, RouteReader, func() error) {
 	p := NewARPProber()
-	return p, NewPresenceProber(), ProcNeighbors{Path: "/proc/net/arp"}, SystemRoutes{RoutePath: "/proc/net/route"}, p.Close
+	return p, NewPresenceProber(), NetlinkNeighbors{}, SystemRoutes{RoutePath: "/proc/net/route"}, p.Close
 }
 
-// ProcNeighbors reads the kernel neighbor table from /proc/net/arp.
-type ProcNeighbors struct{ Path string }
+// NetlinkNeighbors reads the kernel neighbor table with its states (RTM_GETNEIGH): /proc/net/arp
+// shows a STALE entry like a confirmed one (see parseNetlinkNeighbors).
+type NetlinkNeighbors struct{}
 
 // Entries implements NeighborTable.
-func (n ProcNeighbors) Entries(ctx context.Context) ([]Neighbor, error) {
-	f, err := os.Open(n.Path)
+func (NetlinkNeighbors) Entries(ctx context.Context) ([]Neighbor, error) {
+	b, err := unix.NetlinkRIB(unix.RTM_GETNEIGH, unix.AF_INET)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	return parseProcARP(f), nil
-}
-
-// parseProcARP parses "IP address  HW type  Flags  HW address  Mask  Device" lines, skipping
-// incomplete entries (flags 0x0).
-func parseProcARP(r io.Reader) []Neighbor {
-	var out []Neighbor
-	sc := bufio.NewScanner(r)
-	sc.Scan() // header
-	for sc.Scan() {
-		f := strings.Fields(sc.Text())
-		if len(f) < 4 || f[2] == "0x0" {
-			continue
-		}
-		ip, err := netip.ParseAddr(f[0])
-		if err != nil || !ip.Is4() {
-			continue
-		}
-		if mac, ok := NormalizeMAC(f[3]); ok {
-			out = append(out, Neighbor{IP: ip, MAC: mac})
-		}
-	}
-	return out
+	return parseNetlinkNeighbors(b), nil
 }
 
 // SystemRoutes reports interfaces from the OS and IPv4 routes from /proc/net/route.
