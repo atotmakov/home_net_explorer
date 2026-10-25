@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { tooltip, visibleIds, details, nodeClass } from '../static/map-model.js';
 
 // Two subnets: the router .1 (gateway of LAN, also gateway of the home subnet), a phone on LAN1,
-// an offline TV on LAN1 (last known), a stale printer, DUNE in both subnets, a tablet linked
+// an offline TV on LAN1 (last known), a stale printer, DUNE with addresses in both, a tablet linked
 // manually to the access point.
 function fixture() {
   const dev = (id, parent, label, ip, state, extra = {}) => ({
@@ -33,7 +33,6 @@ function fixture() {
     edges: [
       { id: 'gw-1-subnet-2', kind: 'gateway', source: 'dev-1', target: 'subnet-2', current: true },
       { id: 'gw-1-subnet-1', kind: 'gateway', source: 'dev-1', target: 'subnet-1', current: true },
-      { id: 'br-7-subnet-1', kind: 'bridge', source: 'dev-7', target: 'subnet-1', current: true },
       { id: 'rp-1-LAN1', kind: 'port', source: 'dev-1', target: 'port-1-LAN1', label: 'LAN1', current: true },
       { id: 'pd-4', kind: 'port', source: 'port-1-LAN1', target: 'dev-4', label: 'LAN1', current: true },
       { id: 'pd-5', kind: 'port', source: 'port-1-LAN1', target: 'dev-5', label: 'LAN1', current: false },
@@ -56,7 +55,7 @@ test('visibleIds', () => {
 
   const online = visibleIds(t, true);
   for (const id of ['dev-5', 'dev-10', 'pd-5', 'subnet-3']) assert.ok(!online.has(id), id + ' must be hidden');
-  for (const id of ['dev-4', 'dev-6', 'pd-4', 'port-1-LAN1', 'rp-1-LAN1', 'subnet-1', 'subnet-2', 'mu-8', 'br-7-subnet-1']) {
+  for (const id of ['dev-4', 'dev-6', 'pd-4', 'port-1-LAN1', 'rp-1-LAN1', 'subnet-1', 'subnet-2', 'mu-8', 'gw-1-subnet-1']) {
     assert.ok(online.has(id), id + ' must stay');
   }
   // A port left with only offline devices is hidden with its router edge.

@@ -47,7 +47,6 @@ function net() {
       { id: 'mu-9', kind: 'manual', source: 'dev-9', target: 'dev-20', current: true },
       { id: 'rp-9-Home (5 GHz)', kind: 'port', source: 'dev-9', target: 'port-9-Home (5 GHz)', label: 'Home (5 GHz)', current: true },
       { id: 'pd-30', kind: 'port', source: 'port-9-Home (5 GHz)', target: 'dev-30', label: 'Home (5 GHz)', current: true },
-      { id: 'br-7-subnet-3', kind: 'bridge', source: 'dev-7', target: 'subnet-3', current: true },
     ],
   };
 }
