@@ -80,7 +80,7 @@ func evaluateOffline(ctx context.Context, tx *sql.Tx, run *contract.CollectionRu
 
 // endMovedAddresses ends the current address on subnet sn of each device the complete scan did
 // not see there but that has a current address on another subnet seen after its address on sn: it
-// moved (a Dune player that left 192.168.1.0/24 for 192.168.0.0/24 kept both addresses and was
+// moved (a Dune player that left one subnet for another kept both addresses and was
 // drawn in two subnets). A device seen nowhere since keeps its last address (it goes offline).
 func endMovedAddresses(ctx context.Context, tx *sql.Tx, sn *scannedSubnet, seen map[int64]bool) error {
 	rows, err := tx.QueryContext(ctx, `SELECT a.device_id FROM device_addresses a
