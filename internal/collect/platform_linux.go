@@ -13,8 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"golang.org/x/sys/unix"
+	"syscall"
 
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 )
@@ -33,7 +32,7 @@ type NetlinkNeighbors struct{}
 
 // Entries implements NeighborTable.
 func (NetlinkNeighbors) Entries(ctx context.Context) ([]Neighbor, error) {
-	b, err := unix.NetlinkRIB(unix.RTM_GETNEIGH, unix.AF_INET)
+	b, err := syscall.NetlinkRIB(syscall.RTM_GETNEIGH, syscall.AF_INET)
 	if err != nil {
 		return nil, err
 	}
