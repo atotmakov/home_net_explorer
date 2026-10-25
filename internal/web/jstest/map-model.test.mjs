@@ -2,7 +2,7 @@
 // node --test "internal/web/jstest/*.test.mjs" (research R9).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toElements, tooltip, visibleIds, details, layout } from '../static/map-model.js';
+import { tooltip, visibleIds, details, nodeClass } from '../static/map-model.js';
 
 // Two subnets: the router .1 (gateway of LAN, also gateway of the home subnet), a phone on LAN1,
 // an offline TV on LAN1 (last known), a stale printer, DUNE in both subnets, a tablet linked
@@ -42,53 +42,10 @@ function fixture() {
   };
 }
 
-const byId = (els) => Object.fromEntries(els.map((e) => [e.data.id, e]));
-const classes = (e) => (e.classes || '').split(/\s+/).filter(Boolean);
-
-test('toElements groups and devices', () => {
-  const els = byId(toElements(fixture()));
-  for (const g of ['subnet-1', 'subnet-2', 'subnet-3']) {
-    assert.equal(els[g].group, 'nodes');
-    assert.ok(classes(els[g]).includes('group'));
-    assert.equal(els[g].data.parent, undefined);
-  }
-  assert.equal(els['subnet-1'].data.label, 'home (192.168.1.0/24)');
-  assert.ok(classes(els['subnet-3']).includes('stale'));
-
-  assert.equal(els['dev-4'].data.parent, 'subnet-2');
-  assert.equal(els['dev-4'].data.label, 'Pixel <b>10a</b>');
-  assert.ok(classes(els['dev-4']).includes('state-online'));
-  assert.ok(classes(els['dev-6']).includes('state-stale'));
-  assert.ok(!classes(els['dev-6']).includes('dim'));
-  assert.ok(classes(els['dev-5']).includes('state-offline'));
-  assert.ok(classes(els['dev-5']).includes('dim'));
-
+test('tooltip', () => {
   assert.equal(tooltip(fixture().nodes[2]), 'TV · 192.168.0.5 · 00:00:5e:10:00:05 · last seen 1 day, 0 hours, 53 mins ago');
   assert.equal(tooltip({ label: '192.168.0.4', ip: '192.168.0.4', mac: '', last_seen_ago: '3 mins' }),
     '192.168.0.4 · 192.168.0.4 · last seen 3 mins ago');
-  assert.deepEqual(toElements({ groups: [], nodes: [], edges: [] }), []);
-});
-
-test('toElements edges', () => {
-  const els = byId(toElements(fixture()));
-  // A gateway of its own group is shown on the node, not as an edge into its own box.
-  assert.equal(els['gw-1-subnet-2'], undefined);
-  assert.ok(classes(els['dev-1']).includes('gateway'));
-  assert.ok(!classes(els['dev-4']).includes('gateway'));
-  // A gateway of another group is an edge.
-  assert.equal(els['gw-1-subnet-1'].group, 'edges');
-  assert.ok(classes(els['gw-1-subnet-1']).includes('kind-gateway'));
-  assert.equal(els['gw-1-subnet-1'].data.source, 'dev-1');
-  assert.equal(els['gw-1-subnet-1'].data.target, 'subnet-1');
-
-  assert.ok(classes(els['br-7-subnet-1']).includes('kind-bridge'));
-  assert.ok(classes(els['rp-1-LAN1']).includes('kind-port'));
-  assert.equal(els['rp-1-LAN1'].data.label, 'LAN1');
-  assert.ok(classes(els['pd-4']).includes('kind-port'));
-  assert.ok(!classes(els['pd-4']).includes('last-known'));
-  assert.ok(classes(els['pd-5']).includes('last-known'));
-  assert.ok(classes(els['port-1-LAN1']).includes('port'));
-  assert.equal(els['port-1-LAN1'].data.parent, 'subnet-2');
 });
 
 test('visibleIds', () => {
@@ -138,46 +95,8 @@ test('details', () => {
   assert.equal(details(t, 'nope'), null);
 });
 
-// Revision 2026-10-24: a force layout made the real map unreadable (overlapping, oversized
-// boxes); positions are computed here instead and drawn with Cytoscape's preset layout.
-test('layout', () => {
-  const t = fixture();
-  const pos = layout(t);
-  const nodes = t.nodes;
-  for (const n of nodes) assert.ok(pos[n.id] && Number.isFinite(pos[n.id].x) && Number.isFinite(pos[n.id].y), n.id);
-  const keys = new Set(nodes.map((n) => pos[n.id].x + ',' + pos[n.id].y));
-  assert.equal(keys.size, nodes.length, 'no two nodes share a position');
-
-  // Groups do not overlap: the x ranges of their nodes are disjoint (plus a gap).
-  const range = (g) => {
-    const xs = nodes.filter((n) => n.parent === g).map((n) => pos[n.id].x);
-    return [Math.min(...xs), Math.max(...xs)];
-  };
-  const groups = t.groups.map((g) => g.id).filter((g) => nodes.some((n) => n.parent === g));
-  for (let i = 0; i < groups.length; i++) {
-    for (let j = i + 1; j < groups.length; j++) {
-      const [a0, a1] = range(groups[i]);
-      const [b0, b1] = range(groups[j]);
-      assert.ok(a1 + 100 <= b0 || b1 + 100 <= a0, `${groups[i]} and ${groups[j]} overlap`);
-    }
-  }
-  // The gateway is on the top row of its group; a port is below its router; the devices behind
-  // a port are in its column, below it.
-  const top = Math.min(...nodes.filter((n) => n.parent === 'subnet-2').map((n) => pos[n.id].y));
-  assert.equal(pos['dev-1'].y, top);
-  assert.ok(pos['port-1-LAN1'].y > pos['dev-1'].y);
-  for (const d of ['dev-4', 'dev-5']) {
-    assert.equal(pos[d].x, pos['port-1-LAN1'].x, d + ' under its port');
-    assert.ok(pos[d].y > pos['port-1-LAN1'].y);
-  }
-  assert.deepEqual(layout({ groups: [], nodes: [], edges: [] }), {});
-});
-
 test('manual links', () => {
   const t = fixture();
-  const e = byId(toElements(t))['mu-8'];
-  assert.ok(classes(e).includes('kind-manual'));
-  assert.equal(e.data.arrow, true);
   const rows = Object.fromEntries(details(t, 'dev-8').rows.map((r) => [r.label, r.value]));
   assert.equal(rows['Connected via'], 'AP');
   assert.equal(rows['Connected through'], undefined);
@@ -210,11 +129,10 @@ function manualFixture() {
 
 test('a manual device is drawn as manual and says so', () => {
   const topo = manualFixture();
-  const el = toElements(topo).find((e) => e.data.id === 'dev-20');
-  assert.ok(el.classes.split(' ').includes('manual'), el.classes);
-  assert.ok(!el.classes.split(' ').includes('dim'));
-  assert.match(el.data.tip, /manual \(added by hand\)/);
-  assert.doesNotMatch(el.data.tip, /last seen/);
+  const n = topo.nodes.find((x) => x.id === 'dev-20');
+  assert.equal(nodeClass(n), 'device manual');
+  assert.match(tooltip(n), /manual \(added by hand\)/);
+  assert.doesNotMatch(tooltip(n), /last seen/);
   const d = details(topo, 'dev-20');
   assert.equal(d.statusText, 'manual (added by hand)');
   assert.ok(!d.rows.some((r) => r.label === 'Last seen'));
