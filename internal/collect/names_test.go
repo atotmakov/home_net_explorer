@@ -127,18 +127,21 @@ func TestPTRGoesOnlyToConfiguredServer(t *testing.T) {
 	}
 }
 
-func TestDNSPreferredOverMDNS(t *testing.T) {
+// mDNS first: a device's own answer beats the DNS server, whose lookup also reads /etc/hosts.
+// The NAS's hosts file lists a camera under its MAC (accc8e368ee5) while the camera answers mDNS
+// as axis-door.local. DNS (and /etc/hosts) is used only when mDNS gets no answer.
+func TestMDNSPreferredOverDNS(t *testing.T) {
 	r, _ := NewNameResolver(netip.MustParseAddr("192.168.1.100"))
-	r.dns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "nas.lan", true }
-	r.mdns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "nas.local", true }
-	host, src, ok := r.Lookup(context.Background(), netip.MustParseAddr("192.168.1.20"))
-	if !ok || host != "nas.lan" || src != contract.HostnameSourceDNS {
-		t.Errorf("Lookup = %q %q %v, want DNS answer", host, src, ok)
+	r.dns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "accc8e368ee5", true }
+	r.mdns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "axis-door.local", true }
+	host, src, ok := r.Lookup(context.Background(), netip.MustParseAddr("192.168.1.79"))
+	if !ok || host != "axis-door.local" || src != contract.HostnameSourceMDNS {
+		t.Errorf("Lookup = %q %q %v, want the mDNS answer", host, src, ok)
 	}
-	r.dns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "", false }
-	host, src, ok = r.Lookup(context.Background(), netip.MustParseAddr("192.168.1.20"))
-	if !ok || host != "nas.local" || src != contract.HostnameSourceMDNS {
-		t.Errorf("Lookup fallback = %q %q %v, want mDNS answer", host, src, ok)
+	r.mdns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "", false }
+	host, src, ok = r.Lookup(context.Background(), netip.MustParseAddr("192.168.1.79"))
+	if !ok || host != "accc8e368ee5" || src != contract.HostnameSourceDNS {
+		t.Errorf("Lookup fallback = %q %q %v, want the DNS answer", host, src, ok)
 	}
 }
 
