@@ -217,8 +217,7 @@ func platformEngine(cfg config) (*collect.Engine, func() error, error) {
 	return &collect.Engine{
 		Prober: prober, Presence: presence, Neighbors: neighbors, Routes: routes,
 		NewResolver: func(v contract.Vantage) collect.Resolver {
-			server, _ := collect.PickDNSServer(netip.Addr{}, v)
-			r, err := collect.NewNameResolver(server)
+			r, err := collect.NewVantageResolver(netip.Addr{}, v)
 			if err != nil {
 				return nil
 			}

@@ -24,6 +24,7 @@ var mdnsGroup = netip.AddrPortFrom(netip.AddrFrom4([4]byte{224, 0, 0, 251}), 535
 // sending PTR queries for LAN addresses there would leak the inventory (Principle I).
 type NameResolver struct {
 	server  netip.Addr // zero: DNS disabled, mDNS only
+	subnets []subnetServer
 	timeout time.Duration
 	dial    func(ctx context.Context, network, address string) (net.Conn, error)
 	dns     func(ctx context.Context, ip netip.Addr) (string, bool)
@@ -40,6 +41,59 @@ func NewNameResolver(server netip.Addr) (*NameResolver, error) {
 	r := &NameResolver{server: server, timeout: time.Second, dial: d.DialContext, mdns: lookupMDNS}
 	r.dns = r.lookupDNS
 	return r, nil
+}
+
+// subnetServer is the router of a subnet the collector has a network card in: it knows the
+// names of that subnet (DHCP), and only of that one.
+type subnetServer struct {
+	subnet netip.Prefix
+	server netip.Addr
+}
+
+// NewVantageResolver returns the resolver for a run: the configured server for every address,
+// else, per address, the private default gateway reached through the collector's network card on
+// that address's subnet, else the first private default gateway (PickDNSServer). A collector with
+// cards in two subnets has a default route on each; asking one router for the other subnet's
+// names gets nothing.
+func NewVantageResolver(configured netip.Addr, v contract.Vantage) (*NameResolver, error) {
+	server, _ := PickDNSServer(configured, v)
+	r, err := NewNameResolver(server)
+	if err != nil || configured.IsValid() {
+		return r, err
+	}
+	for _, rt := range v.Routes {
+		p, err := netip.ParsePrefix(rt.Destination)
+		if err != nil || p.Bits() != 0 {
+			continue
+		}
+		gw, err := netip.ParseAddr(rt.NextHop)
+		if err != nil || !gw.Is4() || !contract.IsPrivateAddr(gw) {
+			continue
+		}
+		for _, in := range v.Interfaces {
+			ip, err := netip.ParseAddr(in.IP)
+			if err != nil {
+				continue
+			}
+			sn, err := ip.Prefix(in.PrefixLen)
+			if err == nil && sn.Contains(gw) {
+				r.subnets = append(r.subnets, subnetServer{sn, gw})
+			}
+		}
+	}
+	return r, nil
+}
+
+// serverFor is the PTR server for ip: the router of the most specific subnet holding it, else the
+// default server.
+func (r *NameResolver) serverFor(ip netip.Addr) netip.Addr {
+	server, bits := r.server, -1
+	for _, s := range r.subnets {
+		if s.subnet.Contains(ip) && s.subnet.Bits() > bits {
+			server, bits = s.server, s.subnet.Bits()
+		}
+	}
+	return server
 }
 
 // Lookup tries DNS first, then mDNS; each gets its own time budget.
@@ -59,10 +113,11 @@ func (r *NameResolver) Lookup(ctx context.Context, ip netip.Addr) (string, strin
 }
 
 func (r *NameResolver) lookupDNS(ctx context.Context, ip netip.Addr) (string, bool) {
-	if !r.server.IsValid() {
+	srv := r.serverFor(ip)
+	if !srv.IsValid() {
 		return "", false
 	}
-	server := netip.AddrPortFrom(r.server, 53).String()
+	server := netip.AddrPortFrom(srv, 53).String()
 	res := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
