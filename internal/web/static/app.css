@@ -10,6 +10,8 @@
 * { box-sizing: border-box; }
 body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
 main { padding: 16px; max-width: 1200px; margin: 0 auto; }
+/* The Map uses the full window width for the tree (other pages keep the 1200px column). */
+main:has(#map) { max-width: none; }
 nav.top { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding: 10px 16px;
           background: var(--card); border-bottom: 1px solid var(--line); }
 nav.top .brand { font-weight: 600; margin-right: 8px; }

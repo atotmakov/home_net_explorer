@@ -89,6 +89,8 @@ panel on click, the hover text, moving and zooming.
   button MUST work.
 - **FR-007**: All drawing code and libraries MUST be served by the server (no CDN, Principle I); the
   map data (`/ui/map.json`) is unchanged.
+- **FR-008** *(added 2026-10-26 by the owner)*: The Map MUST use the full width of the window; the
+  1200px column of the other pages does not apply to it.
 
 ## Success Criteria *(mandatory)*
 
