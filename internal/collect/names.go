@@ -19,7 +19,8 @@ import (
 // mdnsGroup is the IPv4 mDNS multicast group and port (RFC 6762).
 var mdnsGroup = netip.AddrPortFrom(netip.AddrFrom4([4]byte{224, 0, 0, 251}), 5353)
 
-// NameResolver finds hostnames with reverse DNS (PTR) against a LAN DNS server, then mDNS.
+// NameResolver finds hostnames with mDNS (the device's own answer), then reverse DNS (PTR)
+// against a LAN DNS server, whose lookup also reads /etc/hosts.
 // It never uses the system resolver: the host may be configured with a public DNS server, and
 // sending PTR queries for LAN addresses there would leak the inventory (Principle I).
 type NameResolver struct {
@@ -96,18 +97,20 @@ func (r *NameResolver) serverFor(ip netip.Addr) netip.Addr {
 	return server
 }
 
-// Lookup tries DNS first, then mDNS; each gets its own time budget.
+// Lookup tries mDNS first, then DNS; each gets its own time budget. A DNS server or hosts file
+// can hold a placeholder (the NAS lists DHCP clients under their MAC), while a device that
+// answers mDNS names itself.
 func (r *NameResolver) Lookup(ctx context.Context, ip netip.Addr) (string, string, bool) {
 	try := func(f func(context.Context, netip.Addr) (string, bool)) (string, bool) {
 		c, cancel := context.WithTimeout(ctx, r.timeout)
 		defer cancel()
 		return f(c, ip)
 	}
-	if h, ok := try(r.dns); ok {
-		return h, contract.HostnameSourceDNS, true
-	}
 	if h, ok := try(r.mdns); ok {
 		return h, contract.HostnameSourceMDNS, true
+	}
+	if h, ok := try(r.dns); ok {
+		return h, contract.HostnameSourceDNS, true
 	}
 	return "", "", false
 }
