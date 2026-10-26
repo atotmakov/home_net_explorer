@@ -48,6 +48,9 @@ Each section resolves an unknown from the plan's Technical Context.
      with a network card in two subnets (a default route on each) got no names for the second
      subnet. Each address now goes to the private gateway reached through the card on its subnet,
      else the first private default gateway (`NewVantageResolver`).
+     *Changed 2026-10-26 by the owner*: mDNS is asked first and DNS (whose lookup also reads
+     `/etc/hosts`) only when mDNS gets no answer. The NAS's hosts file lists DHCP clients under
+     their MAC, which hid a camera's own mDNS name.
 - **Container requirements**: `network_mode: host` (the container shares the NAS's network, so it
   can send ARP on the real LAN) and `cap_add: [NET_RAW]`. Without host networking, the container
   would see only the Docker bridge.
