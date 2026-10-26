@@ -138,8 +138,7 @@ func platformEngine(o Options) (*collect.Engine, func() error) {
 	return &collect.Engine{
 		Prober: prober, Presence: presence, Neighbors: neighbors, Routes: routes,
 		NewResolver: func(v contract.Vantage) collect.Resolver {
-			server, _ := collect.PickDNSServer(o.DNSServer, v)
-			r, err := collect.NewNameResolver(server)
+			r, err := collect.NewVantageResolver(o.DNSServer, v)
 			if err != nil {
 				return nil
 			}
