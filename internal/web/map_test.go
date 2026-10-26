@@ -150,6 +150,10 @@ func TestMapPage(t *testing.T) {
 			t.Errorf("/map loads a remote script (%s)", bad)
 		}
 	}
+	// The tree uses the full window width: the page column's 1200px limit is lifted on the Map.
+	if res, css := get(t, hd, "/static/app.css"); res.StatusCode != http.StatusOK || !strings.Contains(css, "main:has(#map) { max-width: none; }") {
+		t.Errorf("app.css = %d, lacks the full-width Map rule", res.StatusCode)
+	}
 	for _, js := range []string{"/static/map.js", "/static/map-model.js"} {
 		res, _ := get(t, hd, js)
 		if res.StatusCode != http.StatusOK || !strings.Contains(res.Header.Get("Content-Type"), "javascript") {
