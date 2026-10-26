@@ -39,6 +39,70 @@ func TestPickDNSServer(t *testing.T) {
 	}
 }
 
+// A collector with a network card in each of two subnets has two default routes; each router
+// knows only the names of its own subnet. The desktop asked the router of 192.168.8.0/24 (its
+// first default route) for every name and got none for 192.168.1.0/24.
+func TestPTRServerPerSubnet(t *testing.T) {
+	v := contract.Vantage{
+		Interfaces: []contract.Interface{
+			{Name: "internet", IP: "192.168.8.176", PrefixLen: 24},
+			{Name: "home", IP: "192.168.1.10", PrefixLen: 24},
+		},
+		Routes: []contract.Route{
+			{Destination: "0.0.0.0/0", NextHop: "192.168.8.1", Interface: "internet"},
+			{Destination: "0.0.0.0/0", NextHop: "192.168.1.100", Interface: "home"},
+		},
+	}
+	dialedFor := func(r *NameResolver, ip string) []string {
+		var dialed []string
+		r.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialed = append(dialed, address)
+			return nil, errors.New("test: no network")
+		}
+		r.mdns = func(ctx context.Context, ip netip.Addr) (string, bool) { return "", false }
+		r.Lookup(context.Background(), netip.MustParseAddr(ip))
+		return dialed
+	}
+	only := func(t *testing.T, dialed []string, want string) {
+		t.Helper()
+		if len(dialed) == 0 {
+			t.Fatalf("no DNS server dialed, want %s", want)
+		}
+		for _, a := range dialed {
+			if a != want {
+				t.Errorf("dialed %s, want only %s", a, want)
+			}
+		}
+	}
+
+	r, err := NewVantageResolver(netip.Addr{}, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	only(t, dialedFor(r, "192.168.1.54"), "192.168.1.100:53")
+	only(t, dialedFor(r, "192.168.8.20"), "192.168.8.1:53")
+	// An address on no card's subnet (a router-table subnet): the first default route, as before.
+	only(t, dialedFor(r, "192.168.0.7"), "192.168.8.1:53")
+
+	// A configured server answers for every subnet.
+	c, err := NewVantageResolver(netip.MustParseAddr("10.0.0.53"), v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	only(t, dialedFor(c, "192.168.1.54"), "10.0.0.53:53")
+
+	// A public gateway is never asked.
+	pub := v
+	pub.Routes = []contract.Route{{Destination: "0.0.0.0/0", NextHop: "192.168.1.100", Interface: "home"},
+		{Destination: "0.0.0.0/0", NextHop: "203.0.113.1", Interface: "wan"}}
+	pub.Interfaces = append(pub.Interfaces, contract.Interface{Name: "wan", IP: "203.0.113.7", PrefixLen: 24})
+	p, err := NewVantageResolver(netip.Addr{}, pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	only(t, dialedFor(p, "203.0.113.9"), "192.168.1.100:53")
+}
+
 func TestPTRGoesOnlyToConfiguredServer(t *testing.T) {
 	r, err := NewNameResolver(netip.MustParseAddr("192.168.1.100"))
 	if err != nil {
