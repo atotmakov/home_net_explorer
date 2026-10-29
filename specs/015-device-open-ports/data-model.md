@@ -30,7 +30,7 @@ device_ports                                (derived, R9)
   proto         TEXT
   service       TEXT
   state         TEXT 'open' | 'closed'
-  ip            TEXT                        (address of the latest finding)
+  ip            TEXT                        (address of the latest finding; a port open on two addresses is one row)
   collector_id  INTEGER                     (collector of the latest finding)
   first_open    TEXT
   last_open     TEXT

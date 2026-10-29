@@ -91,16 +91,16 @@ devices misbehave under them, and the owner must be able to stop that without st
 2. **Given** port scanning is off for a subnet, **When** a scan runs, **Then** no device of that
    subnet is port-checked.
 3. **Given** the Settings page, **When** the owner opens it, **Then** it shows which ports are
-   checked (all TCP, plus the listed UDP services), the schedule (daily) and whether port scanning
-   is on.
+   checked (all TCP, plus the listed UDP services), the schedule (daily) and on how many subnets
+   port checks are on.
 4. **Given** the daily check of a device ran this morning, **When** the owner presses the force
    button for the NAS collector, or runs the desktop collector's scan with the force flag, **Then**
    every reachable device is port-checked now and the device pages show the new results.
 
 ### Edge Cases
 
-- A device with several addresses (feature 001: one MAC, two subnets): ports are checked and listed
-  per address; the page shows which address each port was found on.
+- A device with several addresses (one MAC, two subnets): each address is checked; a port is
+  listed once, with the address and collector of its latest finding.
 - A device that answers on every port (some firewalls or captive devices accept any connection): the
   list is capped and the page says the device answers on all ports checked.
 - A device seen only through a router's client list on a subnet the collector cannot reach directly:
@@ -146,7 +146,7 @@ devices misbehave under them, and the owner must be able to stop that without st
   web UI. A forced check reports its progress like a normal scan and is recorded as a complete port
   check (FR-005).
 - **FR-009**: The owner MUST be able to turn port scanning off and on for a subnet and for a single
-  device; the choice MUST survive scans and be recorded like other owner facts (feature 004).
+  device; the choice MUST survive scans and be recorded like other owner facts (feature 001).
 - **FR-010**: Port checks MUST NOT delay a collector's presence scan beyond its interval; they run
   alongside it, rate-limited per device so that one device never receives a burst it cannot handle.
 - **FR-011**: Port results MUST stay local (Principle I): no external service is used to identify
@@ -189,8 +189,9 @@ devices misbehave under them, and the owner must be able to stop that without st
   client list (192.168.0.0/24 from the NAS) are port-checked only by a collector attached to them.
 - The collector-to-server upload format gets a new, optional part for port results; older collectors
   keep working and simply report no ports (versioned contract, Principle IV).
-- UDP is reported only where a service answers (DNS, mDNS, SSDP, NetBIOS, SNMP and similar); a silent
-  UDP port is not reported, since silence cannot tell open from filtered.
+- UDP is reported only where a service answers a credential-free request (DNS, NTP, NetBIOS,
+  SSDP, mDNS); SNMP is not checked, since every SNMP request carries a community string (a login
+  guess, FR-002). A silent UDP port is not reported, since silence cannot tell open from filtered.
 - The service names come from a list shipped with the application (the usual names of well-known
   ports); identifying exact software versions is out of scope.
 - Port history uses the same retention as other device history (no new retention rule).

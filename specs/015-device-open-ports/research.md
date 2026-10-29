@@ -15,12 +15,11 @@
 ## R2 Load limits and timing
 
 - **Decision**: per device at most 128 connection attempts in flight; at most 4 devices checked at
-  once; ports in ascending order. A device that resets closed ports (most LAN devices) takes well
-  under a minute; a firewalled device (every attempt times out) takes 65,535 / 128 × 1 s ≈ 9
-  minutes, so with 4 in parallel a forced check of ~30 devices fits in 30 minutes only if few are
-  firewalled. To bound that, a device whose first 1,024 ports all time out is checked from then on
-  with a 300 ms timeout (silent devices on a LAN answer in well under 10 ms when they answer at
-  all), which brings a firewalled device to about 3 minutes.
+  once; ports in ascending order; 1 s timeout. A device whose first 1,024 ports all time out
+  (firewalled) is checked from then on with a 300 ms timeout (silent LAN devices answer in well
+  under 10 ms when they answer at all). A device that resets closed ports (most LAN devices) takes
+  well under a minute; a firewalled one about 3 minutes; a forced check of ~30 devices, 4 at once,
+  fits in 30 minutes (SC-004).
 - **Device that answers on every port**: if more than 512 ports are open, the check stops listing
   them and is marked `all_open` (spec edge case "answers on all ports"); it still counts as complete.
 - **Windows**: a refused connection uses no TIME_WAIT slot; only the few open ports do, so the
@@ -63,6 +62,9 @@
   device's history; ping already carries the server's instructions (ignored subnets, routers,
   access points).
 - **Built-in collector**: reads the same plan from the store directly.
+- **Timing**: collectors fetch the plan *after* uploading the presence run (a second `ping`), so a
+  device first found in this scan is already due (FR-008: "at the first scan that finds a new
+  device"). The built-in collector computes the plan after ingesting its run.
 
 ## R6 Storage and history
 
@@ -87,7 +89,8 @@
   finished are reported with `complete: false`.
 - **Rationale**: the presence scan keeps its 15-minute rhythm (FR-010); the upload, spool, token
   and duplicate handling are reused unchanged; older servers reject the unknown field only if
-  validation is strict, so the server is deployed first (as for 012).
+  validation is strict, so the server is deployed first (as for 012). On the server, the built-in
+  collector's port job runs in its own goroutine; the scan loop keeps its interval while it runs.
 - **Server**: a run without subnets skips the presence steps (no offline evaluation, no subnet
   freshness); it still counts as the collector's latest upload.
 

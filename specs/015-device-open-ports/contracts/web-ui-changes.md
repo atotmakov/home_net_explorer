@@ -8,4 +8,4 @@
 | `POST /subnets/{id}/ports` | Form field `ports` = `on` \| `off`; 303 to `/settings`. |
 | `GET /` (home) | Beside "Scan now": "Check ports now" (POST `/scan/ports`). The scan status shows "Checking ports: n of m devices" while a port job runs. |
 | `POST /scan/ports` | Starts the built-in collector's scan with a forced port job (research R8). 202 with the status partial; 409 if a port job is running; 503 if the built-in collector is disabled. |
-| `GET /devices/{id}/history` (device page history list) | Shows "Port 80/tcp opened" / "Port 80/tcp closed" events. |
+| Device page, History list | Shows "Port 80/tcp opened" / "Port 80/tcp closed" events. |

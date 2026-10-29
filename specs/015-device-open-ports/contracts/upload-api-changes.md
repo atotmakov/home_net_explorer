@@ -50,7 +50,7 @@ A run may carry presence data and port checks together; collectors send them apa
 
 - `enabled`: false when the owner turned port checks off everywhere (all subnets off).
 - `due`: current addresses of due devices (research R5) on subnets the collector scanned in its
-  latest run; may be empty.
+  latest run; may be empty. Collectors ask for it after uploading a presence run.
 - `excluded`: addresses the collector must never check, even when forced (devices or subnets the
   owner turned off).
 

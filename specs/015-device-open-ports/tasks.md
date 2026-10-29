@@ -21,7 +21,7 @@ literals in non-test `.go` files (lint).
 services before Phases 4–5 start.
 
 **PRs**: PR 1 = Phases 1–2; PR 2 = Phase 3 (US1, MVP); PR 3 = Phases 4–5 (US2, US3); PR 4 =
-Phase 6. Each PR: red tests commit, then implementation; deploy after merge.
+Phase 6 (T029 removal, docs, validation). Each PR: red tests commit, then implementation; deploy after merge.
 
 ## Phase 1: Setup
 
@@ -42,6 +42,14 @@ Phase 6. Each PR: red tests commit, then implementation; deploy after merge.
   longer than 32 or with control characters; `service_source` other than `table`|`banner`;
   `all_open` without `complete`. `TestPingPortScan`: `PingResponse` round-trips `port_scan`
   {enabled, due, excluded}; a response without it decodes with a nil `PortScan`
+- [ ] T004a [P] Contract tests in `tests/contract/`: add `fixtures/valid_port_run.json` (the example
+  of contracts/upload-api-changes.md: `subnets: []`, `observations: []`, one complete check of
+  192.168.1.79 with 80/tcp, 22/tcp banner, 5353/udp) and `fixtures/invalid_port_run.json` (port 0,
+  duplicate 80/tcp); `collector_payload_test.go`: a port run built by the collector's port job
+  from fakes matches the valid fixture's shape and passes validation; `server_upload_test.go`: the
+  valid fixture → 201 `stored`, the invalid one → 422 `validation_failed`, a run with presence data
+  and port checks together → 201; `schema_test.go`: `GET /api/v1/ping` carries `port_scan` with
+  `enabled`, `due` and `excluded` arrays
 - [ ] T004 Implement in `internal/contract/v1.go` and `validate.go`: `PortCheck{IP, MAC, StartedAt,
   FinishedAt, Complete, AllOpen, Open []OpenPort}`, `OpenPort{Port int, Proto, Service,
   ServiceSource string}`, `CollectionRun.PortChecks []PortCheck \`json:"port_checks,omitempty"\``,
@@ -49,7 +57,7 @@ Phase 6. Each PR: red tests commit, then implementation; deploy after merge.
   Excluded []string}`; constants `MaxPortChecks = 256`, `MaxOpenPorts = 512`, `MaxServiceLen = 32`,
   `ProtoTCP`, `ProtoUDP`, `ServiceSourceTable`, `ServiceSourceBanner`; validation exactly as
   contracts/upload-api-changes.md. Update `specs/001-lan-inventory-topology/contracts/
-  collector-upload-api.yaml` with the two optional fields. Make T003 pass
+  collector-upload-api.yaml` with the two optional fields. Make T003 and T004a pass
 - [ ] T005 [P] Test in `internal/store/migrate_test.go` (or the existing migration test)
   `TestMigration0010`: after migrating a database holding events, device attrs and subnet attrs
   from 0009, those rows are unchanged; `events` accepts `port_opened`/`port_closed`;
@@ -97,7 +105,9 @@ after a forced check; a never-checked device says "Ports not checked yet".
   the job targets the due addresses found by `arp`/`icmp_tcp` only; forced → every such address
   minus excluded; the port run has a new collection id, `subnets: []`, `observations: []`, the
   checks with each target's MAC, and `finished_at` before `started_at` + `MaxRunWindow`; a job
-  near the window stops and reports unfinished targets `complete: false`
+  near the window stops and reports unfinished targets `complete: false`; the job uses the plan
+  fetched after the presence upload: an address absent from the first ping but due in the second
+  is checked
 - [ ] T012 [P] [US1] Test in `cmd/hne-collector/main_test.go` `TestScanOncePorts`: with a fake
   server whose ping returns `port_scan.due = [.20]`, `scan --once` uploads the presence run then a
   port run checking .20 only; `scan --once --ports` checks every ARP-found address except
@@ -113,14 +123,15 @@ after a forced check; a never-checked device says "Ports not checked yet".
   never-checked online device is due; a device checked complete 21 h ago is due only once the
   minute of day is past its slot (`slot = FNV-1a(identity key) mod 1440`); one checked 19 h ago is
   not due; `due` lists only addresses on subnets the collector scanned in its latest run;
+  `enabled` is false only when every scanned subnet is off;
   `TestDevicePortsView`: the page view gives open ports sorted by port, last check time and
   collector name, and "not checked" for a device without checks
 
 ### Implementation
 
 - [ ] T015 [US1] Implement `internal/collect/portjob.go` (targets from a run, the port run, the
-  window stop) and wire `cmd/hne-collector/main.go`: `--ports` flag, `port_scan` from ping (cached
-  like routers), foreground job in `scan`, one background job in `run`, `check` line per
+  window stop) and wire `cmd/hne-collector/main.go`: `--ports` flag, `port_scan` from a ping made after
+  the presence upload (cached like routers for `check`), foreground job in `scan`, one background job in `run`, `check` line per
   contracts/collector-cli-changes.md. Make T011, T012 pass
 - [ ] T016 [US1] Implement `internal/inventory/ports.go`: in `Apply`, a run without subnets skips
   the presence steps; each port check → device by MAC else by address on its subnet at
@@ -132,10 +143,13 @@ after a forced check; a never-checked device says "Ports not checked yet".
   `handlePing` (`internal/web/api.go`). Make T014 pass
 - [ ] T018 [P] [US1] Test in `internal/app/scanner_test.go` `TestBuiltinPortJob`: after a built-in
   scan, a port job runs for the store's due addresses through a fake checker and its port run is
-  ingested; `TriggerPorts` makes the next scan force every found address; a second `TriggerPorts`
-  while a job runs returns busy; the status reports "n of m"
-- [ ] T019 [US1] Implement in `internal/app/scanner.go`: the port job after each scan (fake checker
-  injectable), `TriggerPorts`, progress in `Status()`. Make T018 pass
+  ingested; a device first found by this scan is port-checked in the same cycle; `TriggerPorts`
+  makes the next scan force every found address; a second `TriggerPorts` while a job runs returns
+  busy; the status reports "n of m"; with a fake job that blocks until released, the next scheduled
+  scan still starts at its interval and no second job starts
+- [ ] T019 [US1] Implement in `internal/app/scanner.go`: the port job after each scan, in its own
+  goroutine (one at a time), never blocking `Run`'s loop, with the plan computed after the scan's
+  run is ingested (fake checker injectable), `TriggerPorts`, progress in `Status()`. Make T018 pass
 - [ ] T020 [P] [US1] Tests in `internal/web/ports_test.go`: `TestDevicePagePorts` — the device page
   shows the "Open ports" card with "22/tcp", "ssh", the address and the last check; "Ports not
   checked yet" without checks; "No open ports found" after a complete empty check; "Not reachable
@@ -189,21 +203,22 @@ says so.
 - [ ] T028 [US3] Implement the facts (`internal/inventory/facts.go`), the plan exclusion
   (`internal/store/ports.go`), the handlers and templates (`device.html`, `settings.html`). Make
   T027 pass
-- [ ] T029 [US3] Removal (feature 004): extend `internal/store/maintenance.go` so removing devices
-  or all data deletes `port_checks`, `port_findings`, `device_ports`; test in
-  `internal/store/maintenance_test.go`
 
 ## Phase 6: Polish & Cross-Cutting
 
+- [ ] T029 Removal (feature 004): extend `internal/store/maintenance.go` so removing devices
+  or all data deletes `port_checks`, `port_findings`, `device_ports`; test in
+  `internal/store/maintenance_test.go`
 - [ ] T030 [P] Update `specs/001-lan-inventory-topology/contracts/collector-cli.md` with the
   `--ports` flag and the `check` line
 - [ ] T031 Real-network validation per quickstart.md §2–§5 on the owner's network; record results
-  in this file (like 011 T021)
+  in this file (like 011 T021), including the forced-check duration (SC-004); a week later, record
+  whether any device misbehaved (SC-005)
 - [ ] T032 Mark spec `**Status**: Implemented (0.20)` and all tasks [X]
 
 ## Dependencies
 
-- Phase 2 blocks everything. Within it: T003→T004, T005→T006, T007/T008→T009.
+- Phase 2 blocks everything. Within it: T003, T004a→T004, T005→T006, T007/T008→T009.
 - US1 (Phase 3) needs Phase 2. T015 needs T004, T009; T016 needs T004, T006; T017 needs T006;
   T019 needs T009, T016, T017; T021 needs T017, T019.
 - US2 needs T016 (device_ports). US3 needs T017 (plan) and T021 (page). US2 and US3 are
@@ -211,7 +226,7 @@ says so.
 
 ## Parallel Examples
 
-- Phase 2: T003, T005, T007, T008 together (different files).
+- Phase 2: T003, T004a, T005, T007, T008 together (different files).
 - US1 tests: T011, T012, T013, T014 together; then T015, T016, T017 in parallel (different
   packages); T018 and T020 after.
 - US2 and US3 phases can run side by side after US1.
