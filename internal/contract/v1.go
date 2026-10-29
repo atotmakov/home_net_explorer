@@ -19,9 +19,9 @@ const (
 	MaxRunWindow          = time.Hour
 	MaxFutureSkew         = 5 * time.Minute
 	ClockSkewFlagMs       = 300000
-	MaxSources            = 16 // router and access point sources per run (features 002, 012)
-	MaxViaLen             = 32 // Observation.via
-	MaxModelLen           = 64 // RunSource.model
+	MaxSources            = 16  // router and access point sources per run (features 002, 012)
+	MaxViaLen             = 32  // Observation.via
+	MaxModelLen           = 64  // RunSource.model
 	MaxPortChecks         = 256 // port checks per run (feature 015)
 	MaxOpenPorts          = 512 // open ports listed per check; more → all_open (feature 015)
 	MaxServiceLen         = 32  // OpenPort.service
