@@ -120,49 +120,47 @@ func (c *Checker) checkOne(ctx context.Context, t Target) contract.PortCheck {
 		mu.Unlock()
 	}
 
-	// A firewalled device times out on every port: once its first 1,024 ports all did, the
-	// rest are tried with the short timeout (research R2).
-	var done, silent atomic.Int32
-	var short atomic.Bool
+	// A firewalled device times out on every port: the first 1,024 ports are checked as a batch,
+	// and when they all timed out the rest are tried with the short timeout (research R2).
 	slots := make(chan struct{}, c.PerDevice)
-	var wg sync.WaitGroup
-	complete := true
-sweep:
-	for port := 1; port <= c.MaxPort; port++ {
-		select {
-		case <-ctx.Done():
-			complete = false
-			break sweep
-		case slots <- struct{}{}:
-		}
-		if ctx.Err() != nil {
-			<-slots
-			complete = false
-			break
-		}
-		timeout := c.Timeout
-		if short.Load() {
-			timeout = c.SilentTimeout
-		}
-		wg.Add(1)
-		go func(port int) {
-			defer wg.Done()
-			defer func() { <-slots }()
-			o, open, timedOut := c.tcp(ctx, t.IP, port, timeout)
-			if open {
-				add(o)
+	var silent atomic.Int32
+	sweep := func(from, to int, timeout time.Duration) bool {
+		var wg sync.WaitGroup
+		defer wg.Wait()
+		for port := from; port <= to; port++ {
+			select {
+			case <-ctx.Done():
+				return false
+			case slots <- struct{}{}:
 			}
-			if port <= silentWindow {
+			if ctx.Err() != nil {
+				<-slots
+				return false
+			}
+			wg.Add(1)
+			go func(port int) {
+				defer wg.Done()
+				defer func() { <-slots }()
+				o, open, timedOut := c.tcp(ctx, t.IP, port, timeout)
+				if open {
+					add(o)
+				}
 				if timedOut {
 					silent.Add(1)
 				}
-				if done.Add(1) == silentWindow && silent.Load() == silentWindow {
-					short.Store(true)
-				}
-			}
-		}(port)
+			}(port)
+		}
+		return true
 	}
-	wg.Wait()
+	first := min(silentWindow, c.MaxPort)
+	complete := sweep(1, first, c.Timeout)
+	if complete && c.MaxPort > first {
+		timeout := c.Timeout
+		if silent.Load() == int32(first) {
+			timeout = c.SilentTimeout
+		}
+		complete = sweep(first+1, c.MaxPort, timeout)
+	}
 
 	if complete && ctx.Err() == nil {
 		var uwg sync.WaitGroup

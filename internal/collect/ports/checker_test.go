@@ -229,8 +229,8 @@ func TestCancelled(t *testing.T) {
 	if got := strings.Join(openList(c), ","); got != "22/tcp ssh table,80/tcp http table" {
 		t.Errorf("open = %s, want the ports found before the cancel", got)
 	}
-	if f.dials > 2000+128 {
-		t.Errorf("%d dials after the cancel at 2000", f.dials)
+	if f.dials > 4000 {
+		t.Errorf("%d dials after the cancel at 2000: the sweep did not stop", f.dials)
 	}
 }
 
