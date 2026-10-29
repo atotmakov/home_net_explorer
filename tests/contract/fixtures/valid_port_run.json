@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "collection_id": "5a0c2f4e-7b1d-4e8a-9c3f-15e0a7d2b901",
+  "collector": {
+    "name": "nas",
+    "version": "dev",
+    "os": "linux"
+  },
+  "started_at": "2026-10-27T03:12:00.000Z",
+  "finished_at": "2026-10-27T03:13:00.000Z",
+  "sent_at": "2026-10-27T03:13:01.000Z",
+  "interval_seconds": 900,
+  "vantage": {
+    "hostname": "nas",
+    "interfaces": [
+      {
+        "name": "eth0",
+        "ip": "192.168.1.20",
+        "prefix_len": 24,
+        "mac": "00:11:32:aa:bb:cc"
+      }
+    ],
+    "routes": [
+      {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.168.1.100",
+        "interface": "eth0"
+      },
+      {
+        "destination": "192.168.1.0/24",
+        "interface": "eth0"
+      }
+    ]
+  },
+  "subnets": [],
+  "observations": [],
+  "port_checks": [
+    {
+      "ip": "192.168.1.79",
+      "mac": "00:00:5e:00:53:79",
+      "started_at": "2026-10-27T03:12:00.000Z",
+      "finished_at": "2026-10-27T03:12:41.000Z",
+      "complete": true,
+      "all_open": false,
+      "open": [
+        {
+          "port": 22,
+          "proto": "tcp",
+          "service": "ssh",
+          "service_source": "banner"
+        },
+        {
+          "port": 80,
+          "proto": "tcp",
+          "service": "http",
+          "service_source": "table"
+        },
+        {
+          "port": 554,
+          "proto": "tcp",
+          "service": "rtsp",
+          "service_source": "table"
+        },
+        {
+          "port": 5353,
+          "proto": "udp",
+          "service": "mdns",
+          "service_source": "table"
+        }
+      ]
+    }
+  ]
+}

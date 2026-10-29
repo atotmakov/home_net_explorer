@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,6 +18,8 @@ var expectedTables = []string{
 	"router_settings",
 	// projections
 	"subnets", "sightings", "devices", "device_addresses", "events", "links",
+	// feature 015
+	"port_checks", "port_findings", "device_ports",
 }
 
 func pragma(t *testing.T, s *store.Store, name string) string {
@@ -400,5 +403,94 @@ func TestMigration0008(t *testing.T) {
 	}
 	if _, err := db.Exec(ins, id, 53, "access_point", "rebooted"); err == nil {
 		t.Error("run_sources accepted an unknown outcome")
+	}
+}
+
+// Feature 015: schema 10 adds the port tables; events, user_device_attrs and user_subnet_attrs are
+// rebuilt with the new event types and the "ports" owner fact, keeping every row.
+func TestMigration0010(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "m.db"), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seed, err := os.ReadFile(filepath.Join("testdata", "seed_5.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := s.DB()
+	if _, err := db.ExecContext(ctx, string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateTo(ctx, 9); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO user_subnet_attrs (cidr, field, value, at) VALUES ('192.168.1.0/24', 'name', 'home', 'a')`); err != nil {
+		t.Fatal(err)
+	}
+	count := func(table string) int {
+		var n int
+		if err := db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	tables := []string{"events", "user_device_attrs", "user_subnet_attrs"}
+	before := map[string]int{}
+	for _, tb := range tables {
+		before[tb] = count(tb)
+	}
+	if err := s.MigrateTo(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	for _, tb := range tables {
+		if before[tb] == 0 || count(tb) != before[tb] {
+			t.Errorf("%s: %d rows before, %d after", tb, before[tb], count(tb))
+		}
+	}
+	var dev int64
+	if err := db.QueryRow(`SELECT id FROM devices LIMIT 1`).Scan(&dev); err != nil {
+		t.Fatal(err)
+	}
+	ev := `INSERT INTO events (at, device_id, type, new_value) VALUES (?, ?, ?, '80/tcp')`
+	for i, typ := range []string{"port_opened", "port_closed"} {
+		if _, err := db.Exec(ev, fmt.Sprintf("2026-10-27T0%d:00:00Z", i), dev, typ); err != nil {
+			t.Errorf("events refuses %s: %v", typ, err)
+		}
+	}
+	if _, err := db.Exec(ev, "2026-10-27T05:00:00Z", dev, "port_scanned"); err == nil {
+		t.Error("events accepted an unknown type")
+	}
+	if _, err := db.Exec(`INSERT INTO user_device_attrs (identity_key, field, value, at) VALUES ('mac:x', 'ports', 'off', 'a')`); err != nil {
+		t.Errorf("user_device_attrs refuses ports: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO user_subnet_attrs (cidr, field, value, at) VALUES ('192.168.1.0/24', 'ports', 'off', 'a')`); err != nil {
+		t.Errorf("user_subnet_attrs refuses ports: %v", err)
+	}
+	cols := map[string][]string{
+		"port_checks": {"id", "collection_id", "collector_id", "device_id", "subnet_id", "ip", "started_at",
+			"finished_at", "complete", "all_open"},
+		"port_findings": {"check_id", "port", "proto", "service", "service_source"},
+		"device_ports": {"device_id", "port", "proto", "service", "state", "ip", "collector_id", "first_open",
+			"last_open", "closed_at"},
+	}
+	for table, want := range cols {
+		rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		have := map[string]bool{}
+		for rows.Next() {
+			var n string
+			rows.Scan(&n)
+			have[n] = true
+		}
+		rows.Close()
+		for _, c := range want {
+			if !have[c] {
+				t.Errorf("%s lacks column %s", table, c)
+			}
+		}
 	}
 }

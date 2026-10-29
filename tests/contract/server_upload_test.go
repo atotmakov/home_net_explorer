@@ -159,3 +159,22 @@ func TestPing(t *testing.T) {
 	status, body = s.do("GET", "/api/v1/ping", "", nil)
 	expectError(t, "ping without token", status, body, http.StatusUnauthorized, contract.CodeInvalidToken)
 }
+
+// Feature 015: a port run is stored; an invalid one is rejected; port checks may travel with a
+// presence scan (the valid fixture itself is uploaded by TestUploadValidFixtures).
+func TestUploadPortRun(t *testing.T) {
+	s := newServer(t)
+	status, body := s.do("POST", "/api/v1/collections", s.token, contracttest.Fixture(t, "invalid_port_run.json"))
+	expectError(t, "invalid port run", status, body, http.StatusBadRequest, contract.CodeValidation)
+
+	both := contracttest.Modify(t, "valid_port_run.json", func(m map[string]any) {
+		m["collection_id"] = "5a0c2f4e-7b1d-4e8a-9c3f-15e0a7d2b903"
+		m["subnets"] = []any{map[string]any{"cidr": "192.168.1.0/24", "method": "arp", "complete": true, "hosts_probed": 254}}
+		m["observations"] = []any{map[string]any{"observed_at": "2026-10-27T03:12:10.000Z", "ip": "192.168.1.79",
+			"mac": "00:00:5e:00:53:79", "method": "arp"}}
+	})
+	status, body = s.do("POST", "/api/v1/collections", s.token, both)
+	if status != http.StatusCreated {
+		t.Errorf("presence scan with port checks = %d, want 201 (%s)", status, body)
+	}
+}

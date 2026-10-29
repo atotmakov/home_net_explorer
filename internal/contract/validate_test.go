@@ -2,7 +2,9 @@ package contract_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
@@ -51,6 +53,8 @@ var fixtureCodes = map[string]string{
 	"invalid_via_on_arp.json":              contract.CodeValidation,
 	"invalid_router_public_address.json":   contract.CodeValidation,
 	"valid_access_point.json":              "", // feature 012
+	"valid_port_run.json":                  "", // feature 015
+	"invalid_port_run.json":                contract.CodeValidation,
 }
 
 func decodeAndValidate(data []byte) error {
@@ -229,5 +233,112 @@ func TestIsPrivate(t *testing.T) {
 		if got := contract.IsPrivate(netip.MustParsePrefix(s)); got != want {
 			t.Errorf("IsPrivate(%s) = %v, want %v", s, got, want)
 		}
+	}
+}
+
+// Feature 015: port checks in a port run (contracts/upload-api-changes.md).
+func TestPortChecks(t *testing.T) {
+	pc := func(m map[string]any) map[string]any { return m["port_checks"].([]any)[0].(map[string]any) }
+	open := func(m map[string]any, i int) map[string]any { return pc(m)["open"].([]any)[i].(map[string]any) }
+	many := func(n int, f func(i int) any) []any {
+		out := make([]any, n)
+		for i := range out {
+			out[i] = f(i)
+		}
+		return out
+	}
+	bad := map[string]func(m map[string]any){
+		"257 port checks": func(m map[string]any) {
+			first := pc(m)
+			m["port_checks"] = many(257, func(i int) any {
+				c := map[string]any{}
+				for k, v := range first {
+					c[k] = v
+				}
+				c["ip"] = fmt.Sprintf("192.168.1.%d", i%250+1)
+				return c
+			})
+		},
+		"513 open ports": func(m map[string]any) {
+			pc(m)["open"] = many(513, func(i int) any {
+				return map[string]any{"port": i + 1, "proto": "tcp", "service": "", "service_source": "table"}
+			})
+		},
+		"public ip":                func(m map[string]any) { pc(m)["ip"] = "8.8.8.8" },
+		"malformed ip":             func(m map[string]any) { pc(m)["ip"] = "cam.lan" },
+		"group mac":                func(m map[string]any) { pc(m)["mac"] = "01:00:5e:00:00:fb" },
+		"started after finished":   func(m map[string]any) { pc(m)["started_at"] = "2026-10-27T03:12:50.000Z" },
+		"finished after the run":   func(m map[string]any) { pc(m)["finished_at"] = "2026-10-27T03:14:00.000Z" },
+		"started before the run":   func(m map[string]any) { pc(m)["started_at"] = "2026-10-27T03:11:00.000Z" },
+		"port 0":                   func(m map[string]any) { open(m, 0)["port"] = 0 },
+		"port 65536":               func(m map[string]any) { open(m, 0)["port"] = 65536 },
+		"proto sctp":               func(m map[string]any) { open(m, 0)["proto"] = "sctp" },
+		"duplicate port and proto": func(m map[string]any) { open(m, 1)["port"] = 22 },
+		"service of 33 characters": func(m map[string]any) { open(m, 0)["service"] = strings.Repeat("s", 33) },
+		"service with a newline":   func(m map[string]any) { open(m, 0)["service"] = "ssh\nx" },
+		"unknown service_source":   func(m map[string]any) { open(m, 0)["service_source"] = "guess" },
+		"all_open without complete": func(m map[string]any) {
+			pc(m)["complete"], pc(m)["all_open"] = false, true
+		},
+	}
+	for label, f := range bad {
+		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_port_run.json", f)), contract.CodeValidation)
+	}
+	good := map[string]func(m map[string]any){
+		"256 port checks": func(m map[string]any) {
+			first := pc(m)
+			m["port_checks"] = many(256, func(i int) any {
+				c := map[string]any{}
+				for k, v := range first {
+					c[k] = v
+				}
+				c["ip"] = fmt.Sprintf("192.168.1.%d", i%250+1)
+				return c
+			})
+		},
+		"512 open ports, all_open": func(m map[string]any) {
+			pc(m)["all_open"] = true
+			pc(m)["open"] = many(512, func(i int) any {
+				return map[string]any{"port": i + 1, "proto": "tcp", "service": "", "service_source": "table"}
+			})
+		},
+		"same port on tcp and udp": func(m map[string]any) { open(m, 3)["port"] = 22 },
+		"no mac":                   func(m map[string]any) { delete(pc(m), "mac") },
+		"incomplete, no ports":     func(m map[string]any) { pc(m)["complete"], pc(m)["open"] = false, []any{} },
+		"unknown service":          func(m map[string]any) { open(m, 2)["service"] = "" },
+		"port checks beside a presence scan": func(m map[string]any) {
+			m["subnets"] = []any{map[string]any{"cidr": "192.168.1.0/24", "method": "arp", "complete": true, "hosts_probed": 254}}
+			m["observations"] = []any{map[string]any{"observed_at": "2026-10-27T03:12:10.000Z", "ip": "192.168.1.79",
+				"mac": "00:00:5e:00:53:79", "method": "arp"}}
+		},
+	}
+	for label, f := range good {
+		checkCode(t, label, decodeAndValidate(contracttest.Modify(t, "valid_port_run.json", f)), "")
+	}
+	if contract.MaxPortChecks != 256 || contract.MaxOpenPorts != 512 || contract.MaxServiceLen != 32 ||
+		contract.ProtoTCP != "tcp" || contract.ProtoUDP != "udp" ||
+		contract.ServiceSourceTable != "table" || contract.ServiceSourceBanner != "banner" {
+		t.Error("feature 015 constants")
+	}
+}
+
+// Feature 015: the ping tells collectors which addresses are due for a port check.
+func TestPingPortScan(t *testing.T) {
+	in := contract.PingResponse{Collector: "desktop", PortScan: &contract.PortScan{Enabled: true,
+		Due: []string{"192.168.1.57", "192.168.1.79"}, Excluded: []string{"192.168.1.54"}}}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"port_scan":{"enabled":true,"due":["192.168.1.57","192.168.1.79"],"excluded":["192.168.1.54"]}`) {
+		t.Errorf("ping JSON = %s", b)
+	}
+	var out contract.PingResponse
+	if err := json.Unmarshal(b, &out); err != nil || out.PortScan == nil || len(out.PortScan.Due) != 2 {
+		t.Errorf("round trip = %+v, %v", out.PortScan, err)
+	}
+	var old contract.PingResponse
+	if err := json.Unmarshal([]byte(`{"collector":"desktop","ignored_subnets":[]}`), &old); err != nil || old.PortScan != nil {
+		t.Errorf("a ping without port_scan decodes to %+v, %v; want nil", old.PortScan, err)
 	}
 }
