@@ -9,11 +9,13 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
 	"github.com/atotmakov/home_net_explorer/internal/collect/accesspoint"
+	"github.com/atotmakov/home_net_explorer/internal/collect/ports"
 	"github.com/atotmakov/home_net_explorer/internal/collect/router"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/ingest"
@@ -34,6 +36,10 @@ type Scanner struct {
 	defaultInterval time.Duration
 	routerRT        http.RoundTripper
 	apRT            http.RoundTripper // access point traffic (feature 012)
+	portChecker     *ports.Checker    // feature 015; nil: no port checks
+	portBusy        atomic.Bool       // a port job is running
+	forcePorts      atomic.Bool       // "Check ports now": the next scan checks every address found
+	portWG          sync.WaitGroup
 
 	trigger chan struct{}
 	wake    chan struct{} // pause state changed (feature 004)
@@ -51,6 +57,7 @@ type Scanner struct {
 // the next scan is due one interval after the last one, or at once if that time has passed.
 func (s *Scanner) Run(ctx context.Context) {
 	defer close(s.done)
+	defer s.portWG.Wait() // a port job ends with the context
 	if !s.paused(ctx) {
 		s.scanOnce(ctx)
 	}
@@ -97,6 +104,23 @@ func (s *Scanner) Trigger() web.TriggerResult {
 	select {
 	case s.trigger <- struct{}{}:
 	default: // one is already pending
+	}
+	return web.TriggerStarted
+}
+
+// TriggerPorts asks for "Check ports now" (feature 015, research R8): the next scan, started at
+// once, checks the ports of every address it finds. Refused while paused or while a port job runs.
+func (s *Scanner) TriggerPorts() web.TriggerResult {
+	if s.paused(context.Background()) {
+		return web.TriggerPaused
+	}
+	if s.portBusy.Load() {
+		return web.TriggerRunning
+	}
+	s.forcePorts.Store(true)
+	select {
+	case s.trigger <- struct{}{}:
+	default: // a scan is pending or running; the flag applies when it ends
 	}
 	return web.TriggerStarted
 }
@@ -209,7 +233,68 @@ func (s *Scanner) scan(ctx context.Context) (int, error) {
 	}
 	s.log.Info("built-in scan", "subnets", len(run.Subnets), "found", len(run.Observations),
 		"duration", run.FinishedAt.Sub(run.StartedAt).Round(time.Millisecond))
+	s.startPorts(ctx, run)
 	return len(run.Observations), nil
+}
+
+// startPorts starts the port job of a scan (feature 015) in the background, so the scan loop
+// keeps its interval (FR-010): the due addresses found, computed after the run was ingested so a
+// new device is due at once, or all of them after "Check ports now". One job at a time.
+func (s *Scanner) startPorts(ctx context.Context, run *contract.CollectionRun) {
+	force := s.forcePorts.Swap(false)
+	if s.portChecker == nil {
+		return
+	}
+	plan, err := s.store.PortPlan(ctx, s.collectorID, s.clock.Now())
+	if err != nil {
+		s.log.Error("port plan", "err", err)
+		return
+	}
+	targets := collect.PortTargets(run, &plan, force)
+	if len(targets) == 0 || !s.portBusy.CompareAndSwap(false, true) {
+		return
+	}
+	checker := *s.portChecker
+	checker.Done = func() {
+		s.mu.Lock()
+		s.status.PortsDone++
+		s.mu.Unlock()
+	}
+	s.mu.Lock()
+	s.status.PortsRunning, s.status.PortsDone, s.status.PortsTotal = true, 0, len(targets)
+	s.mu.Unlock()
+	job := &collect.PortJob{Checker: &checker, Clock: s.clock, Collector: s.engine.Collector,
+		IntervalSeconds: s.engine.IntervalSeconds}
+	s.portWG.Add(1)
+	go func() {
+		defer s.portWG.Done()
+		defer func() {
+			s.mu.Lock()
+			s.status.PortsRunning = false
+			s.mu.Unlock()
+			s.portBusy.Store(false)
+		}()
+		pr := job.Run(ctx, run.Vantage, targets)
+		pr.SentAt = s.clock.Now()
+		if err := contract.Validate(pr); err != nil {
+			s.log.Error("port run invalid", "err", err)
+			return
+		}
+		raw, err := json.Marshal(pr)
+		if err != nil {
+			return
+		}
+		if _, err := s.ingester.Ingest(context.WithoutCancel(ctx), s.collectorID, raw, pr, pr.SentAt); err != nil {
+			s.log.Error("port run not stored", "err", err)
+			return
+		}
+		open := 0
+		for _, c := range pr.PortChecks {
+			open += len(c.Open)
+		}
+		s.log.Info("built-in port check", "devices", len(pr.PortChecks), "open", open,
+			"duration", pr.FinishedAt.Sub(pr.StartedAt).Round(time.Millisecond))
+	}()
 }
 
 // accessPoints returns the access points set up in the web UI as sources for the built-in

@@ -100,7 +100,7 @@ after a forced check; a never-checked device says "Ports not checked yet".
 
 ### Tests (red first)
 
-- [ ] T011 [P] [US1] Test in `internal/collect/portjob_test.go` `TestPortJobTargets`: from a run with
+- [X] T011 [P] [US1] Test in `internal/collect/portjob_test.go` `TestPortJobTargets`: from a run with
   `arp`, `icmp_tcp`, `router_table` and `ap_client` observations, a due list and an excluded list,
   the job targets the due addresses found by `arp`/`icmp_tcp` only; forced → every such address
   minus excluded; the port run has a new collection id, `subnets: []`, `observations: []`, the
@@ -108,18 +108,18 @@ after a forced check; a never-checked device says "Ports not checked yet".
   near the window stops and reports unfinished targets `complete: false`; the job uses the plan
   fetched after the presence upload: an address absent from the first ping but due in the second
   is checked
-- [ ] T012 [P] [US1] Test in `cmd/hne-collector/main_test.go` `TestScanOncePorts`: with a fake
+- [X] T012 [P] [US1] Test in `cmd/hne-collector/main_test.go` `TestScanOncePorts`: with a fake
   server whose ping returns `port_scan.due = [.20]`, `scan --once` uploads the presence run then a
   port run checking .20 only; `scan --once --ports` checks every ARP-found address except
   `excluded`; `--dry-run --ports` prints both runs and uploads nothing; `check` prints
   `Port checks: on (1 due)`; `run` starts at most one background port job at a time
-- [ ] T013 [P] [US1] Test in `internal/inventory/ports_test.go` `TestApplyPortRun`: after a presence
+- [X] T013 [P] [US1] Test in `internal/inventory/ports_test.go` `TestApplyPortRun`: after a presence
   run with device D at 192.168.1.79, a port run with a complete check (80/tcp, 554/tcp) stores one
   `port_checks` row (device D, complete) and two `port_findings`; `device_ports` has both `open`
   with `first_open = last_open = finished_at`; a check matching no device is dropped; the port run
   creates no subnet scan, no offline change and no `went_offline` event; rebuild reproduces the
   same rows (research R10)
-- [ ] T014 [P] [US1] Test in `internal/store/ports_test.go` `TestPortPlan`: with clock.Fake, a
+- [X] T014 [P] [US1] Test in `internal/store/ports_test.go` `TestPortPlan`: with clock.Fake, a
   never-checked online device is due; a device checked complete 21 h ago is due only once the
   minute of day is past its slot (`slot = FNV-1a(identity key) mod 1440`); one checked 19 h ago is
   not due; `due` lists only addresses on subnets the collector scanned in its latest run;
@@ -129,37 +129,37 @@ after a forced check; a never-checked device says "Ports not checked yet".
 
 ### Implementation
 
-- [ ] T015 [US1] Implement `internal/collect/portjob.go` (targets from a run, the port run, the
+- [X] T015 [US1] Implement `internal/collect/portjob.go` (targets from a run, the port run, the
   window stop) and wire `cmd/hne-collector/main.go`: `--ports` flag, `port_scan` from a ping made after
   the presence upload (cached like routers for `check`), foreground job in `scan`, one background job in `run`, `check` line per
   contracts/collector-cli-changes.md. Make T011, T012 pass
-- [ ] T016 [US1] Implement `internal/inventory/ports.go`: in `Apply`, a run without subnets skips
+- [X] T016 [US1] Implement `internal/inventory/ports.go`: in `Apply`, a run without subnets skips
   the presence steps; each port check → device by MAC else by address on its subnet at
   `started_at`; insert `port_checks`/`port_findings`; upsert `device_ports` open rows; clear the
   three tables in `Rebuild` before replay; `ProjectionRules = 9` in `internal/app/app.go` (update
   `internal/app/rebuild_test.go`). Make T013 pass
-- [ ] T017 [US1] Implement `internal/store/ports.go`: `PortPlan(ctx, collectorID, now)`
+- [X] T017 [US1] Implement `internal/store/ports.go`: `PortPlan(ctx, collectorID, now)`
   (due/excluded/enabled, research R5) and `DevicePorts(ctx, deviceID)`; return `port_scan` in
   `handlePing` (`internal/web/api.go`). Make T014 pass
-- [ ] T018 [P] [US1] Test in `internal/app/scanner_test.go` `TestBuiltinPortJob`: after a built-in
+- [X] T018 [P] [US1] Test in `internal/app/scanner_test.go` `TestBuiltinPortJob`: after a built-in
   scan, a port job runs for the store's due addresses through a fake checker and its port run is
   ingested; a device first found by this scan is port-checked in the same cycle; `TriggerPorts`
   makes the next scan force every found address; a second `TriggerPorts` while a job runs returns
   busy; the status reports "n of m"; with a fake job that blocks until released, the next scheduled
   scan still starts at its interval and no second job starts
-- [ ] T019 [US1] Implement in `internal/app/scanner.go`: the port job after each scan, in its own
+- [X] T019 [US1] Implement in `internal/app/scanner.go`: the port job after each scan, in its own
   goroutine (one at a time), never blocking `Run`'s loop, with the plan computed after the scan's
   run is ingested (fake checker injectable), `TriggerPorts`, progress in `Status()`. Make T018 pass
-- [ ] T020 [P] [US1] Tests in `internal/web/ports_test.go`: `TestDevicePagePorts` — the device page
+- [X] T020 [P] [US1] Tests in `internal/web/ports_test.go`: `TestDevicePagePorts` — the device page
   shows the "Open ports" card with "22/tcp", "ssh", the address and the last check; "Ports not
   checked yet" without checks; "No open ports found" after a complete empty check; "Not reachable
   for port checks" for a device only listed by a router; no card for a manual device;
   `TestCheckPortsNow` — POST `/scan/ports` 202 and the status partial, 409 when busy, 503 without
   the built-in collector, 403 cross-site; the home page has the "Check ports now" button
-- [ ] T021 [US1] Implement the device page card (`internal/web/templates/device.html`,
+- [X] T021 [US1] Implement the device page card (`internal/web/templates/device.html`,
   `internal/web/pages.go`), the home button and `POST /scan/ports` (`internal/web/server.go`,
   `home.html`). Make T020 pass. Release; **gate G1** (quickstart §1)
-- [ ] T022 [US1] Integration test in `tests/integration/us_ports_test.go` (written red with T020):
+- [X] T022 [US1] Integration test in `tests/integration/us_ports_test.go` (written red with T020):
   upload a presence run, a ping returns .79 due, upload a port run for it, GET the device page:
   80/tcp and 554/tcp listed
 

@@ -42,6 +42,7 @@ type Options struct {
 // Scanner is the built-in collector as seen by the UI.
 type Scanner interface {
 	Trigger() TriggerResult
+	TriggerPorts() TriggerResult // "Check ports now" (feature 015)
 	Status() ScanStatus
 	Paused(ctx context.Context) (bool, time.Time)    // paused by the owner, and since when
 	SetPaused(ctx context.Context, pause bool) error // stored; survives restarts (feature 004)
@@ -63,6 +64,10 @@ type ScanStatus struct {
 	LastFinished time.Time
 	LastFound    int
 	LastError    string
+	// Feature 015: a port job running after a scan, and its progress.
+	PortsRunning bool
+	PortsDone    int
+	PortsTotal   int
 }
 
 // Ingester stores uploaded runs and runs user-fact transactions serialized with ingest
@@ -182,6 +187,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /map", s.handleMap)
 	s.mux.HandleFunc("GET /ui/map.json", s.handleMapJSON)
 	s.mux.HandleFunc("POST /scan", s.handleScan)
+	s.mux.HandleFunc("POST /scan/ports", s.handleScanPorts) // feature 015
 	s.mux.HandleFunc("GET /ui/scan-status", s.handleScanStatus)
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSettingsSave)

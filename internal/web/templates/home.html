@@ -52,7 +52,7 @@
 {{end}}
 
 {{define "scan-status"}}
-<div id="scan-status" {{if .Status.Running}}hx-get="/ui/scan-status" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
+<div id="scan-status" {{if or .Status.Running .Status.PortsRunning}}hx-get="/ui/scan-status" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
 {{if .Enabled}}
   {{if .Paused}}
     <p><span class="badge warn">Paused</span> since {{fmtTime .PausedAt}}. Remote collectors keep working.</p>
@@ -65,7 +65,9 @@
       {{if .Status.LastError}}<span class="error">{{.Status.LastError}}</span>{{end}}
     </p>
     <button type="button" hx-post="/scan" hx-target="#scan-status" hx-swap="outerHTML">Scan now</button>
+    {{if not .Status.PortsRunning}}<button type="button" hx-post="/scan/ports" hx-target="#scan-status" hx-swap="outerHTML" title="Scan, then check every TCP port of each device found">Check ports now</button>{{end}}
   {{end}}
+  {{if .Status.PortsRunning}}<p>Checking ports: {{.Status.PortsDone}} of {{.Status.PortsTotal}} devices…</p>{{end}}
 {{else}}
   <p class="muted">The built-in collector is disabled (--no-builtin-scan).</p>
 {{end}}

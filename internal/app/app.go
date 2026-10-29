@@ -16,6 +16,7 @@ import (
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
+	"github.com/atotmakov/home_net_explorer/internal/collect/ports"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/ingest"
 	"github.com/atotmakov/home_net_explorer/internal/inventory"
@@ -29,9 +30,9 @@ const (
 	BuiltinCollector       = "nas"
 	// ProjectionRules is the version of the derivation rules (feature 006: offline after one
 	// missed complete scan; 7: a broadcast address or group MAC is never a device; 8: an address
-	// ends on a subnet the device moved away from). Data derived by older rules is rebuilt once at
-	// start-up.
-	ProjectionRules = 8
+	// ends on a subnet the device moved away from; 9: port checks, feature 015). Data derived by
+	// older rules is rebuilt once at start-up.
+	ProjectionRules = 9
 )
 
 // Options configure the server.
@@ -49,7 +50,10 @@ type Options struct {
 	RouterTransport http.RoundTripper
 	// AccessPointTransport carries its access point traffic (feature 012), like RouterTransport.
 	AccessPointTransport http.RoundTripper
-	DownloadsDir         string // collector binaries for /downloads/
+	// PortChecker checks the built-in collector's ports (feature 015). Nil: the real network with
+	// the platform engine; no port checks when Engine is overridden (tests).
+	PortChecker  *ports.Checker
+	DownloadsDir string // collector binaries for /downloads/
 	Version              string
 	Commit               string
 }
@@ -100,14 +104,17 @@ func New(ctx context.Context, o Options) (*App, error) {
 
 	var scanner web.Scanner
 	if !o.NoBuiltinScan {
-		engine := o.Engine
+		engine, checker := o.Engine, o.PortChecker
 		if engine == nil {
 			engine, a.closePlatform = platformEngine(o)
+			if checker == nil {
+				checker = &ports.Checker{}
+			}
 		}
 		a.Scanner = &Scanner{
 			engine: engine, ingester: a.Ingester, store: st, collectorID: cid,
 			clock: o.Clock, log: o.Log, subnets: o.Subnets, defaultInterval: o.ScanInterval,
-			routerRT: o.RouterTransport, apRT: o.AccessPointTransport,
+			routerRT: o.RouterTransport, apRT: o.AccessPointTransport, portChecker: checker,
 			trigger: make(chan struct{}, 1), wake: make(chan struct{}, 1), done: make(chan struct{}),
 		}
 		scanner = a.Scanner

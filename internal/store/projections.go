@@ -6,7 +6,8 @@ import (
 )
 
 // projectionTables lists the derived tables in dependency order (children first).
-var projectionTables = []string{"links", "events", "sightings", "device_addresses", "devices", "subnets"}
+var projectionTables = []string{"port_findings", "port_checks", "device_ports", "links", "events", "sightings",
+	"device_addresses", "devices", "subnets"}
 
 // ResetProjections deletes every projection row, leaving facts untouched. Row ids restart at 1,
 // so a rebuild reproduces ingest-order ids exactly.

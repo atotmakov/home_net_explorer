@@ -27,11 +27,13 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
+	"github.com/atotmakov/home_net_explorer/internal/collect/ports"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"github.com/atotmakov/home_net_explorer/internal/upload"
 	"gopkg.in/yaml.v3"
@@ -86,6 +88,8 @@ type environment struct {
 	routerTransport http.RoundTripper
 	apTransport     http.RoundTripper // access point traffic (feature 012), like routerTransport
 	ctx             context.Context   // parent of the command's context (nil: background)
+	// newPortChecker builds the port checker (feature 015); nil: the real network.
+	newPortChecker func() *ports.Checker
 }
 
 func main() {
@@ -229,7 +233,7 @@ func platformEngine(cfg config) (*collect.Engine, func() error, error) {
 }
 
 func run(args []string, env environment) int {
-	jsonOut, dryRun := false, false
+	jsonOut, dryRun, forcePorts := false, false, false
 	var cmd string
 	for _, a := range args {
 		switch a {
@@ -237,6 +241,8 @@ func run(args []string, env environment) int {
 			jsonOut = true
 		case "--dry-run":
 			dryRun = true
+		case "--ports":
+			forcePorts = true // feature 015: check the ports of every address found
 		case "--once":
 			// scan is always a single collection; run is the loop
 		default:
@@ -253,7 +259,7 @@ func run(args []string, env environment) int {
 		return exitOK
 	}
 	if cmd != "check" && cmd != "scan" && cmd != "run" {
-		fmt.Fprintln(env.stderr, "usage: hne-collector check | scan --once [--dry-run] | run | version  [--json]")
+		fmt.Fprintln(env.stderr, "usage: hne-collector check | scan --once [--dry-run] [--ports] | run [--ports] | version  [--json]")
 		return exitConfig
 	}
 
@@ -280,12 +286,19 @@ func run(args []string, env environment) int {
 		os.Remove(filepath.Join(env.dir, rejectedFile))
 	}
 
+	checker := &ports.Checker{}
+	if env.newPortChecker != nil {
+		checker = env.newPortChecker()
+	}
 	c := &collector{
-		cfg:     cfg,
-		env:     env,
-		log:     log,
-		jsonOut: jsonOut,
-		engine:  engine,
+		cfg:        cfg,
+		env:        env,
+		log:        log,
+		jsonOut:    jsonOut,
+		engine:     engine,
+		forcePorts: forcePorts,
+		portJob: &collect.PortJob{Checker: checker, Clock: engine.Clock, Collector: engine.Collector,
+			IntervalSeconds: cfg.IntervalSeconds},
 		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
 		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
@@ -299,7 +312,7 @@ func run(args []string, env environment) int {
 	case "check":
 		return c.check(ctx)
 	case "scan":
-		return c.scanOnce(ctx, dryRun)
+		return c.scanOnce(ctx, dryRun, false)
 	default:
 		return c.loop(ctx)
 	}
@@ -316,6 +329,12 @@ type collector struct {
 
 	serverRouters []contract.RouterRef // routers set up in the web UI (ping, else the cache)
 	markerMu      sync.Mutex           // guards the rejection marker file
+
+	// Feature 015: port checks after each presence run.
+	portJob    *collect.PortJob
+	forcePorts bool        // --ports: check every address found (in run: the first job only)
+	portBusy   atomic.Bool // a background port job is running
+	flushMu    sync.Mutex  // one spool flush at a time (the loop and a background port job)
 }
 
 func (c *collector) check(ctx context.Context) int {
@@ -358,6 +377,14 @@ func (c *collector) check(ctx context.Context) int {
 		return code
 	}
 	fmt.Fprintf(w, "Server %s: OK (collector %q, server time %s)\n", c.cfg.ServerURL, ping.Collector, ping.ServerTime.Format(time.RFC3339))
+	switch ps := ping.PortScan; {
+	case ps == nil:
+		fmt.Fprintln(w, "Port checks: unknown (the server is older than 0.20)")
+	case ps.Enabled:
+		fmt.Fprintf(w, "Port checks: on (%d due)\n", len(ps.Due))
+	default:
+		fmt.Fprintln(w, "Port checks: off")
+	}
 	return exitOK
 }
 
@@ -423,7 +450,9 @@ func (c *collector) lastIgnored() []netip.Prefix {
 }
 
 // scanOnce runs one collection and uploads everything pending.
-func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
+// The port job (feature 015) follows the presence run: in the foreground for scan, in the
+// background for run (background).
+func (c *collector) scanOnce(ctx context.Context, dryRun, background bool) int {
 	ignored, err := c.ignored(ctx)
 	if errors.Is(err, upload.ErrTokenRejected) && !dryRun {
 		return c.pingExit(err)
@@ -447,13 +476,14 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 		enc := json.NewEncoder(c.env.stdout)
 		enc.SetIndent("", "  ")
 		enc.Encode(run)
+		c.portCheck(ctx, run, true, false)
 		return exitOK
 	}
 	if _, err := c.spool.Save(run); err != nil {
 		c.log.Error("cannot write the spool", "dir", c.spool.Dir, "err", err)
 		return exitFailure
 	}
-	res, err := c.client.Flush(ctx, c.spool)
+	res, err := c.flush(ctx)
 	result := "stored"
 	if res.Last.Status != "" {
 		result = res.Last.Status
@@ -467,8 +497,75 @@ func (c *collector) scanOnce(ctx context.Context, dryRun bool) int {
 		c.log.Warn("upload deferred", "err", err)
 	}
 	c.summary(run, result)
+	if code == exitOK || code == exitSpooled {
+		c.portCheck(ctx, run, false, background)
+	}
 	return code
 }
+
+// flush uploads the spool; a background port job and the loop never flush at the same time.
+func (c *collector) flush(ctx context.Context) (upload.FlushResult, error) {
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
+	return c.client.Flush(ctx, c.spool)
+}
+
+// portCheck checks the ports of the run's due addresses, or of all of them when forced, and
+// uploads the port run (feature 015). The plan is asked for after the presence upload, so a
+// device the server first learned from it is already due (research R5). In the background, a
+// job still running from an earlier run means no new one.
+func (c *collector) portCheck(ctx context.Context, run *contract.CollectionRun, dryRun, background bool) {
+	force := c.forcePorts
+	if background {
+		c.forcePorts = false // run --ports forces the first job only
+	}
+	var plan *contract.PortScan
+	if ping, err := c.client.Ping(ctx); err == nil {
+		plan = ping.PortScan
+	} else if !force {
+		return
+	}
+	targets := collect.PortTargets(run, plan, force)
+	if len(targets) == 0 {
+		return
+	}
+	job := func(ctx context.Context) {
+		pr := c.portJob.Run(ctx, run.Vantage, targets)
+		open := 0
+		for _, pc := range pr.PortChecks {
+			open += len(pc.Open)
+		}
+		c.log.Info("port check finished", "devices", len(pr.PortChecks), "open", open,
+			"duration", pr.FinishedAt.Sub(pr.StartedAt).Round(time.Millisecond))
+		if dryRun {
+			enc := json.NewEncoder(c.env.stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(pr)
+			return
+		}
+		pr.SentAt = time.Now().UTC()
+		if _, err := c.spool.Save(pr); err != nil {
+			c.log.Error("cannot write the spool", "dir", c.spool.Dir, "err", err)
+			return
+		}
+		if _, err := c.flush(ctx); err != nil {
+			c.log.Warn("port run upload deferred", "err", err)
+		}
+	}
+	if !background {
+		job(ctx)
+		return
+	}
+	if !c.portBusy.CompareAndSwap(false, true) {
+		c.log.Info("port check still running; no new one started")
+		return
+	}
+	go func() {
+		defer c.portBusy.Store(false)
+		job(ctx)
+	}()
+}
+
 
 func (c *collector) summary(run *contract.CollectionRun, result string) {
 	scanned := 0
@@ -508,7 +605,7 @@ func (c *collector) loop(ctx context.Context) int {
 		now := time.Now()
 		switch {
 		case !now.Before(nextScan):
-			code := c.scanOnce(ctx, false)
+			code := c.scanOnce(ctx, false, true)
 			if code == exitToken {
 				return exitToken
 			}
@@ -520,7 +617,7 @@ func (c *collector) loop(ctx context.Context) int {
 				nextRetry = time.Time{}
 			}
 		case !nextRetry.IsZero() && !now.Before(nextRetry):
-			_, err := c.client.Flush(ctx, c.spool)
+			_, err := c.flush(ctx)
 			switch {
 			case errors.Is(err, upload.ErrTokenRejected):
 				return c.pingExit(err)
