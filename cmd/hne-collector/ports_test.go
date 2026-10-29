@@ -88,7 +88,7 @@ func TestScanOnceForcePorts(t *testing.T) {
 	if srv.uploads != 2 {
 		t.Fatalf("uploads = %d, want 2", srv.uploads)
 	}
-	if got := checkedIPs(portRun(t, srv.bodies[1])); !slices.Equal(got, []string{"192.168.1.100", "192.168.1.20"}) {
+	if got := checkedIPs(portRun(t, srv.bodies[1])); !slices.Equal(got, []string{"192.168.1.20", "192.168.1.100"}) {
 		t.Errorf("forced checks = %v, want every address found except the excluded one", got)
 	}
 	if slices.Contains(h.checked, "192.168.1.21") {
