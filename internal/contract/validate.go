@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"net"
 	"net/netip"
 	"regexp"
 )
@@ -105,7 +106,76 @@ func Validate(run *CollectionRun) error {
 			return err
 		}
 	}
-	return validateSources(run.Sources)
+	if err := validateSources(run.Sources); err != nil {
+		return err
+	}
+	return validatePortChecks(run)
+}
+
+// validatePortChecks enforces contracts/upload-api-changes.md of feature 015.
+func validatePortChecks(run *CollectionRun) error {
+	if len(run.PortChecks) > MaxPortChecks {
+		return invalid("no more than %d port_checks per run", MaxPortChecks)
+	}
+	for i, c := range run.PortChecks {
+		if a, err := netip.ParseAddr(c.IP); err != nil || !IsPrivateAddr(a) {
+			return invalid("port_checks[%d]: ip %q must be a private IPv4 address", i, c.IP)
+		}
+		if c.MAC != "" && (!macRe.MatchString(c.MAC) || groupMAC(c.MAC)) {
+			return invalid("port_checks[%d]: mac %q must be a lower-case unicast MAC", i, c.MAC)
+		}
+		if c.StartedAt.IsZero() || c.FinishedAt.IsZero() || c.FinishedAt.Before(c.StartedAt) {
+			return invalid("port_checks[%d]: started_at must not be after finished_at", i)
+		}
+		if c.StartedAt.Before(run.StartedAt) || c.FinishedAt.After(run.FinishedAt) {
+			return invalid("port_checks[%d]: the check must be within the run window", i)
+		}
+		if c.AllOpen && !c.Complete {
+			return invalid("port_checks[%d]: all_open requires complete", i)
+		}
+		if len(c.Open) > MaxOpenPorts {
+			return invalid("port_checks[%d]: no more than %d open ports", i, MaxOpenPorts)
+		}
+		type key struct {
+			port  int
+			proto string
+		}
+		seen := map[key]bool{}
+		for j, o := range c.Open {
+			if o.Port < 1 || o.Port > 65535 {
+				return invalid("port_checks[%d].open[%d]: port must be 1 to 65535", i, j)
+			}
+			if o.Proto != ProtoTCP && o.Proto != ProtoUDP {
+				return invalid("port_checks[%d].open[%d]: proto must be tcp or udp", i, j)
+			}
+			if seen[key{o.Port, o.Proto}] {
+				return invalid("port_checks[%d].open[%d]: %d/%s listed twice", i, j, o.Port, o.Proto)
+			}
+			seen[key{o.Port, o.Proto}] = true
+			if len(o.Service) > MaxServiceLen || !printable(o.Service) {
+				return invalid("port_checks[%d].open[%d]: service must be at most %d printable characters", i, j, MaxServiceLen)
+			}
+			if o.ServiceSource != ServiceSourceTable && o.ServiceSource != ServiceSourceBanner {
+				return invalid("port_checks[%d].open[%d]: service_source must be table or banner", i, j)
+			}
+		}
+	}
+	return nil
+}
+
+// groupMAC reports a multicast or broadcast MAC (the low bit of the first octet).
+func groupMAC(mac string) bool {
+	hw, err := net.ParseMAC(mac)
+	return err != nil || hw[0]&1 == 1
+}
+
+func printable(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func validateSources(sources []RunSource) error {

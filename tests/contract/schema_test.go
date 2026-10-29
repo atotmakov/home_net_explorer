@@ -19,6 +19,7 @@ var schemaInvalid = []string{
 	"invalid_router_bad_outcome.json",
 	"invalid_source_with_password.json",
 	"invalid_via_too_long.json",
+	"invalid_port_run.json", // port 0 (feature 015)
 }
 
 func TestValidFixturesMatchSchema(t *testing.T) {
@@ -134,5 +135,20 @@ func TestSkipReasonFakedAnswers(t *testing.T) {
 	}
 	if contract.SkipFakedAnswers != "faked_answers" {
 		t.Errorf("SkipFakedAnswers = %q", contract.SkipFakedAnswers)
+	}
+}
+
+// Feature 015: the ping's port plan.
+func TestPingPortScanSchema(t *testing.T) {
+	ping := contracttest.Schema(t, "PingResponse")
+	ok := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],
+		"ignored_subnets":[],"port_scan":{"enabled":true,"due":["192.168.1.79"],"excluded":["192.168.1.54"]}}`)
+	if err := contracttest.Validate(ping, ok); err != nil {
+		t.Errorf("ping with port_scan: %v", err)
+	}
+	bad := []byte(`{"collector":"desktop","server_time":"2026-10-10T10:00:00Z","supported_schema_versions":[1],
+		"ignored_subnets":[],"port_scan":{"enabled":true,"due":"192.168.1.79"}}`)
+	if err := contracttest.Validate(ping, bad); err == nil {
+		t.Error("ping schema accepted port_scan without arrays")
 	}
 }

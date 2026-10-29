@@ -19,9 +19,20 @@ const (
 	MaxRunWindow          = time.Hour
 	MaxFutureSkew         = 5 * time.Minute
 	ClockSkewFlagMs       = 300000
-	MaxSources            = 16 // router and access point sources per run (features 002, 012)
-	MaxViaLen             = 32 // Observation.via
-	MaxModelLen           = 64 // RunSource.model
+	MaxSources            = 16  // router and access point sources per run (features 002, 012)
+	MaxViaLen             = 32  // Observation.via
+	MaxModelLen           = 64  // RunSource.model
+	MaxPortChecks         = 256 // port checks per run (feature 015)
+	MaxOpenPorts          = 512 // open ports listed per check; more → all_open (feature 015)
+	MaxServiceLen         = 32  // OpenPort.service
+)
+
+// Port checks (feature 015).
+const (
+	ProtoTCP            = "tcp"
+	ProtoUDP            = "udp"
+	ServiceSourceTable  = "table"  // the usual name of the port
+	ServiceSourceBanner = "banner" // named from the greeting the device sent
 )
 
 // Scan methods, observation methods, and skip reasons.
@@ -96,6 +107,28 @@ type CollectionRun struct {
 	Subnets         []SubnetScan  `json:"subnets"`
 	Observations    []Observation `json:"observations"`
 	Sources         []RunSource   `json:"sources,omitempty"`
+	PortChecks      []PortCheck   `json:"port_checks,omitempty"` // feature 015; a port run has no subnets
+}
+
+// PortCheck is one check of the ports of one address (feature 015). Complete means every TCP port
+// and every UDP service was tried; only a complete check may close a port. Open lists the open
+// ports, at most MaxOpenPorts; AllOpen marks a device that accepted more than that.
+type PortCheck struct {
+	IP         string     `json:"ip"`
+	MAC        string     `json:"mac,omitempty"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt time.Time  `json:"finished_at"`
+	Complete   bool       `json:"complete"`
+	AllOpen    bool       `json:"all_open"`
+	Open       []OpenPort `json:"open"`
+}
+
+// OpenPort is a port that accepted a connection (TCP) or answered a request (UDP).
+type OpenPort struct {
+	Port          int    `json:"port"`
+	Proto         string `json:"proto"`
+	Service       string `json:"service"`
+	ServiceSource string `json:"service_source"`
 }
 
 // RunSource is the outcome of one router or access point read in a run (features 002, 012). It
@@ -184,6 +217,15 @@ type PingResponse struct {
 	IgnoredSubnets          []string    `json:"ignored_subnets"`
 	Routers                 []RouterRef `json:"routers,omitempty"`       // routers configured in the web UI (feature 003)
 	AccessPoints            []RouterRef `json:"access_points,omitempty"` // access points configured in the web UI (feature 012)
+	PortScan                *PortScan   `json:"port_scan,omitempty"`     // what to port-check now (feature 015)
+}
+
+// PortScan is the server's port plan for a collector (feature 015, research R5): the addresses
+// due for a check, and those never to check, even when forced.
+type PortScan struct {
+	Enabled  bool     `json:"enabled"`
+	Due      []string `json:"due"`
+	Excluded []string `json:"excluded"`
 }
 
 // RouterRef is a router configured in the web UI, as listed to collectors. It never carries

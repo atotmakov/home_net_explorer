@@ -189,7 +189,8 @@ on) is deferred to a separate, later feature.
   of /22 or narrower. Subnets MUST be tracked automatically the first time any collector reports
   them. Users MAY restrict a collector to chosen subnets and MAY ignore a subnet.
 - **FR-007**: Discovery MUST be non-intrusive. It is limited to identifying presence and identity,
-  and it MUST NOT attempt logins, exploits, or brute force against devices.
+  and it MUST NOT attempt logins, exploits, or brute force against devices. (Port checks: feature
+  015, same limit.)
 
 **Collectors & uploads**
 
@@ -311,7 +312,8 @@ on) is deferred to a separate, later feature.
   feature.
 - Alerts outside the UI (email, push, chat) are out of scope for this feature. Changes are
   surfaced in the UI.
-- Port scanning and service/OS fingerprinting are out of scope for this feature.
+- Port scanning and service/OS fingerprinting are out of scope for this feature. Port checks were
+  added by feature 015; fingerprinting stays out of scope.
 - Automatic physical topology discovery (switch ports, access point clients) is planned as a later,
   separate feature. The data model should not prevent adding it, but nothing is built for it now.
 - The MAC manufacturer lookup table ships with the application and is updated with application
