@@ -156,6 +156,13 @@ func TestPing(t *testing.T) {
 	if !strings.Contains(string(body), `"ignored_subnets":[]`) {
 		t.Errorf("ignored_subnets must be an empty array, got %s", body)
 	}
+	// Feature 015: the port plan, with arrays even when nothing is due.
+	if err := contracttest.Validate(contracttest.Schema(t, "PingResponse"), body); err != nil {
+		t.Errorf("ping fails the schema: %v", err)
+	}
+	if !strings.Contains(string(body), `"port_scan":{"enabled":true,"due":[],"excluded":[]}`) {
+		t.Errorf("ping lacks an empty port plan: %s", body)
+	}
 	status, body = s.do("GET", "/api/v1/ping", "", nil)
 	expectError(t, "ping without token", status, body, http.StatusUnauthorized, contract.CodeInvalidToken)
 }

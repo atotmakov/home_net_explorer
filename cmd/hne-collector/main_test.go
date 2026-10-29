@@ -4,20 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
 	"github.com/atotmakov/home_net_explorer/internal/collect"
 	"github.com/atotmakov/home_net_explorer/internal/collect/collecttest"
+	"github.com/atotmakov/home_net_explorer/internal/collect/ports"
 	"github.com/atotmakov/home_net_explorer/internal/contract"
 	"gopkg.in/yaml.v3"
 )
@@ -35,6 +40,10 @@ type fakeServer struct {
 	accessPoints  []contract.RouterRef // feature 012
 	logins        map[int64]contract.RouterLogin
 	loginRequests int
+
+	// Feature 015: the port plan of each ping in turn (the last one repeats); nil = none.
+	plans []*contract.PortScan
+	pings int
 }
 
 func newFakeServer(t *testing.T) *fakeServer {
@@ -48,9 +57,15 @@ func newFakeServer(t *testing.T) *fakeServer {
 		}
 		switch r.URL.Path {
 		case "/api/v1/ping":
+			var plan *contract.PortScan
+			if len(f.plans) > 0 {
+				plan = f.plans[min(f.pings, len(f.plans)-1)]
+			}
+			f.pings++
 			w.WriteHeader(f.pingStatus)
 			json.NewEncoder(w).Encode(contract.PingResponse{Collector: "desktop", ServerTime: time.Now(),
-				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}, Routers: f.routers, AccessPoints: f.accessPoints})
+				SupportedSchemaVersions: []int{1}, IgnoredSubnets: []string{}, Routers: f.routers, AccessPoints: f.accessPoints,
+				PortScan: plan})
 		case "/api/v1/collections":
 			f.uploads++
 			b, _ := io.ReadAll(r.Body)
@@ -99,6 +114,9 @@ type harness struct {
 	apRT           http.RoundTripper // sends access point requests to an eaptest.AP (feature 012)
 	ctx            context.Context   // parent context of the command (nil: background)
 	answerAll      bool              // the network path answers every address (a VPN, feature 005)
+	hosts          []string          // more hosts on the fake network (feature 015)
+	portsOpen      map[string][]int  // open TCP ports per address on the fake network (feature 015)
+	checked        []string          // addresses the fake port checker was asked about
 }
 
 func newHarness(t *testing.T, serverURL string) *harness {
@@ -112,6 +130,11 @@ func (h *harness) run(args ...string) int {
 	h.stderr.Reset()
 	fnet := collecttest.NewFakeNetwork().Add("192.168.1.100", collecttest.Host{MAC: "a0:b1:c2:d3:e4:f5", Hostname: "router.lan"})
 	fnet.AnswerAll = h.answerAll
+	for i, ip := range h.hosts {
+		fnet.Add(ip, collecttest.Host{MAC: fmt.Sprintf("00:00:5e:00:53:%02x", i+1)})
+	}
+	var mu sync.Mutex
+	h.checked = nil
 	return run(args, environment{
 		dir:             h.dir,
 		getenv:          func(k string) string { return h.env[k] },
@@ -120,6 +143,25 @@ func (h *harness) run(args ...string) int {
 		routerTransport: h.routerRT,
 		apTransport:     h.apRT,
 		ctx:             h.ctx,
+		newPortChecker: func() *ports.Checker {
+			return &ports.Checker{MaxPort: 100, BannerTimeout: 5 * time.Millisecond,
+				Dial: func(ctx context.Context, a netip.AddrPort, _ time.Duration) (net.Conn, error) {
+					if a.Port() == 1 {
+						mu.Lock()
+						h.checked = append(h.checked, a.Addr().String())
+						mu.Unlock()
+					}
+					if slices.Contains(h.portsOpen[a.Addr().String()], int(a.Port())) {
+						c, s := net.Pipe()
+						go func() { s.Read(make([]byte, 1)); s.Close() }()
+						return c, nil
+					}
+					return nil, errors.New("connection refused")
+				},
+				UDP: func(context.Context, netip.AddrPort, []byte, time.Duration) ([]byte, error) {
+					return nil, errors.New("no answer")
+				}}
+		},
 		newEngine: func(cfg config) (*collect.Engine, func() error, error) {
 			return &collect.Engine{
 				Prober: fnet, Presence: fnet, Neighbors: fnet, Resolver: fnet,

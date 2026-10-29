@@ -52,8 +52,8 @@ func TestOneTimeRebuild(t *testing.T) {
 	if s := status(a); s != "offline" {
 		t.Errorf("after the upgrade start status = %s, want offline (re-derived by the new rule)", s)
 	}
-	if v, _, _ := a.Store.Setting(ctx, store.SettingProjectionRules); v != "8" {
-		t.Errorf("projection_rules = %q, want 8", v)
+	if v, _, _ := a.Store.Setting(ctx, store.SettingProjectionRules); v != "9" {
+		t.Errorf("projection_rules = %q, want 9", v)
 	}
 
 	// Already at the current rules: no rebuild on the next start.
