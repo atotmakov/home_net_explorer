@@ -75,8 +75,7 @@ func TestCollectorPortRunMatchesSchema(t *testing.T) {
 			Dial: func(ctx context.Context, a netip.AddrPort, _ time.Duration) (net.Conn, error) {
 				if a.Port() == 22 {
 					c, s := net.Pipe()
-					go func() { s.Write([]byte("SSH-2.0-test
-")); s.Close() }()
+					go func() { s.Write([]byte("SSH-2.0-test\r\n")); s.Close() }()
 					return c, nil
 				}
 				return nil, errors.New("connection refused")
@@ -92,7 +91,6 @@ func TestCollectorPortRunMatchesSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := contracttest.Validate(contracttest.Schema(t, "CollectionRun"), b); err != nil {
-		t.Errorf("port run fails the schema: %v
-%s", err, b)
+		t.Errorf("port run fails the schema: %v\n%s", err, b)
 	}
 }
