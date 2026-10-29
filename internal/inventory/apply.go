@@ -78,6 +78,9 @@ func (a *Applier) Apply(ctx context.Context, tx *sql.Tx, collectorID int64, run 
 			return nil, err
 		}
 	}
+	if err := applyPortChecks(ctx, tx, collectorID, run); err != nil {
+		return nil, err
+	}
 	return newSubnets, nil
 }
 

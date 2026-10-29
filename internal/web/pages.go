@@ -77,6 +77,22 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	s.renderPartialStatus(w, r, http.StatusAccepted, "home.html", "scan-status", view)
 }
 
+// handleScanPorts: "Check ports now" (feature 015): the built-in collector scans at once and
+// checks the ports of every address it finds.
+func (s *Server) handleScanPorts(w http.ResponseWriter, r *http.Request) {
+	if s.opts.Scanner == nil {
+		http.Error(w, "the built-in collector is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if s.opts.Scanner.TriggerPorts() != TriggerStarted {
+		s.renderPartialStatus(w, r, http.StatusConflict, "home.html", "scan-status", s.scanView(r.Context()))
+		return
+	}
+	view := s.scanView(r.Context())
+	view.Status.Running = true
+	s.renderPartialStatus(w, r, http.StatusAccepted, "home.html", "scan-status", view)
+}
+
 func (s *Server) handleScanStatus(w http.ResponseWriter, r *http.Request) {
 	s.renderPartial(w, r, "home.html", "scan-status", s.scanView(r.Context()))
 }
@@ -148,6 +164,7 @@ type deviceData struct {
 	Saved  bool
 	Router *routerData        // Router or Access point card (features 003, 012); nil for other types
 	Links  []store.LinkOption // "Connected via" choices (feature 010)
+	Ports  store.DevicePorts  // "Open ports" card (feature 015)
 }
 
 func (s *Server) loadDevice(w http.ResponseWriter, r *http.Request) (store.DeviceRow, bool) {
@@ -187,7 +204,13 @@ func (s *Server) renderDevice(w http.ResponseWriter, r *http.Request, status int
 		s.serverError(w, r, err)
 		return
 	}
-	data := deviceData{Device: d, Types: inventory.DeviceTypes, Saved: r.URL.Query().Get("saved") == "1", Router: rd, Links: links}
+	ports, err := s.opts.Store.DevicePorts(r.Context(), d.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data := deviceData{Device: d, Types: inventory.DeviceTypes, Saved: r.URL.Query().Get("saved") == "1", Router: rd, Links: links,
+		Ports: ports}
 	s.render(w, r, status, "device.html", page{Title: d.DisplayName, Nav: true, Active: "devices", Data: data})
 }
 

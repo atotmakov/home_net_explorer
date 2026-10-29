@@ -70,6 +70,8 @@ type Run struct {
 	Subnets   []contract.SubnetScan
 	Obs       []contract.Observation
 	Vantage   *contract.Vantage
+	// PortChecks makes a port run (feature 015); checks without times run from Start for 30 s.
+	PortChecks []contract.PortCheck
 }
 
 // Build turns a Run into a contract.CollectionRun with a fresh collection_id. Observations
@@ -101,6 +103,16 @@ func (h *Harness) Build(r Run) *contract.CollectionRun {
 	}
 	subnets := append([]contract.SubnetScan{}, r.Subnets...)
 	finished := r.Start.Add(r.Duration)
+	var checks []contract.PortCheck
+	for _, c := range r.PortChecks {
+		if c.StartedAt.IsZero() {
+			c.StartedAt, c.FinishedAt = r.Start, r.Start.Add(30*time.Second)
+		}
+		if c.Open == nil {
+			c.Open = []contract.OpenPort{}
+		}
+		checks = append(checks, c)
+	}
 	return &contract.CollectionRun{
 		SchemaVersion:   contract.SchemaVersion,
 		CollectionID:    fmt.Sprintf("00000000-0000-4000-8000-%012d", h.seq),
@@ -112,6 +124,7 @@ func (h *Harness) Build(r Run) *contract.CollectionRun {
 		Vantage:         v,
 		Subnets:         subnets,
 		Observations:    obs,
+		PortChecks:      checks,
 	}
 }
 
@@ -186,7 +199,8 @@ func (h *Harness) Snapshot() map[string][]string {
 // SnapshotStore dumps every projection table of s.
 func SnapshotStore(t testing.TB, s *store.Store) map[string][]string {
 	t.Helper()
-	tables := []string{"subnets", "devices", "device_addresses", "sightings", "events", "links"}
+	tables := []string{"subnets", "devices", "device_addresses", "sightings", "events", "links",
+		"port_checks", "port_findings", "device_ports"}
 	out := map[string][]string{}
 	for _, table := range tables {
 		rows, err := s.DB().Query(`SELECT * FROM ` + table + ` ORDER BY 1, 2, 3`)

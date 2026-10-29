@@ -59,6 +59,27 @@
     <button type="submit">Save</button>
   </form>
 </section>
+{{if not .Manual}}{{with $.Data.Ports}}
+<section class="card" id="ports">
+  <h2>{{if eq $.Data.Device.State "offline"}}Last known open ports{{else}}Open ports{{end}}</h2>
+  {{if .Open}}
+  {{if .AllOpen}}<p class="warn">Answers on every port checked; only the first {{len .Open}} are listed.</p>{{end}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Port</th><th>Service</th><th>Address</th><th>Last found open</th><th>By</th></tr></thead>
+    <tbody>
+    {{range .Open}}<tr><td><code>{{.Label}}</code></td><td>{{if .Service}}{{.Service}}{{else}}<span class="muted">unknown</span>{{end}}</td><td>{{.IP}}</td><td>{{fmtTime .LastOpen}}</td><td>{{.Collector}}</td></tr>{{end}}
+    </tbody>
+  </table></div>
+  {{else if .Checked}}
+  <p>No open ports found.</p>
+  {{else if .Reachable}}
+  <p class="muted">Ports not checked yet. They are checked once a day; "Check ports now" on the home page checks them at once.</p>
+  {{else}}
+  <p class="muted">Not reachable for port checks (only listed by a router or access point).</p>
+  {{end}}
+  {{if .Checked}}<p class="muted">Last checked: {{fmtTime .LastCheck}} by {{.LastCollector}}.</p>{{end}}
+</section>
+{{end}}{{end}}
 {{with $.Data.Router}}
 <section class="card" id="{{.Kind.Anchor}}">
   <h2>{{.Kind.Title}}</h2>

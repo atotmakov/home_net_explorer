@@ -126,6 +126,12 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "")
 		return
 	}
+	plan, err := s.opts.Store.PortPlan(r.Context(), c.ID, s.opts.Clock.Now()) // feature 015
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "")
+		return
+	}
+	resp.PortScan = &plan
 	writeJSON(w, http.StatusOK, resp)
 }
 
