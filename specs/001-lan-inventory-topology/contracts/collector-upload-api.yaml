@@ -143,6 +143,34 @@ components:
           maxItems: 16
           description: One entry per router (feature 002) or access point (feature 012) read by the collector. Never carries credentials.
           items: { $ref: "#/components/schemas/RunSource" }
+        port_checks:
+          type: array
+          maxItems: 256
+          description: Feature 015. Port checks of a port run (subnets and observations empty), one per address.
+          items: { $ref: "#/components/schemas/PortCheck" }
+    PortCheck:
+      type: object
+      additionalProperties: false
+      required: [ip, started_at, finished_at, complete, all_open, open]
+      properties:
+        ip: { type: string, format: ipv4 }
+        mac: { $ref: "#/components/schemas/Mac" }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        complete: { type: boolean, description: "Every TCP port and UDP service tried; only a complete check closes ports" }
+        all_open: { type: boolean, description: "More than 512 ports open: the list is cut" }
+        open:
+          type: array
+          maxItems: 512
+          items:
+            type: object
+            additionalProperties: false
+            required: [port, proto, service, service_source]
+            properties:
+              port: { type: integer, minimum: 1, maximum: 65535 }
+              proto: { type: string, enum: [tcp, udp] }
+              service: { type: string, maxLength: 32 }
+              service_source: { type: string, enum: [table, banner] }
     Vantage:
       type: object
       description: The collector's own network position. Used for topology inference (research R4).
@@ -255,6 +283,18 @@ components:
           type: array
           description: Access points configured in the web UI (feature 012), same shape as routers. Never carries credentials; logins come from /api/v1/routers/{id}/login.
           items: { $ref: "#/components/schemas/RouterRef" }
+        port_scan:
+          type: object
+          description: Feature 015. The port plan for this collector, asked for after a presence upload.
+          required: [enabled, due, excluded]
+          properties:
+            enabled: { type: boolean }
+            due:
+              type: array
+              items: { type: string, format: ipv4 }
+            excluded:
+              type: array
+              items: { type: string, format: ipv4 }
     RouterRef:
       type: object
       additionalProperties: false

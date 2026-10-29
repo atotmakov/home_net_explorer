@@ -25,8 +25,8 @@ Phase 6 (T029 removal, docs, validation). Each PR: red tests commit, then implem
 
 ## Phase 1: Setup
 
-- [ ] T001 Set `VERSION` to `0.20`
-- [ ] T002 [P] Amend `specs/001-lan-inventory-topology/spec.md`: FR-007 gets "(port checks: feature
+- [X] T001 Set `VERSION` to `0.20`
+- [X] T002 [P] Amend `specs/001-lan-inventory-topology/spec.md`: FR-007 gets "(port checks: feature
   015, same limit)" and the "Port scanning and service/OS fingerprinting are out of scope" line
   gets "Port checks were added by feature 015; fingerprinting stays out of scope"
 
@@ -34,7 +34,7 @@ Phase 6 (T029 removal, docs, validation). Each PR: red tests commit, then implem
 
 **Purpose**: the additive v1 contract both sides use, migration 0010, and the collector's checker.
 
-- [ ] T003 [P] Tests in `internal/contract/validate_test.go` `TestPortChecks`: a run with
+- [X] T003 [P] Tests in `internal/contract/validate_test.go` `TestPortChecks`: a run with
   `subnets: []`, `observations: []` and one port check (ip 192.168.1.79, mac, complete, open
   80/tcp http table, 22/tcp ssh banner, 5353/udp mdns table) is valid; invalid: 257 checks; 513
   open entries; public or malformed `ip`; group MAC; `started_at` > `finished_at` or outside the run
@@ -42,15 +42,15 @@ Phase 6 (T029 removal, docs, validation). Each PR: red tests commit, then implem
   longer than 32 or with control characters; `service_source` other than `table`|`banner`;
   `all_open` without `complete`. `TestPingPortScan`: `PingResponse` round-trips `port_scan`
   {enabled, due, excluded}; a response without it decodes with a nil `PortScan`
-- [ ] T004a [P] Contract tests in `tests/contract/`: add `fixtures/valid_port_run.json` (the example
+- [X] T004a [P] Contract tests in `tests/contract/`: add `fixtures/valid_port_run.json` (the example
   of contracts/upload-api-changes.md: `subnets: []`, `observations: []`, one complete check of
   192.168.1.79 with 80/tcp, 22/tcp banner, 5353/udp) and `fixtures/invalid_port_run.json` (port 0,
-  duplicate 80/tcp); `collector_payload_test.go`: a port run built by the collector's port job
+  duplicate 80/tcp); `collector_payload_test.go` (written with T011 in Phase 3, where the port job exists): a port run built by the collector's port job
   from fakes matches the valid fixture's shape and passes validation; `server_upload_test.go`: the
-  valid fixture → 201 `stored`, the invalid one → 422 `validation_failed`, a run with presence data
+  valid fixture → 201 `stored`, the invalid one → 400 `validation_failed`, a run with presence data
   and port checks together → 201; `schema_test.go`: `GET /api/v1/ping` carries `port_scan` with
   `enabled`, `due` and `excluded` arrays
-- [ ] T004 Implement in `internal/contract/v1.go` and `validate.go`: `PortCheck{IP, MAC, StartedAt,
+- [X] T004 Implement in `internal/contract/v1.go` and `validate.go`: `PortCheck{IP, MAC, StartedAt,
   FinishedAt, Complete, AllOpen, Open []OpenPort}`, `OpenPort{Port int, Proto, Service,
   ServiceSource string}`, `CollectionRun.PortChecks []PortCheck \`json:"port_checks,omitempty"\``,
   `PingResponse.PortScan *PortScan \`json:"port_scan,omitempty"\`` with `PortScan{Enabled bool, Due,
@@ -58,16 +58,16 @@ Phase 6 (T029 removal, docs, validation). Each PR: red tests commit, then implem
   `ProtoTCP`, `ProtoUDP`, `ServiceSourceTable`, `ServiceSourceBanner`; validation exactly as
   contracts/upload-api-changes.md. Update `specs/001-lan-inventory-topology/contracts/
   collector-upload-api.yaml` with the two optional fields. Make T003 and T004a pass
-- [ ] T005 [P] Test in `internal/store/migrate_test.go` (or the existing migration test)
+- [X] T005 [P] Test in `internal/store/migrate_test.go` (or the existing migration test)
   `TestMigration0010`: after migrating a database holding events, device attrs and subnet attrs
   from 0009, those rows are unchanged; `events` accepts `port_opened`/`port_closed`;
   `user_device_attrs` and `user_subnet_attrs` accept field `ports`; `port_checks`, `port_findings`,
   `device_ports` exist with the columns of data-model.md
-- [ ] T006 Add `internal/store/migrations/0010_ports.sql`: the three tables of data-model.md
+- [X] T006 Add `internal/store/migrations/0010_ports.sql`: the three tables of data-model.md
   (`port_findings` PK (check_id, port, proto); `device_ports` PK (device_id, port, proto);
   `port_checks` index (device_id, finished_at)) and the rebuilds of `events`, `user_device_attrs`,
   `user_subnet_attrs` with the extended CHECKs, copying all rows. Make T005 pass
-- [ ] T007 [P] Tests in `internal/collect/ports/checker_test.go` with a fake dialer (open set,
+- [X] T007 [P] Tests in `internal/collect/ports/checker_test.go` with a fake dialer (open set,
   refused set, everything else times out) and a fake clock: `TestCheckTCP` — open {22, 80, 554}
   are reported, refused and silent ports are not, the check is `complete`; at most 128 dials in
   flight per device and 4 devices at once (the fake records the peak); `TestSilentDeviceShortTimeout`
@@ -79,14 +79,14 @@ Phase 6 (T029 removal, docs, validation). Each PR: red tests commit, then implem
   node status, a unicast SSDP M-SEARCH and an mDNS query; no request to 161; `TestBanner` — an open
   port whose fake connection sends `SSH-2.0-…` within 500 ms is named `ssh` with source `banner`,
   one that sends nothing keeps the table name; the banner text is not in the result
-- [ ] T008 [P] Test in `internal/collect/ports/services_test.go`: 22→ssh, 80→http, 443→https,
-  445→microsoft-ds, 554→rtsp, 631→ipp, 5000→synology-dsm, 8009→googlecast, 9100→jetdirect,
+- [X] T008 [P] Test in `internal/collect/ports/services_test.go`: 22→ssh, 80→http, 443→https,
+  445→smb, 554→rtsp, 631→ipp, 5000→synology-dsm, 8009→googlecast, 9100→jetdirect,
   udp 5353→mdns; an unknown port → ""
-- [ ] T009 Implement `internal/collect/ports/` (`checker.go`: `Checker{Dial, UDP, Clock,
+- [X] T009 Implement `internal/collect/ports/` (`checker.go`: `Checker{Dial, UDP, Clock,
   PerDevice=128, Devices=4, Timeout=1s, SilentTimeout=300ms}`, `Check(ctx, []Target) []contract.
   PortCheck`; `udp.go`: the five requests of research R3; `banner.go`; `services.go`: the table of
   research R4) with a `net.Dialer`-based default. Make T007, T008 pass
-- [ ] T010 [P] `internal/collect/ports/loopback_hw_test.go` (build tag `hwtest`): listen on two
+- [X] T010 [P] `internal/collect/ports/loopback_hw_test.go` (build tag `hwtest`): listen on two
   loopback ports, check 127.0.0.1 with the real dialer, both found open with a closed neighbour not
 
 **Checkpoint**: contract, schema and checker are in; nothing is wired yet.
