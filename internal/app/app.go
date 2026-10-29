@@ -54,8 +54,8 @@ type Options struct {
 	// the platform engine; no port checks when Engine is overridden (tests).
 	PortChecker  *ports.Checker
 	DownloadsDir string // collector binaries for /downloads/
-	Version              string
-	Commit               string
+	Version      string
+	Commit       string
 }
 
 // App is an assembled server.

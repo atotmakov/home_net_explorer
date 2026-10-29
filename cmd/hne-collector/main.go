@@ -299,8 +299,8 @@ func run(args []string, env environment) int {
 		forcePorts: forcePorts,
 		portJob: &collect.PortJob{Checker: checker, Clock: engine.Clock, Collector: engine.Collector,
 			IntervalSeconds: cfg.IntervalSeconds},
-		client:  &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
-		spool:   upload.Spool{Dir: filepath.Join(env.dir, "spool")},
+		client: &upload.Client{BaseURL: cfg.ServerURL, Token: cfg.Token, Log: log},
+		spool:  upload.Spool{Dir: filepath.Join(env.dir, "spool")},
 	}
 	parent := env.ctx
 	if parent == nil {
@@ -565,7 +565,6 @@ func (c *collector) portCheck(ctx context.Context, run *contract.CollectionRun, 
 		job(ctx)
 	}()
 }
-
 
 func (c *collector) summary(run *contract.CollectionRun, result string) {
 	scanned := 0

@@ -53,7 +53,7 @@ type Checker struct {
 	SilentTimeout time.Duration
 	BannerTimeout time.Duration
 	UDPTimeout    time.Duration
-	MaxPort       int // highest TCP port checked; 65535 by default (tests use fewer)
+	MaxPort       int    // highest TCP port checked; 65535 by default (tests use fewer)
 	Done          func() // called after each target's check (progress); optional
 }
 

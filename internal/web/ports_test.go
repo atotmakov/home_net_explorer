@@ -30,9 +30,9 @@ func (f *fakeScanner) TriggerPorts() web.TriggerResult {
 	f.portsCalls++
 	return f.ports
 }
-func (f *fakeScanner) Status() web.ScanStatus                    { return f.status }
-func (f *fakeScanner) Paused(context.Context) (bool, time.Time)  { return false, time.Time{} }
-func (f *fakeScanner) SetPaused(context.Context, bool) error     { return nil }
+func (f *fakeScanner) Status() web.ScanStatus                   { return f.status }
+func (f *fakeScanner) Paused(context.Context) (bool, time.Time) { return false, time.Time{} }
+func (f *fakeScanner) SetPaused(context.Context, bool) error    { return nil }
 
 func portsServer(t *testing.T, sc web.Scanner) (*it.Harness, http.Handler) {
 	t.Helper()
