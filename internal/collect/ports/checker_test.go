@@ -157,8 +157,8 @@ func TestCheckTCP(t *testing.T) {
 			t.Errorf("%s: times %v–%v, want the clock's", c.IP, c.StartedAt, c.FinishedAt)
 		}
 	}
-	if f.peakDev > 128 || f.peakDev == 0 {
-		t.Errorf("peak dials to one device = %d, want 1..128", f.peakDev)
+	if f.peakDev > 32 || f.peakDev == 0 {
+		t.Errorf("peak dials to one device = %d, want 1..32", f.peakDev)
 	}
 	if f.peakIPs > 4 || f.peakIPs == 0 {
 		t.Errorf("peak devices at once = %d, want 1..4", f.peakIPs)
@@ -186,7 +186,7 @@ func TestSilentDeviceShortTimeout(t *testing.T) {
 			t.Errorf("port %d timeout = %v, want 300ms", p, f.timeouts[p])
 		}
 	}
-	if f.dials < 65535 {
+	if f.dials != 65535 {
 		t.Errorf("%d dials, want every port", f.dials)
 	}
 }
