@@ -51,7 +51,9 @@ func TestRetrySilentPorts(t *testing.T) {
 			}
 			res := c.Check(ctx, []Target{tg})[0]
 			if cancelRetry {
-				if res.Complete { t.Error("cancelled retry reported complete") }
+				if res.Complete {
+					t.Error("cancelled retry reported complete")
+				}
 				return
 			}
 			if !res.Complete || len(res.Open) != 1 || res.Open[0].Port != 80 {
@@ -59,10 +61,16 @@ func TestRetrySilentPorts(t *testing.T) {
 			}
 			for p := 1; p <= 128; p++ {
 				want := 1
-				if p >= 80 && p <= 87 { want = 2 }
-				if attempts[p] != want { t.Errorf("port %d: %d attempts, want %d", p, attempts[p], want) }
+				if p >= 80 && p <= 87 {
+					want = 2
+				}
+				if attempts[p] != want {
+					t.Errorf("port %d: %d attempts, want %d", p, attempts[p], want)
+				}
 			}
-			if peak > 4 { t.Errorf("retry concurrency = %d, want <= 4", peak) }
+			if peak > 4 {
+				t.Errorf("retry concurrency = %d, want <= 4", peak)
+			}
 		})
 	}
 }
@@ -78,9 +86,13 @@ func TestMostlySilentDeviceNoRetry(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		dials++
-		if dials == 1 { return nil, errors.New("connection refused") }
+		if dials == 1 {
+			return nil, errors.New("connection refused")
+		}
 		return nil, timeoutErr{}
 	}
 	c.Check(context.Background(), []Target{target(9)})
-	if dials != 128 { t.Errorf("%d dials, want 128", dials) }
+	if dials != 128 {
+		t.Errorf("%d dials, want 128", dials)
+	}
 }
