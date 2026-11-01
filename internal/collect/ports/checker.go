@@ -19,8 +19,8 @@ import (
 
 // Defaults (research R2).
 const (
-	DefaultPerDevice     = 32  // connection attempts in flight per device
-	DefaultDevices       = 4   // devices checked at once
+	DefaultPerDevice     = 32 // connection attempts in flight per device
+	DefaultDevices       = 4  // devices checked at once
 	DefaultTimeout       = time.Second
 	DefaultSilentTimeout = 300 * time.Millisecond // after the first 1,024 ports all time out
 	DefaultBannerTimeout = 500 * time.Millisecond
