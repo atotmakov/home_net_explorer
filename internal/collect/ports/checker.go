@@ -11,7 +11,6 @@ import (
 	"net/netip"
 	"slices"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/atotmakov/home_net_explorer/internal/clock"
@@ -20,12 +19,14 @@ import (
 
 // Defaults (research R2).
 const (
-	DefaultPerDevice     = 128 // connection attempts in flight per device
-	DefaultDevices       = 4   // devices checked at once
+	DefaultPerDevice     = 32 // connection attempts in flight per device
+	DefaultDevices       = 4  // devices checked at once
 	DefaultTimeout       = time.Second
 	DefaultSilentTimeout = 300 * time.Millisecond // after the first 1,024 ports all time out
 	DefaultBannerTimeout = 500 * time.Millisecond
 	DefaultUDPTimeout    = time.Second
+	retryConcurrency     = 4
+	retryTimeout         = 2 * time.Second
 	silentWindow         = 1024
 )
 
@@ -126,12 +127,12 @@ func (c *Checker) checkOne(ctx context.Context, t Target) contract.PortCheck {
 
 	// A firewalled device times out on every port: the first 1,024 ports are checked as a batch,
 	// and when they all timed out the rest are tried with the short timeout (research R2).
-	slots := make(chan struct{}, c.PerDevice)
-	var silent atomic.Int32
-	sweep := func(from, to int, timeout time.Duration) bool {
+	var silent []int
+	sweep := func(ports []int, concurrency int, timeout time.Duration, rememberSilent bool) bool {
+		slots := make(chan struct{}, concurrency)
 		var wg sync.WaitGroup
 		defer wg.Wait()
-		for port := from; port <= to; port++ {
+		for _, port := range ports {
 			select {
 			case <-ctx.Done():
 				return false
@@ -149,21 +150,34 @@ func (c *Checker) checkOne(ctx context.Context, t Target) contract.PortCheck {
 				if open {
 					add(o)
 				}
-				if timedOut {
-					silent.Add(1)
+				if timedOut && rememberSilent {
+					mu.Lock()
+					silent = append(silent, port)
+					mu.Unlock()
 				}
 			}(port)
 		}
 		return true
 	}
+	ports := make([]int, c.MaxPort)
+	for i := range ports {
+		ports[i] = i + 1
+	}
 	first := min(silentWindow, c.MaxPort)
-	complete := sweep(1, first, c.Timeout)
+	complete := sweep(ports[:first], c.PerDevice, c.Timeout, true)
 	if complete && c.MaxPort > first {
 		timeout := c.Timeout
-		if silent.Load() == int32(first) {
+		if len(silent) == first {
 			timeout = c.SilentTimeout
 		}
-		complete = sweep(first+1, c.MaxPort, timeout)
+		complete = sweep(ports[first:], c.PerDevice, timeout, true)
+	}
+	// Cameras may silently drop connects under load. On devices where at least
+	// 90% of ports answered, retry just the silent ports once, gently. Do not
+	// repeat a firewalled host's sweep. Wait for the first pass before retrying.
+	if complete && len(silent) > 0 && len(silent)*10 <= c.MaxPort {
+		slices.Sort(silent)
+		complete = sweep(silent, min(retryConcurrency, c.PerDevice), max(retryTimeout, c.Timeout), false)
 	}
 
 	if complete && ctx.Err() == nil {

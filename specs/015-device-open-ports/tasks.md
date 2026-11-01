@@ -167,6 +167,30 @@ after a forced check; a never-checked device says "Ports not checked yet".
 
 ## Phase 4: User Story 2 - See when ports change (P2)
 
+### Gate G1 follow-up (resume point)
+
+The interrupted Claude Code session `ab958be1-8aed-45c8-8cf3-222a4ba5b1e4`
+merged PR #44 and deployed 0.20.201. Its validation reported NAS checks of 8 devices
+in 8m34s and desktop checks of 10 devices in 25m40s, all marked complete, but Axis
+cameras had inconsistent open ports between collectors. The scans overlapped;
+connection drops under load are suspected, not confirmed. G1 remains open.
+
+The owner authorized: "make the fix and return to check". Before Phase 4:
+
+- [ ] G1a Run the added retry regression tests red in CI, then reduce default
+  per-device concurrency from 128 to 32 and retry silent TCP ports once with at
+  most 4 concurrent attempts and a longer timeout, only on mostly responsive
+  devices. Preserve cancellation and avoid a second sweep of firewalled devices.
+- [ ] G1b After green CI, deploy and rerun camera checks sequentially from each
+  collector; compare known ports and duration, then decide whether G1 passes.
+
+Recovery attempt: regression tests are present locally in
+`internal/collect/ports/retry_test.go`, with tighter concurrency and no-retry
+assertions in `checker_test.go`. GitHub branch `015-camera-port-retries` was
+created, but publishing tests/creating a PR could not be confirmed because both
+CLI and connector requests failed. No implementation or deployment was performed
+in this recovery attempt. Verify the remote branch before retrying publication.
+
 **Goal**: open/closed history and "Previously open".
 
 **Independent Test**: spec US2: 8765/tcp opened, then closed after the next complete check, both in

@@ -34,7 +34,7 @@ checked (no direct reach).
 minute; a firewalled device (silent ports) in about 4 minutes; a forced check of ~30 devices within
 30 minutes (SC-004).
 **Constraints**: non-intrusive (001 FR-007): a connection attempt, closed at once; UDP only
-standard queries without credentials (no SNMP community guess). Per device at most 128 connection
+standard queries without credentials (no SNMP community guess). Per device at most 32 connection
 attempts in flight; at most 4 devices at once. No CIDR literals outside tests (lint).
 **Scale/Scope**: ~30 devices, a handful of open ports each.
 **Version**: `0.20` (server and collector).
