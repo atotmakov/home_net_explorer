@@ -4,7 +4,7 @@
 
 - **Decision**: a TCP *connect* to each port (`net.Dialer`, 1 s timeout), closed at once. Connected
   = open; refused (reset) = closed; timeout or unreachable = no answer (filtered), treated as not
-  open. No retries: a silent port stays silent.
+  open. After G1: silent TCP ports are retried once on devices where at least 90% of ports answered; see R2.
 - **Rationale**: needs no raw sockets, so it works for the Windows collector without Npcap and in
   the NAS container without extra capabilities. It is the least intrusive scan type a device can
   see: a normal connection attempt (001 FR-007).
@@ -14,7 +14,7 @@
 
 ## R2 Load limits and timing
 
-- **Decision**: per device at most 128 connection attempts in flight; at most 4 devices checked at
+- **Decision**: per device at most 32 connection attempts in flight; at most 4 devices checked at
   once; ports in ascending order; 1 s timeout. A device whose first 1,024 ports all time out
   (firewalled) is checked from then on with a 300 ms timeout (silent LAN devices answer in well
   under 10 ms when they answer at all). A device that resets closed ports (most LAN devices) takes
@@ -26,6 +26,17 @@
   ephemeral port range is not exhausted.
 - **Alternatives**: one global rate (packets per second): simpler to reason about for the network
   but a single fragile device would still get the whole rate; the per-device cap protects it.
+
+### G1 reliability correction
+
+The initial NAS/Windows scans disagreed on camera ports. The owner authorized lowering
+per-device concurrency to 32 and retrying silent ports once after the first sweep,
+with at most 4 connections and a timeout of at least 2 seconds. Retry only when at
+least 90% of ports answered without a timeout; mostly filtered devices do not get a
+second sweep. Cancellation during either pass makes the result incomplete. This
+reduces load and recovers transient drops but cannot guarantee every open port is
+found; rerun G1 before enabling history. The original timing estimates above need
+to be remeasured with the lower concurrency, especially for firewalled devices.
 
 ## R3 UDP
 
