@@ -177,19 +177,59 @@ connection drops under load are suspected, not confirmed. G1 remains open.
 
 The owner authorized: "make the fix and return to check". Before Phase 4:
 
-- [ ] G1a Run the added retry regression tests red in CI, then reduce default
+- [X] G1a Run the added retry regression tests red in CI, then reduce default
   per-device concurrency from 128 to 32 and retry silent TCP ports once with at
   most 4 concurrent attempts and a longer timeout, only on mostly responsive
   devices. Preserve cancellation and avoid a second sweep of firewalled devices.
-- [ ] G1b After green CI, deploy and rerun camera checks sequentially from each
+- [X] G1b After green CI, deploy and rerun camera checks sequentially from each
   collector; compare known ports and duration, then decide whether G1 passes.
 
-Recovery attempt: regression tests are present locally in
-`internal/collect/ports/retry_test.go`, with tighter concurrency and no-retry
-assertions in `checker_test.go`. GitHub branch `015-camera-port-retries` was
-created, but publishing tests/creating a PR could not be confirmed because both
-CLI and connector requests failed. No implementation or deployment was performed
-in this recovery attempt. Verify the remote branch before retrying publication.
+Recovery: PR #45 merged as `40d82a3`; version `0.20.206` deployed and health
+verified. Red CI run `41335522608` reproduced excessive concurrency, the missed
+web port and cancellation incorrectly marked complete. Green CI run
+`41338183941` passed every job (unit, Windows collector, contract, integration,
+JavaScript, lint, binaries, image); main run `41340987455` passed too.
+
+NAS forced validation (2026-11-01): all 9 checks complete. The four Axis cameras
+(.57, .60, .62, .79) each reported 21/tcp, 80/tcp, 554/tcp and the high port in the
+table below, taking 8-11 seconds each. The NAS reported its expected SSH, web, SMB, DSM and app ports. The total
+job took 34m11s, dominated by desktop .10, so the SC-004 30-minute target is not
+met. Gate G1 remains open pending Windows comparison and timing assessment.
+
+Windows isolated camera validation (2026-11-02, NAS scanner paused): dry run
+completed successfully in 34m09.802s. All four checks were complete, and their TCP
+findings exactly matched the NAS run:
+
+| Camera suffix | TCP ports (NAS and Windows) |
+|---------------|-----------------------------|
+| .57 | 21, 80, 554, 49155 |
+| .60 | 21, 80, 554, 43969 |
+| .62 | 21, 80, 554, 49154 |
+| .79 | 21, 80, 554, 42658 |
+
+The wrapper sent the resume request after the run without a curl error. Follow-up
+HTTP and SSH checks timed out, so restored scanning could not be independently
+verified; check it when NAS access returns. The temporary copied collector
+configuration was removed; the normal Downloads collector is unchanged. Evidence
+is local only in ignored `dist/g1-windows/g1.json` and `g1.log`.
+
+**G1 outcome: reliability comparison passed for these runs; performance FAILED.**
+SC-004 is still unmet even for this four-camera Windows subset. Do not begin
+Phases 4-5 yet. The next step is a test-first timing correction or an explicit
+revision of the performance requirement, followed by another G1 run. These runs
+do not establish the week-long device-behavior criterion (T031 / SC-005).
+
+Root cause (2026-11-05): both 34-minute results are 65,535 ports / 32 x 1 s = 2,048 s,
+plus 1 s of UDP. Windows retries a refused connect for about 2 s (measured from the
+desktop: 2,040 ms to a closed camera port, 1 ms with SYN retransmission off), so the
+1 s timeout expired on every closed port. On the NAS, devices .10 and .176 drop most
+ports but leave a few open, so "all of the first 1,024 silent" never held and they
+kept 1 s. NAS scanning was confirmed running, with no pause set.
+
+- [ ] G1c Run red in CI, then turn off SYN retransmission in the Windows dialer and use
+  the short timeout when at least 90% of the first 1,024 ports are silent.
+- [ ] G1d After green CI and deploy, rerun the NAS forced check and the Windows check;
+  compare ports with the table above and durations with SC-004; decide G1.
 
 **Goal**: open/closed history and "Previously open".
 
