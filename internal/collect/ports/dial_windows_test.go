@@ -9,9 +9,16 @@ import (
 	"time"
 )
 
-// Windows answers a refused connect only after retrying it for about 2 s, so with the 1 s timeout
-// every closed port looked silent and a full sweep took 34 minutes (gate G1). Loopback only: this
-// is the one behaviour a fake dialer cannot show.
+// The owner's Windows 11 desktop answers a refused connect only after retrying it for about 2 s,
+// so with the 1 s timeout every closed port looked silent and a full sweep took 34 minutes (gate
+// G1). The CI runner refuses fast even without the fix, so this test cannot catch that slowdown
+// there; TestDialerTurnsOffSynRetransmit guards the fix, and the desktop run proves it.
+func TestDialerTurnsOffSynRetransmit(t *testing.T) {
+	if dialControl == nil {
+		t.Fatal("the dialer leaves SYN retransmission on")
+	}
+}
+
 func TestDialRefusedFast(t *testing.T) {
 	l, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

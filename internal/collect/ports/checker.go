@@ -228,6 +228,6 @@ func (c *Checker) tcp(ctx context.Context, ip netip.Addr, port int, timeout time
 }
 
 func dialTCP(ctx context.Context, addr netip.AddrPort, timeout time.Duration) (net.Conn, error) {
-	d := net.Dialer{Timeout: timeout}
+	d := net.Dialer{Timeout: timeout, Control: dialControl}
 	return d.DialContext(ctx, "tcp4", addr.String())
 }
