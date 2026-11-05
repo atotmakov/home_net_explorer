@@ -75,6 +75,39 @@ func TestRetrySilentPorts(t *testing.T) {
 	}
 }
 
+// A desktop firewall drops almost every port but leaves a few services open. It must get the short
+// timeout like a fully silent device (it took 34 minutes at 1 s a port, gate G1), still find its
+// open ports, including one above the first 1,024, and not be swept twice.
+func TestMostlySilentDeviceShortTimeout(t *testing.T) {
+	f := newFakeNet()
+	tg := target(10)
+	f.open[tg.IP] = map[int]string{135: "", 445: "", 49668: ""}
+	f.refused = func(netip.Addr, int) bool { return false }
+	res := f.checker(65535).Check(context.Background(), []Target{tg})[0]
+	if !res.Complete || len(res.Open) != 3 {
+		t.Fatalf("check = %+v, want complete with 3 open ports", res)
+	}
+	if f.timeouts[1024] != time.Second {
+		t.Errorf("port 1024 timeout = %v, want 1s", f.timeouts[1024])
+	}
+	if f.timeouts[2049] != 300*time.Millisecond {
+		t.Errorf("port 2049 timeout = %v, want 300ms", f.timeouts[2049])
+	}
+	if f.dials != 65535 {
+		t.Errorf("%d dials, want one per port", f.dials)
+	}
+}
+
+// A device that answers on a real share of its first ports is not firewalled: it keeps 1 s.
+func TestPartlySilentDeviceKeepsTimeout(t *testing.T) {
+	f := newFakeNet()
+	f.refused = func(_ netip.Addr, port int) bool { return port <= 200 }
+	f.checker(4096).Check(context.Background(), []Target{target(11)})
+	if f.timeouts[2049] != time.Second {
+		t.Errorf("port 2049 timeout = %v, want 1s", f.timeouts[2049])
+	}
+}
+
 // A mostly filtered host must not get a second full sweep just because it has
 // one reachable service. This keeps retries bounded for firewalled devices.
 func TestMostlySilentDeviceNoRetry(t *testing.T) {

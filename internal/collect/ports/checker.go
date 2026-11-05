@@ -22,7 +22,7 @@ const (
 	DefaultPerDevice     = 32 // connection attempts in flight per device
 	DefaultDevices       = 4  // devices checked at once
 	DefaultTimeout       = time.Second
-	DefaultSilentTimeout = 300 * time.Millisecond // after the first 1,024 ports all time out
+	DefaultSilentTimeout = 300 * time.Millisecond // after 90% of the first 1,024 ports time out
 	DefaultBannerTimeout = 500 * time.Millisecond
 	DefaultUDPTimeout    = time.Second
 	retryConcurrency     = 4
@@ -125,8 +125,9 @@ func (c *Checker) checkOne(ctx context.Context, t Target) contract.PortCheck {
 		mu.Unlock()
 	}
 
-	// A firewalled device times out on every port: the first 1,024 ports are checked as a batch,
-	// and when they all timed out the rest are tried with the short timeout (research R2).
+	// A firewalled device times out on nearly every port, though it may leave a few services open:
+	// the first 1,024 ports are checked as a batch, and when at least 90% of them timed out the rest
+	// are tried with the short timeout (research R2).
 	var silent []int
 	sweep := func(ports []int, concurrency int, timeout time.Duration, rememberSilent bool) bool {
 		slots := make(chan struct{}, concurrency)
@@ -167,7 +168,7 @@ func (c *Checker) checkOne(ctx context.Context, t Target) contract.PortCheck {
 	complete := sweep(ports[:first], c.PerDevice, c.Timeout, true)
 	if complete && c.MaxPort > first {
 		timeout := c.Timeout
-		if len(silent) == first {
+		if len(silent)*10 >= first*9 {
 			timeout = c.SilentTimeout
 		}
 		complete = sweep(ports[first:], c.PerDevice, timeout, true)
@@ -228,6 +229,6 @@ func (c *Checker) tcp(ctx context.Context, ip netip.Addr, port int, timeout time
 }
 
 func dialTCP(ctx context.Context, addr netip.AddrPort, timeout time.Duration) (net.Conn, error) {
-	d := net.Dialer{Timeout: timeout}
+	d := net.Dialer{Timeout: timeout, Control: dialControl}
 	return d.DialContext(ctx, "tcp4", addr.String())
 }

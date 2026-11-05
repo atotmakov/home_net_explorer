@@ -15,11 +15,16 @@
 ## R2 Load limits and timing
 
 - **Decision**: per device at most 32 connection attempts in flight; at most 4 devices checked at
-  once; ports in ascending order; 1 s timeout. A device whose first 1,024 ports all time out
-  (firewalled) is checked from then on with a 300 ms timeout (silent LAN devices answer in well
-  under 10 ms when they answer at all). A device that resets closed ports (most LAN devices) takes
-  well under a minute; a firewalled one about 3 minutes; a forced check of ~30 devices, 4 at once,
-  fits in 30 minutes (SC-004).
+  once; ports in ascending order; 1 s timeout. A device with at least 90% of its first 1,024 ports timing out
+  (firewalled, perhaps with a few services open) is checked from then on with a 300 ms timeout
+  (silent LAN devices answer in well under 10 ms when they answer at all). A device that resets
+  closed ports (most LAN devices) takes well under a minute; a firewalled one about 11 minutes
+  (32 s + 64,511 ports / 32 x 300 ms); a forced check of ~30 devices, 4 at once, fits in 30 minutes
+  unless more than about 10 of them are firewalled (SC-004).
+- **Windows refusals**: Windows retries a refused connect for about 2 s (measured on the owner's
+  Windows 11 desktop; the CI runner refuses at once). The dialer turns this off with
+  `SIO_TCP_INITIAL_RTO` (no SYN retransmissions): refused in about 1 ms. A dropped SYN is then only
+  recovered by the retry pass below.
 - **Device that answers on every port**: if more than 512 ports are open, the check stops listing
   them and is marked `all_open` (spec edge case "answers on all ports"); it still counts as complete.
 - **Windows**: a refused connection uses no TIME_WAIT slot; only the few open ports do, so the
