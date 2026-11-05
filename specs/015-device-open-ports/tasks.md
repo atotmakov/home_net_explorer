@@ -226,8 +226,10 @@ desktop: 2,040 ms to a closed camera port, 1 ms with SYN retransmission off), so
 ports but leave a few open, so "all of the first 1,024 silent" never held and they
 kept 1 s. NAS scanning was confirmed running, with no pause set.
 
-- [ ] G1c Run red in CI, then turn off SYN retransmission in the Windows dialer and use
-  the short timeout when at least 90% of the first 1,024 ports are silent.
+- [X] G1c Run red in CI, then turn off SYN retransmission in the Windows dialer and use
+  the short timeout when at least 90% of the first 1,024 ports are silent. The CI
+  runner refuses fast without the fix, so red there covers the wiring only; the
+  desktop run in G1d is the evidence for the Windows speed-up.
 - [ ] G1d After green CI and deploy, rerun the NAS forced check and the Windows check;
   compare ports with the table above and durations with SC-004; decide G1.
 
