@@ -230,8 +230,33 @@ kept 1 s. NAS scanning was confirmed running, with no pause set.
   the short timeout when at least 90% of the first 1,024 ports are silent. The CI
   runner refuses fast without the fix, so red there covers the wiring only; the
   desktop run in G1d is the evidence for the Windows speed-up.
-- [ ] G1d After green CI and deploy, rerun the NAS forced check and the Windows check;
+- [X] G1d After green CI and deploy, rerun the NAS forced check and the Windows check;
   compare ports with the table above and durations with SC-004; decide G1.
+
+G1d results (2026-11-05, version `0.20.210`, PR #46, checks run one after the other):
+
+| Run | Devices | Total | Slowest device | Before |
+|-----|---------|-------|----------------|--------|
+| NAS forced | 8 | 10m57s | .10: 640 s | 34m11s |
+| Windows forced dry run | 11 | 19m29s | 192.168.8.1: 1,151 s | 34m10s (4 cameras) |
+
+- **Speed passed** for the devices online now. All checks were complete; each camera took
+  7-11 s from Windows. Only 8 and 11 devices were checked, not the ~30 SC-004 describes.
+- **NAS and cameras matched:** the cameras' TCP ports equal the table above from both
+  collectors, and the NAS's TCP ports are unchanged.
+- **Router 192.168.8.1 is unreliable under a full sweep:** direct connects (3 rounds, 5 s
+  limit) found 22, 443, 7874, 7890, 7891, 8443 and 9090 all open in about 1 ms. The old build's
+  complete check missed 443, 7890, 7891 and 8443; the new one missed 9090. Dropped connects
+  under load are suspected, not confirmed; the retry pass only runs when at most 10% of ports
+  are silent.
+- **UDP findings vary between runs:** .54 reported 123/udp and 137/udp from the NAS but only
+  137/udp from Windows; earlier NAS checks reported neither.
+- **Why it matters for Phase 4:** T023 closes a port when a newer complete check lacks it, so
+  these misses would record false `port_closed` events.
+
+**G1 outcome: open pending the owner's decision** on whether Phase 4 needs these misses
+handled first. Evidence is local only in ignored `dist/g1d-windows/`. The desktop collector
+`karlo2` in Downloads still runs the old build and stays slow until it is updated.
 
 **Goal**: open/closed history and "Previously open".
 
